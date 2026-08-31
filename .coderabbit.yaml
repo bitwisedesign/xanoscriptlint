@@ -162,6 +162,23 @@ reviews:
         parser. Rules operate on raw source text plus line helpers. Suggesting a
         real parser as a future direction is fine; flagging its absence as a
         defect is not.
+
+        This repository runs its own linters in CI and they gate every pull
+        request: ESLint with type-aware typescript-eslint rules
+        (`npm run lint:ts`, config in `eslint.config.mjs`) and markdownlint-cli2
+        (`npm run lint:md`, config in `.markdownlint.yaml`). Both of CodeRabbit's
+        equivalent built-in tools are deliberately disabled.
+
+        Do NOT duplicate that work. Skip comments about formatting, indentation,
+        quote style, semicolons, import ordering, line length, unused variables,
+        `any` usage, floating promises, Markdown heading or list style, and
+        anything else those two linters already decide. If a rule is off in
+        `eslint.config.mjs` or `.markdownlint.yaml`, that is an intentional
+        project decision, not an oversight to re-report in review.
+
+        Spend the review on what a linter cannot see: correctness, false
+        positives in lint rules, unhandled edge cases, incorrect or missing
+        tests, and documentation that contradicts the code.
     - path: "src/**/*.ts"
       instructions: |
         TypeScript, ESM only, targeting Node.js >= 20 with no bundler and no
@@ -416,7 +433,8 @@ reviews:
 
       # Enable markdownlint - markdownlint-cli2 is a static analysis tool to enforce standards and consistency for Markdown files. - Enable markdownlint integration. - v0.18.1
       # Default: true
-      enabled: true
+      # Disabled: this repo runs its own markdownlint-cli2 in CI (npm run lint:md).
+      enabled: false
 
     # GitHub Checks integration configuration.
     # Default: {}
@@ -571,6 +589,7 @@ reviews:
 
       # Enable ESLint - ESLint is a static code analysis tool for JavaScript files.
       # Default: true
+      # Disabled: this repo runs its own ESLint in CI (npm run lint:ts).
       enabled: false
 
     # Flake8 is a Python linter that wraps PyFlakes, pycodestyle and Ned Batchelder's McCabe script.
