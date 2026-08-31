@@ -1,0 +1,26 @@
+name: MarkdownLint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  markdownlint:
+    name: Lint Markdown
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Lint
+        uses: DavidAnson/markdownlint-cli2-action@21c1be1b93ad9ed58fa840aacc3f279cde2a72ff # v24
+        with:
+          config: .markdownlint.yaml
+          globs: |
+            **/*.md
+            !node_modules/**
