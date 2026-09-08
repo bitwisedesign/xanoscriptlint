@@ -105,7 +105,9 @@ async function runLint(
       sources = fixed;
       const summary = formatFixSummary(corrections, cwd);
       if (summary.length > 0) {
-        io.stdout.write(summary.endsWith("\n") ? summary : `${summary}\n`);
+        const text = summary.endsWith("\n") ? summary : `${summary}\n`;
+        const stream = reporter === "json" ? io.stderr : io.stdout;
+        stream.write(text);
       }
     }
     const violations = applyStrict(lintFiles(sources, config), opts.strict);

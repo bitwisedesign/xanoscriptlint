@@ -19,6 +19,15 @@ describe("fixFile", () => {
     assert.equal(result.corrections[0].file, "nl.xs");
   });
 
+  it("strips spaces and tabs after the closing brace", () => {
+    const file = { path: "ws.xs", text: `${CLEAN_XS}  \t \n` };
+    const result = fixFile(file, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, CLEAN_XS);
+    assert.equal(result.corrections.length, 1);
+    assert.equal(result.corrections[0].ruleId, "no_trailing_newline");
+  });
+
   it("makes no change to an already-clean file", () => {
     const result = fixFile({ path: "clean.xs", text: CLEAN_XS }, config());
     assert.equal(result.changed, false);

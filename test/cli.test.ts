@@ -123,6 +123,29 @@ describe("cli", () => {
       }
     });
   });
+
+  it("keeps --fix summary off JSON stdout", async () => {
+    await withTempDir(async (dir) => {
+      await writeXs(dir, ".xanoscriptlint.yml", "included:\n  - \"**/*.xs\"\n");
+      const filePath = await writeXs(dir, "ok.xs", `${CLEAN_XS}\n`);
+      const cwd = process.cwd();
+      process.chdir(dir);
+      try {
+        const stdout = collectStream();
+        const stderr = collectStream();
+        const code = await runCli(
+          ["node", "xanoscriptlint", "--fix", "--reporter", "json", "ok.xs"],
+          { stdout: stdout.stream, stderr: stderr.stream },
+        );
+        assert.equal(code, 0, stderr.text());
+        assert.equal(await readFile(filePath, "utf8"), CLEAN_XS);
+        assert.deepEqual(JSON.parse(stdout.text()), []);
+        assert.match(stderr.text(), /Corrected 1 violation in 1 file/);
+      } finally {
+        process.chdir(cwd);
+      }
+    });
+  });
 });
 
 describe("isMainModule", () => {
