@@ -1,7 +1,7 @@
 import type { Rule, RuleOptions, SourceFile, Violation } from "./types.js";
 import { isCommentLine, splitLines } from "../util.js";
 
-const VAR_RESPONSE = /var\s+\$response\b/;
+const VAR_RESPONSE = /\bvar\s+\$response\b/;
 
 export const noVarResponse: Rule = {
   id: "no_var_response",

@@ -147,7 +147,7 @@ export function resolveConfig(
     }
   }
 
-  const knownIds = new Set([...builtinIds, ...customIds, "custom_rules"]);
+  const knownIds = new Set([...builtinIds, ...customIds]);
   for (const [listName, list] of [
     ["disabled_rules", disabledRules],
     ["opt_in_rules", optInRules],
@@ -157,6 +157,12 @@ export function resolveConfig(
       continue;
     }
     for (const id of list) {
+      if (id === "custom_rules") {
+        if (listName !== "only_rules") {
+          throw new ConfigError("custom_rules is only valid in only_rules");
+        }
+        continue;
+      }
       if (!knownIds.has(id)) {
         throw new ConfigError(`unknown rule id in ${listName}: ${id}`);
       }

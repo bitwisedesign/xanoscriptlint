@@ -145,6 +145,39 @@ custom_rules:
     assert.equal(config.customRules.length, 0);
   });
 
+  it("rejects the custom_rules token in disabled_rules and opt_in_rules", () => {
+    assert.throws(
+      () =>
+        loadConfigText(
+          `
+disabled_rules:
+  - custom_rules
+custom_rules:
+  no_todo:
+    regex: TODO
+`,
+          "/tmp",
+          null,
+        ),
+      /custom_rules is only valid in only_rules/,
+    );
+    assert.throws(
+      () =>
+        loadConfigText(
+          `
+opt_in_rules:
+  - custom_rules
+custom_rules:
+  no_todo:
+    regex: TODO
+`,
+          "/tmp",
+          null,
+        ),
+      /custom_rules is only valid in only_rules/,
+    );
+  });
+
   it("rejects invalid custom regex", () => {
     assert.throws(
       () =>

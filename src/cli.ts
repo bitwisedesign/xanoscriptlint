@@ -2,7 +2,7 @@
 
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { Command } from "commander";
+import { Command, CommanderError } from "commander";
 import { ConfigError, loadConfig } from "./config.js";
 import { discoverXsFiles } from "./discover.js";
 import { lintFiles, readSourceFile } from "./lint.js";
@@ -61,8 +61,8 @@ export async function runCli(
     await program.parseAsync(argv);
     return exitCode;
   } catch (error) {
-    if (isCommanderEarlyExit(error)) {
-      return 0;
+    if (error instanceof CommanderError) {
+      return error.exitCode;
     }
     const message = error instanceof Error ? error.message : String(error);
     io.stderr.write(`${message}\n`);
@@ -121,15 +121,6 @@ function parseReporter(name: string): ReporterName | undefined {
   return undefined;
 }
 
-function isCommanderEarlyExit(error: unknown): boolean {
-  if (typeof error !== "object" || error === null || !("code" in error)) {
-    return false;
-  }
-  const code = (error as { code?: string }).code;
-  return code === "commander.helpDisplayed" || code === "commander.version";
-}
-
 if (isMainModule(process.argv[1], fileURLToPath(import.meta.url))) {
-  const code = await runCli(process.argv);
-  process.exit(code);
+  process.exitCode = await runCli(process.argv);
 }
