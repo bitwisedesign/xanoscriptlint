@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { symlink, writeFile } from "node:fs/promises";
 import { describe, it } from "node:test";
+import { readFile } from "node:fs/promises";
 import { runCli } from "../src/cli.js";
-import { applyStrict, exitCodeFor, formatReport } from "../src/report.js";
-import type { Violation } from "../src/rules/types.js";
+import { applyStrict, exitCodeFor, formatFixSummary, formatReport } from "../src/report.js";
+import type { Correction, Violation } from "../src/rules/types.js";
 import { isMainModule } from "../src/util.js";
-import { collectStream, withTempDir } from "./support.js";
+import { CLEAN_XS, collectStream, withTempDir, writeXs } from "./support.js";
 
 const warning: Violation = {
   ruleId: "no_var_response",
@@ -50,6 +51,16 @@ describe("reporters and exit codes", () => {
     assert.match(stylish, /empty_function_run/);
     assert.match(stylish, /1 problem/);
   });
+
+  it("fix summary lists corrections and a count", () => {
+    const corrections: Correction[] = [
+      { ruleId: "no_trailing_newline", file: "/tmp/a.xs", line: 10 },
+    ];
+    const summary = formatFixSummary(corrections, "/tmp");
+    assert.match(summary, /a\.xs/);
+    assert.match(summary, /no_trailing_newline/);
+    assert.match(summary, /Corrected 1 violation in 1 file/);
+  });
 });
 
 describe("cli", () => {
@@ -78,6 +89,7 @@ describe("cli", () => {
     assert.match(helpText, /xanoscriptlint/);
     assert.match(helpText, /--config/);
     assert.match(helpText, /--strict/);
+    assert.match(helpText, /--fix/);
 
     const verOut = collectStream();
     const verErr = collectStream();
@@ -87,6 +99,52 @@ describe("cli", () => {
     });
     assert.equal(verCode, 0);
     assert.match(verOut.text() + verErr.text(), /\d+\.\d+\.\d+/);
+  });
+
+  it("rewrites a trailing newline with --fix", async () => {
+    await withTempDir(async (dir) => {
+      await writeXs(dir, ".xanoscriptlint.yml", "included:\n  - \"**/*.xs\"\n");
+      const filePath = await writeXs(dir, "ok.xs", `${CLEAN_XS}\n`);
+      const cwd = process.cwd();
+      process.chdir(dir);
+      try {
+        const stdout = collectStream();
+        const stderr = collectStream();
+        const code = await runCli(["node", "xanoscriptlint", "--fix", "ok.xs"], {
+          stdout: stdout.stream,
+          stderr: stderr.stream,
+        });
+        assert.equal(code, 0, stderr.text());
+        assert.equal(await readFile(filePath, "utf8"), CLEAN_XS);
+        assert.match(stdout.text(), /no_trailing_newline/);
+        assert.match(stdout.text(), /Corrected 1 violation in 1 file/);
+      } finally {
+        process.chdir(cwd);
+      }
+    });
+  });
+
+  it("keeps --fix summary off JSON stdout", async () => {
+    await withTempDir(async (dir) => {
+      await writeXs(dir, ".xanoscriptlint.yml", "included:\n  - \"**/*.xs\"\n");
+      const filePath = await writeXs(dir, "ok.xs", `${CLEAN_XS}\n`);
+      const cwd = process.cwd();
+      process.chdir(dir);
+      try {
+        const stdout = collectStream();
+        const stderr = collectStream();
+        const code = await runCli(
+          ["node", "xanoscriptlint", "--fix", "--reporter", "json", "ok.xs"],
+          { stdout: stdout.stream, stderr: stderr.stream },
+        );
+        assert.equal(code, 0, stderr.text());
+        assert.equal(await readFile(filePath, "utf8"), CLEAN_XS);
+        assert.deepEqual(JSON.parse(stdout.text()), []);
+        assert.match(stderr.text(), /Corrected 1 violation in 1 file/);
+      } finally {
+        process.chdir(cwd);
+      }
+    });
   });
 });
 

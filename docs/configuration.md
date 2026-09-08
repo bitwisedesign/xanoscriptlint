@@ -97,10 +97,11 @@ Multiple ids may be separated by spaces or commas. `disable` without `next` or `
 | `--config <path>` | Load this YAML file |
 | `--reporter stylish\|json` | Output format (default `stylish`) |
 | `--strict` | Treat warnings as errors |
+| `--fix` | Automatically fix violations where a rule implements a fixer |
 | `--version` | Print the package version |
 
 Exit codes: `0` no errors, `2` at least one error-severity violation, `1` usage or config error.
 
 ## Out of scope
 
-Nested directory configs, `parent_config`, `--fix`, analyzer/type-aware rules, JavaScript plugin rules, and SARIF are not implemented yet.
+Nested directory configs, `parent_config`, analyzer/type-aware rules, JavaScript plugin rules, and SARIF are not implemented yet.

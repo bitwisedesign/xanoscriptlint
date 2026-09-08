@@ -13,4 +13,11 @@ export function builtinRuleById(id: string): Rule | undefined {
   return builtinRules.find((rule) => rule.id === id);
 }
 
-export type { Rule, RuleOptions, Severity, SourceFile, Violation } from "./types.js";
+export type {
+  Correction,
+  Rule,
+  RuleOptions,
+  Severity,
+  SourceFile,
+  Violation,
+} from "./types.js";

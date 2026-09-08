@@ -81,7 +81,7 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 | Id | Default | Severity | What it catches |
 | --- | --- | --- | --- |
 | `empty_function_run` | on | error | `function.run ""` / `function.run ''` |
-| `no_trailing_newline` | on | error | File does not end with `}` (Xano pull strips trailing newlines) |
+| `no_trailing_newline` | on | error | File does not end with `}` (Xano pull strips trailing newlines); auto-fixable with `--fix` |
 | `no_var_response` | opt-in | warning | `var $response` (Xano rewrites it) |
 
 House style such as a `// Modified:` timestamp belongs in `custom_rules`, not in the default catalog:
@@ -118,6 +118,7 @@ xanoscriptlint rules
 xanoscriptlint --config path/to/.xanoscriptlint.yml
 xanoscriptlint --reporter json
 xanoscriptlint --strict
+xanoscriptlint --fix
 ```
 
 Exit `0` when there are no error-severity violations. Exit `2` when there is at least one error. Warnings alone do not fail CI unless `--strict`.

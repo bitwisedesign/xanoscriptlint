@@ -14,3 +14,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Regex `custom_rules`.
 - Own-line suppressions: `disable` / `enable` / `disable:next` / `disable:previous`.
 - Built-in rules: `empty_function_run`, `no_trailing_newline` (default on), `no_var_response` (opt-in).
+- `--fix` applies auto-fixes for enabled rules that implement a fixer (`no_trailing_newline`).

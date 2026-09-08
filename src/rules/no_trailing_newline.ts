@@ -22,4 +22,14 @@ export const noTrailingNewline: Rule = {
       },
     ];
   },
+  fix(file: SourceFile): string | null {
+    const trimmed = file.text.replace(/\s+$/, "");
+    if (!trimmed.endsWith("}")) {
+      return null;
+    }
+    if (trimmed === file.text) {
+      return null;
+    }
+    return trimmed;
+  },
 };

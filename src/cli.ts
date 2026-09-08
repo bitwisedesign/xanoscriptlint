@@ -1,18 +1,21 @@
 #!/usr/bin/env node
 
+import { writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { Command, CommanderError } from "commander";
 import { ConfigError, loadConfig } from "./config.js";
 import { discoverXsFiles } from "./discover.js";
-import { lintFiles, readSourceFile } from "./lint.js";
+import { fixFile, lintFiles, readSourceFile } from "./lint.js";
 import { builtinRules } from "./rules/index.js";
 import {
   applyStrict,
   exitCodeFor,
+  formatFixSummary,
   formatReport,
   type ReporterName,
 } from "./report.js";
+import type { Correction, SourceFile } from "./rules/types.js";
 import { isMainModule } from "./util.js";
 
 const require = createRequire(import.meta.url);
@@ -31,6 +34,7 @@ export async function runCli(
     .option("-c, --config <path>", "path to .xanoscriptlint.yml")
     .option("--reporter <name>", "stylish or json", "stylish")
     .option("--strict", "treat warnings as errors", false)
+    .option("--fix", "automatically fix violations where possible", false)
     .exitOverride()
     .configureOutput({
       writeOut: (str) => io.stdout.write(str),
@@ -46,6 +50,7 @@ export async function runCli(
         config?: string;
         reporter: string;
         strict: boolean;
+        fix: boolean;
       }>();
       exitCode = await runLint(paths, opts, io);
     });
@@ -72,7 +77,7 @@ export async function runCli(
 
 async function runLint(
   paths: string[],
-  opts: { config?: string; reporter: string; strict: boolean },
+  opts: { config?: string; reporter: string; strict: boolean; fix: boolean },
   io: { stdout: NodeJS.WritableStream; stderr: NodeJS.WritableStream },
 ): Promise<number> {
   const reporter = parseReporter(opts.reporter);
@@ -85,7 +90,26 @@ async function runLint(
     const cwd = process.cwd();
     const config = loadConfig({ cwd, configPath: opts.config });
     const files = await discoverXsFiles({ config, cwd, cliPaths: paths });
-    const sources = files.map((filePath) => readSourceFile(filePath));
+    let sources = files.map((filePath) => readSourceFile(filePath));
+    if (opts.fix) {
+      const corrections: Correction[] = [];
+      const fixed: SourceFile[] = [];
+      for (const source of sources) {
+        const result = fixFile(source, config);
+        if (result.changed) {
+          writeFileSync(source.path, result.text, "utf8");
+        }
+        corrections.push(...result.corrections);
+        fixed.push({ path: source.path, text: result.text });
+      }
+      sources = fixed;
+      const summary = formatFixSummary(corrections, cwd);
+      if (summary.length > 0) {
+        const text = summary.endsWith("\n") ? summary : `${summary}\n`;
+        const stream = reporter === "json" ? io.stderr : io.stdout;
+        stream.write(text);
+      }
+    }
     const violations = applyStrict(lintFiles(sources, config), opts.strict);
     const report = formatReport(violations, reporter, cwd);
     if (report.length > 0) {
