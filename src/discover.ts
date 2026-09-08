@@ -66,12 +66,7 @@ async function walk(
 }
 
 function compileGlob(pattern: string): GlobMatcher {
-  const match = picomatch(pattern, { dot: true });
-  if (pattern.startsWith("**/")) {
-    const basenameMatch = picomatch(pattern.slice(3), { dot: true });
-    return (rel: string) => Boolean(match(rel) || basenameMatch(rel));
-  }
-  return (rel: string) => Boolean(match(rel));
+  return picomatch(pattern, { dot: true });
 }
 
 function isIncluded(rel: string, include: GlobMatcher[]): boolean {
