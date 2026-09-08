@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { Violation } from "./rules/types.js";
+import type { Correction, Violation } from "./rules/types.js";
 
 export type ReporterName = "stylish" | "json";
 
@@ -64,6 +64,31 @@ function displayPath(file: string, cwd: string): string {
     return rel.split(path.sep).join("/");
   }
   return file;
+}
+
+export function formatFixSummary(corrections: Correction[], cwd: string): string {
+  if (corrections.length === 0) {
+    return "";
+  }
+  const byFile = new Map<string, Correction[]>();
+  for (const correction of corrections) {
+    const file = displayPath(correction.file, cwd);
+    const list = byFile.get(file) ?? [];
+    list.push(correction);
+    byFile.set(file, list);
+  }
+  const sections: string[] = [];
+  for (const [file, fileCorrections] of byFile) {
+    const lines = [file];
+    for (const correction of fileCorrections) {
+      lines.push(`  ${correction.line}:1  Corrected  ${correction.ruleId}`);
+    }
+    sections.push(lines.join("\n"));
+  }
+  const violationWord = corrections.length === 1 ? "violation" : "violations";
+  const fileWord = byFile.size === 1 ? "file" : "files";
+  sections.push(`\nCorrected ${corrections.length} ${violationWord} in ${byFile.size} ${fileWord}`);
+  return sections.join("\n\n");
 }
 
 export function applyStrict(violations: Violation[], strict: boolean): Violation[] {

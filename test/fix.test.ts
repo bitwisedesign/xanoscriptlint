@@ -1,0 +1,52 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import { resolveConfig } from "../src/config.js";
+import { fixFile } from "../src/lint.js";
+import { CLEAN_XS } from "./support.js";
+
+function config(overrides: Parameters<typeof resolveConfig>[0] = {}) {
+  return resolveConfig(overrides, "/tmp", null);
+}
+
+describe("fixFile", () => {
+  it("strips a trailing newline and reports a correction", () => {
+    const file = { path: "nl.xs", text: `${CLEAN_XS}\n` };
+    const result = fixFile(file, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, CLEAN_XS);
+    assert.equal(result.corrections.length, 1);
+    assert.equal(result.corrections[0].ruleId, "no_trailing_newline");
+    assert.equal(result.corrections[0].file, "nl.xs");
+  });
+
+  it("makes no change to an already-clean file", () => {
+    const result = fixFile({ path: "clean.xs", text: CLEAN_XS }, config());
+    assert.equal(result.changed, false);
+    assert.equal(result.text, CLEAN_XS);
+    assert.deepEqual(result.corrections, []);
+  });
+
+  it("does not fix a suppressed no_trailing_newline violation", () => {
+    const text = `// xanoscriptlint:disable no_trailing_newline\n${CLEAN_XS}\n`;
+    const result = fixFile({ path: "suppressed.xs", text }, config());
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
+    assert.deepEqual(result.corrections, []);
+  });
+
+  it("does not rewrite an unfixable file that does not end with }", () => {
+    const text = "not a closing brace\n";
+    const result = fixFile({ path: "bad.xs", text }, config());
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
+    assert.deepEqual(result.corrections, []);
+  });
+
+  it("does not run the fixer when the rule is disabled", () => {
+    const file = { path: "nl.xs", text: `${CLEAN_XS}\n` };
+    const result = fixFile(file, config({ disabled_rules: ["no_trailing_newline"] }));
+    assert.equal(result.changed, false);
+    assert.equal(result.text, file.text);
+    assert.deepEqual(result.corrections, []);
+  });
+});

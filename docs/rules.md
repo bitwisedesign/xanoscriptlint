@@ -3,7 +3,7 @@
 | Id | Default | Severity | Description |
 | --- | --- | --- | --- |
 | [`empty_function_run`](#empty_function_run) | on | error | `function.run` must not be called with an empty name |
-| [`no_trailing_newline`](#no_trailing_newline) | on | error | File must end with `}` and no trailing newline |
+| [`no_trailing_newline`](#no_trailing_newline) | on | error | File must end with `}` and no trailing newline (auto-fixable) |
 | [`no_var_response`](#no_var_response) | opt-in | warning | Do not declare `var $response` |
 
 List the same catalog from the CLI with `xanoscriptlint rules`.
@@ -22,6 +22,8 @@ Comment lines are ignored.
 ## no_trailing_newline
 
 Xano pull strips trailing newlines and treats their absence as canonical. A lintable file must end with `}` as the last character — no `\n` after it.
+
+Auto-fixable with `--fix`: trailing whitespace after the closing `}` is stripped. Files that do not end with `}` after that trim remain a reported violation.
 
 ## no_var_response
 

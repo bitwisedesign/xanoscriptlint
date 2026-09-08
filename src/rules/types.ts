@@ -18,10 +18,17 @@ export interface RuleOptions {
   severity?: Severity;
 }
 
+export interface Correction {
+  ruleId: string;
+  file: string;
+  line: number;
+}
+
 export interface Rule {
   id: string;
   description: string;
   defaultEnabled: boolean;
   defaultSeverity: Severity;
   lint(file: SourceFile, options: RuleOptions): Violation[];
+  fix?(file: SourceFile, options: RuleOptions): string | null;
 }
