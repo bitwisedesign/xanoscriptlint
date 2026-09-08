@@ -45,7 +45,7 @@ npm run build
 npm link
 ```
 
-Or `npm install -g .` from this checkout. Remove it with `npm unlink -g xanoscriptlint`.
+Or `npm install -g .` from this checkout. Remove it with `npm unlink -g @bitwisedesign/xanoscriptlint`.
 
 ## Pull requests
 

@@ -1,8 +1,11 @@
 {
-  "name": "xanoscriptlint",
+  "name": "@bitwisedesign/xanoscriptlint",
   "version": "0.1.0",
   "description": "A linter for XanoScript",
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=20"
   },

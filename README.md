@@ -9,13 +9,13 @@ Requires Node.js 20 or later. Runs on linux and macOS (Windows is untested but n
 ## Install
 
 ```bash
-npm install --save-dev xanoscriptlint
+npm install --save-dev @bitwisedesign/xanoscriptlint
 ```
 
 ```bash
-npx xanoscriptlint
-npx xanoscriptlint rules
-npx xanoscriptlint path/to/file.xs
+npx @bitwisedesign/xanoscriptlint
+npx @bitwisedesign/xanoscriptlint rules
+npx @bitwisedesign/xanoscriptlint path/to/file.xs
 ```
 
 `npx` is optional. After a local install, npm puts the binary on `PATH` for scripts:
@@ -28,7 +28,7 @@ npx xanoscriptlint path/to/file.xs
 
 Then `npm run lint:xs` runs `xanoscriptlint` with no `npx`.
 
-`npm install -g xanoscriptlint` (no path) only works after the package is published to npm. To put the command on your PATH from a git checkout:
+`npm install -g @bitwisedesign/xanoscriptlint` (no path) only works after the package is published to npm. To put the command on your PATH from a git checkout:
 
 ```bash
 npm install
@@ -36,7 +36,7 @@ npm run build
 npm link
 ```
 
-Or `npm install -g /path/to/xanoscriptlint`. Remove a link with `npm unlink -g xanoscriptlint`.
+Or `npm install -g /path/to/xanoscriptlint`. Remove a link with `npm unlink -g @bitwisedesign/xanoscriptlint`.
 
 ## Configuration
 
