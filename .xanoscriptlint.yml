@@ -1,0 +1,6 @@
+included:
+  - "**/*.xs"
+excluded:
+  - "test/fixtures/**"
+  - ".xano/**"
+  - "**/node_modules/**"

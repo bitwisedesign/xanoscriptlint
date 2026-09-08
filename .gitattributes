@@ -1,0 +1,2 @@
+# Fixture bytes are significant: several files must not end with a newline.
+test/fixtures/**/*.xs -text
