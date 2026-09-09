@@ -144,7 +144,8 @@ function runContext(stack: Frame[]): { inFunctionRun: boolean; functionRunId: nu
 }
 
 function isFunctionRunBrace(line: string, braceCol: number): boolean {
-  return /\bfunction\.run\b/.test(line.slice(0, braceCol));
+  const prefix = line.slice(0, braceCol);
+  return /\bfunction\.run\b/.test(prefix) && !prefix.includes("{");
 }
 
 function addEntry(frame: Frame, entry: ObjectEntry): void {

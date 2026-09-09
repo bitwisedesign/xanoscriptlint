@@ -253,11 +253,14 @@ function functionRunMockIndentViolations(
   return violations;
 }
 
-function fixFunctionRunMockIndents(records: LineRecord[]): boolean {
+function fixFunctionRunMockIndents(records: LineRecord[], permittedLines: Set<number>): boolean {
   const lines = records.map((record) => record.content);
   let changed = false;
   const pairs = functionRunPairs(lines).sort((a, b) => b.mock.openLine - a.mock.openLine);
   for (const { input, mock } of pairs) {
+    if (!permittedLines.has(mock.openLine + 1)) {
+      continue;
+    }
     const inputIndent = leadingSpaces(records[input.openLine].content);
     const mockIndent = leadingSpaces(records[mock.openLine].content);
     const delta = inputIndent - mockIndent;
@@ -330,13 +333,13 @@ export const fenceMultilineValues: Rule = {
       .filter((entry) => rewriteLines.has(entry.lineIndex + 1))
       .sort((a, b) => b.lineIndex - a.lineIndex || b.colonIndex - a.colonIndex);
     let changed = false;
+    if (fixFunctionRunMockIndents(records, rewriteLines)) {
+      changed = true;
+    }
     for (const entry of entries) {
       if (fenceEntry(records, entry)) {
         changed = true;
       }
-    }
-    if (fixFunctionRunMockIndents(records)) {
-      changed = true;
     }
     if (!changed) {
       return null;

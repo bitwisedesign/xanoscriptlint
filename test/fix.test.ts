@@ -518,6 +518,46 @@ describe("fixFile", () => {
     assert.equal(fixedInput !== undefined && fixedMock !== undefined, true);
     assert.equal(fixedInput?.match(/^ */)?.[0].length, fixedMock?.match(/^ */)?.[0].length);
     assert.match(outdented.text, /function\.run[^\n]*\{\n(?:.*\n)* *mock = \{/);
+
+    const suppressedOutdent = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query item {
+      mock = {
+        "checkout applies gift wrap": {
+          queued: []
+        }
+      }
+    }
+    conditional {
+      if ($ok) {
+        foreach ($items) {
+          each {
+            function.run "Orders/apply_discounts" {
+              input = {
+                user_id: $cart_user_id
+                reason : "manual"
+              }
+
+              // xanoscriptlint:disable:next fence_multiline_values
+          mock = {
+            "checkout empty cart": {queued: [], sent: [], done: false}
+          }
+            } as $discount_result
+          }
+        }
+      }
+    }
+  }
+
+  response = $ok
+}`;
+    const kept = fixFile({ path: "suppressed-outdent.xs", text: suppressedOutdent }, config());
+    assert.equal(kept.changed, true);
+    assert.match(kept.text, /"checkout applies gift wrap": ```/);
+    assert.match(kept.text, /\n {10}mock = \{\n/);
   });
 
   it("does not rewrite a tab-indented multiline value", () => {

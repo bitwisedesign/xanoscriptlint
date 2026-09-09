@@ -694,15 +694,19 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     const double = lintFile({ path: "double.xs", text: INVALID_DOUBLE_OPENER_XS }, config()).filter(
       (v) => v.ruleId === "fence_multiline_values",
     );
-    assert.equal(double.length >= 1, true);
+    assert.equal(double.length, 1);
     assert.match(double[0]?.message ?? "", /consecutive fence openers/);
+    assert.equal(double[0]?.line, 9);
+    assert.equal(double[0]?.column, 9);
 
     const outdented = lintFile(
       { path: "outdent.xs", text: INVALID_FUNCTION_RUN_OUTDENTED_MOCK_XS },
       config(),
     ).filter((v) => v.ruleId === "fence_multiline_values");
-    assert.equal(outdented.length >= 1, true);
+    assert.equal(outdented.length, 1);
     assert.match(outdented[0]?.message ?? "", /indented with input inside function\.run/);
+    assert.equal(outdented[0]?.line, 16);
+    assert.equal(outdented[0]?.column, 11);
 
     const validFences = lintFile({ path: "ok-fence.xs", text: VALID_SIBLING_FENCES_XS }, config());
     assert.equal(
@@ -727,6 +731,37 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
       multilineRun.some((v) => v.ruleId === "fence_multiline_values"),
       false,
     );
+
+    const sameLineOpen = `function "example" {
+  input {
+  }
+
+  stack {
+    conditional {
+      if ($ok) {
+        foreach ($items) {
+          each {
+            function.run "Orders/apply_discounts" { input = {
+                user_id: $cart_user_id
+              }
+
+          mock = {
+            "checkout empty cart": {queued: [], sent: [], done: false}
+          }
+            } as $discount_result
+          }
+        }
+      }
+    }
+  }
+
+  response = $ok
+}`;
+    const sameLineHits = lintFile({ path: "same-line.xs", text: sameLineOpen }, config()).filter(
+      (v) => v.ruleId === "fence_multiline_values",
+    );
+    assert.equal(sameLineHits.length >= 1, true);
+    assert.match(sameLineHits[0]?.message ?? "", /indented with input inside function\.run/);
   });
 
   it("no_zero_numeric_default flags explicit zero defaults", () => {
