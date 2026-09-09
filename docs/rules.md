@@ -2,7 +2,7 @@
 
 | Id | Default | Severity | Auto-fix | Description |
 | --- | --- | --- | --- | --- |
-| [`align_mock_colons`](#align_mock_colons) | on | error | yes | Mock entry colons must align to the longest name |
+| [`align_object_colons`](#align_object_colons) | on | error | yes | Object entry colons must align to the longest name |
 | [`empty_function_run`](#empty_function_run) | on | error | no | `function.run` must not be called with an empty name |
 | [`fence_multiline_mocks`](#fence_multiline_mocks) | on | error | yes | Multiline mock values must be wrapped in a triple-backtick fence |
 | [`no_null_response`](#no_null_response) | opt-in | warning | yes | Do not assign `response = null` |
@@ -11,20 +11,29 @@
 
 List the same catalog from the CLI with `xanoscriptlint rules`.
 
-## align_mock_colons
+## align_object_colons
 
-Xano realigns `mock` entry colons on push so they share one column, immediately after the longest quoted name in that block. The pulled file is canonical; local misalignment is push/pull churn.
+Xano realigns `key: value` colons on push so siblings in the same `{ ... }` share one column, immediately after the longest name in that block. The pulled file is canonical; local misalignment is push/pull churn.
+
+The rule covers assignment objects Xano realigns on push — `input = {`, `mock = {`, `data = {`, `response = {`, `return {` — and nested `{ ... }` values inside those. Each `{ ... }` aligns independently. Quoted keys count their quotes toward name length. Anonymous objects in arrays (`value = [{ ... }]`) are left as-is; Xano does not rewrite those.
 
 ```xs
+input = {
+  user_id   : $input.user_id
+  award_uuid: $input.award_uuid
+}
+
 mock = {
   "checkout short"                : {id: 1}
   "checkout longest_scenario_name": {id: 2}
 }
 ```
 
-Each `mock = { ... }` block is aligned independently. Text after the colon is left unchanged, including multiline and triple-backtick values. Quoted keys outside `mock` are ignored.
+Own-line entries pad so every colon sits immediately after the longest name. Inline pairs (`{id: 1, name: "x"}`) stay compact: no pad before the colon. Exactly one space follows each colon. Text after that space is left unchanged, including multiline and triple-backtick values.
 
-Auto-fixable with `--fix`: spaces between the closing `"` and `:` are inserted or removed until the colons line up.
+Content inside triple-backtick fences and `"""` strings is ignored, so prompt bodies and fenced JSON are not rewritten. Blocks that are not colon-object assignments (`throw { name = ... }`, `var $x { value = ... }`, `input { uuid id }` declarations, and `{ ... }` array elements) are skipped.
+
+Auto-fixable with `--fix`: spaces before the colon are inserted or removed until the colons line up, and extra spaces after the colon collapse to one.
 
 ## empty_function_run
 

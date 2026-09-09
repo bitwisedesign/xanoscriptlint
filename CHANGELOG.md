@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Default-on `fence_multiline_mocks` flags unfenced multiline `mock` values and auto-fixes them to Xano's push fence.
-- Default-on `align_mock_colons` flags misaligned `mock` entry colons and auto-fixes them to Xano's push alignment.
+- Default-on `align_object_colons` flags misaligned `key: value` colons in assignment objects (`input = {`, `mock = {`, and nested values) and auto-fixes them to Xano's push alignment.
 - Opt-in `no_null_response` flags `response = null` and auto-fixes to `response = {}`.
 
 ### Changed

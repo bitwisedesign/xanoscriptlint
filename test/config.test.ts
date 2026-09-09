@@ -11,7 +11,7 @@ describe("config enablement", () => {
     const config = resolveConfig({}, "/tmp", null);
     assert.equal(config.enabledRuleIds.has("empty_function_run"), true);
     assert.equal(config.enabledRuleIds.has("no_trailing_newline"), true);
-    assert.equal(config.enabledRuleIds.has("align_mock_colons"), true);
+    assert.equal(config.enabledRuleIds.has("align_object_colons"), true);
     assert.equal(config.enabledRuleIds.has("fence_multiline_mocks"), true);
     assert.equal(config.enabledRuleIds.has("no_var_response"), false);
     assert.deepEqual(config.included, ["**/*.xs"]);

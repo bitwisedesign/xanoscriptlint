@@ -121,20 +121,20 @@ describe("built-in rules", () => {
     );
   });
 
-  it("align_mock_colons flags misaligned mock names and skips non-mocks", () => {
+  it("align_object_colons flags misaligned mock names", () => {
     const aligned = lintFile({ path: "ok.xs", text: ALIGNED_MOCK_XS }, config());
     assert.equal(
-      aligned.some((v) => v.ruleId === "align_mock_colons"),
+      aligned.some((v) => v.ruleId === "align_object_colons"),
       false,
     );
 
     const under = lintFile({ path: "under.xs", text: UNDERPADDED_MOCK_XS }, config());
-    const underHit = under.filter((v) => v.ruleId === "align_mock_colons");
+    const underHit = under.filter((v) => v.ruleId === "align_object_colons");
     assert.equal(underHit.length, 1);
     assert.equal(underHit[0]?.line, 8);
 
     const over = lintFile({ path: "over.xs", text: OVERPADDED_LONG_MOCK_XS }, config());
-    const overHit = over.filter((v) => v.ruleId === "align_mock_colons");
+    const overHit = over.filter((v) => v.ruleId === "align_object_colons");
     assert.equal(overHit.length, 1);
     assert.equal(overHit[0]?.line, 9);
 
@@ -160,7 +160,7 @@ describe("built-in rules", () => {
   response = $item
 }`;
     const two = lintFile({ path: "two.xs", text: twoBlocks }, config());
-    const twoHits = two.filter((v) => v.ruleId === "align_mock_colons");
+    const twoHits = two.filter((v) => v.ruleId === "align_object_colons");
     assert.equal(twoHits.length, 1);
     assert.equal(twoHits[0]?.line, 8);
 
@@ -173,7 +173,7 @@ describe("built-in rules", () => {
         ${MOCK_LONG_NAME}: []`,
     );
     const multi = lintFile({ path: "multi.xs", text: multiline }, config());
-    const multiHits = multi.filter((v) => v.ruleId === "align_mock_colons");
+    const multiHits = multi.filter((v) => v.ruleId === "align_object_colons");
     assert.equal(multiHits.length, 1);
     assert.equal(multiHits[0]?.line, 8);
 
@@ -191,14 +191,14 @@ describe("built-in rules", () => {
 }`;
     const compact = lintFile({ path: "one.xs", text: oneLiner }, config());
     assert.equal(
-      compact.some((v) => v.ruleId === "align_mock_colons"),
+      compact.some((v) => v.ruleId === "align_object_colons"),
       true,
     );
 
     const singleEntry = wrapMockBlock(`        ${MOCK_SHORT_NAME}  : {id: 1}`);
     const single = lintFile({ path: "single.xs", text: singleEntry }, config());
     assert.equal(
-      single.some((v) => v.ruleId === "align_mock_colons"),
+      single.some((v) => v.ruleId === "align_object_colons"),
       true,
     );
 
@@ -217,10 +217,10 @@ describe("built-in rules", () => {
 
   response = $row
 }`;
-    const ignored = lintFile({ path: "obj.xs", text: notMock }, config());
+    const objectHits = lintFile({ path: "obj.xs", text: notMock }, config());
     assert.equal(
-      ignored.some((v) => v.ruleId === "align_mock_colons"),
-      false,
+      objectHits.some((v) => v.ruleId === "align_object_colons"),
+      true,
     );
 
     const commented = wrapMockBlock(
@@ -229,16 +229,204 @@ ${ALIGNED_MOCK_ENTRIES}`,
     );
     const comments = lintFile({ path: "c.xs", text: commented }, config());
     assert.equal(
-      comments.some((v) => v.ruleId === "align_mock_colons"),
+      comments.some((v) => v.ruleId === "align_object_colons"),
       false,
     );
 
     const disabled = lintFile(
       { path: "off.xs", text: UNDERPADDED_MOCK_XS },
-      config({ disabled_rules: ["align_mock_colons"] }),
+      config({ disabled_rules: ["align_object_colons"] }),
     );
     assert.equal(
-      disabled.some((v) => v.ruleId === "align_mock_colons"),
+      disabled.some((v) => v.ruleId === "align_object_colons"),
+      false,
+    );
+  });
+
+  it("align_object_colons flags input blocks, nested objects, and inline padding", () => {
+    const alignedInput = `function "example" {
+  input {
+  }
+
+  stack {
+    function.run "Orders/dispatch" {
+      input = {
+        user_id   : $input.user_id
+        award_uuid: $input.award_uuid
+      }
+    } as $dispatch
+  }
+
+  response = $dispatch
+}`;
+    assert.equal(
+      lintFile({ path: "in-ok.xs", text: alignedInput }, config()).some(
+        (v) => v.ruleId === "align_object_colons",
+      ),
+      false,
+    );
+
+    const misalignedInput = `function "example" {
+  input {
+  }
+
+  stack {
+    function.run "Orders/dispatch" {
+      input = {
+        user_id: $input.user_id
+        award_uuid: $input.award_uuid
+      }
+    } as $dispatch
+  }
+
+  response = $dispatch
+}`;
+    const inputHits = lintFile({ path: "in-bad.xs", text: misalignedInput }, config()).filter(
+      (v) => v.ruleId === "align_object_colons",
+    );
+    assert.equal(inputHits.length, 1);
+    assert.equal(inputHits[0]?.line, 8);
+    assert.equal(inputHits[0]?.message, "object colons must align to the longest name");
+
+    const nested = `function "example" {
+  input {
+  }
+
+  stack {
+    db.add job {
+      data = {
+        short: 1
+        nested: {
+          inner_longer: 2
+          x           : 3
+        }
+      }
+    }
+  }
+
+  response = $job
+}`;
+    const nestedHits = lintFile({ path: "nested.xs", text: nested }, config()).filter(
+      (v) => v.ruleId === "align_object_colons",
+    );
+    assert.equal(nestedHits.length, 1);
+    assert.equal(nestedHits[0]?.line, 8);
+
+    const afterColon = `function "example" {
+  input {
+  }
+
+  stack {
+    function.run "Orders/dispatch" {
+      input = {
+        user_id   :  $input.user_id
+        award_uuid: $input.award_uuid
+      }
+    } as $dispatch
+  }
+
+  response = $dispatch
+}`;
+    const spaceHits = lintFile({ path: "spaces.xs", text: afterColon }, config()).filter(
+      (v) => v.ruleId === "align_object_colons",
+    );
+    assert.equal(spaceHits.length, 1);
+    assert.equal(spaceHits[0]?.line, 8);
+    assert.equal(spaceHits[0]?.message, "object colon must be followed by a single space");
+
+    const inline = `function "example" {
+  input {
+  }
+
+  stack {
+    function.run "Orders/dispatch" {
+      input = {user_id  : 1, amount: 2}
+    } as $dispatch
+  }
+
+  response = $dispatch
+}`;
+    const inlineHits = lintFile({ path: "inline.xs", text: inline }, config()).filter(
+      (v) => v.ruleId === "align_object_colons",
+    );
+    assert.equal(inlineHits.length, 1);
+    assert.equal(inlineHits[0]?.line, 7);
+  });
+
+  it("align_object_colons ignores fences, triple quotes, declarations, pipes, and array objects", () => {
+    const fenced = wrapMockBlock(
+      `        "checkout source": \`\`\`
+          {
+            foo: 1
+            longer_key: 2
+          }
+          \`\`\``,
+    );
+    assert.equal(
+      lintFile({ path: "fence.xs", text: fenced }, config()).some(
+        (v) => v.ruleId === "align_object_colons",
+      ),
+      false,
+    );
+
+    const triple = `function "example" {
+  input {
+  }
+
+  stack {
+    var $agent {
+      value = {
+        type         : "openai"
+        system_prompt: """
+          foo     : 1
+          longer_key: 2
+          """
+        max_steps    : 10
+      }
+    }
+  }
+
+  response = $agent
+}`;
+    assert.equal(
+      lintFile({ path: "triple.xs", text: triple }, config()).some(
+        (v) => v.ruleId === "align_object_colons",
+      ),
+      false,
+    );
+
+    const ignored = `function "example" {
+  input {
+    uuid job_uuid
+    text email?
+  }
+
+  stack {
+    var $err {
+      value = {}
+        |set:"error":"not_found"
+        |set:"message":"missing"
+    }
+    throw {
+      name = "not_found"
+      value = {}
+    }
+    var $rows {
+      value = [
+        {
+          uuid : "a"
+          output_count_key_fallbacks: []
+        }
+      ]
+    }
+  }
+
+  response = $err
+}`;
+    assert.equal(
+      lintFile({ path: "decl.xs", text: ignored }, config()).some(
+        (v) => v.ruleId === "align_object_colons",
+      ),
       false,
     );
   });
