@@ -83,6 +83,7 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 | `empty_function_run` | on | error | `function.run ""` / `function.run ''` |
 | `no_trailing_newline` | on | error | File does not end with `}` (Xano pull strips trailing newlines); auto-fixable with `--fix` |
 | `no_var_response` | opt-in | warning | `var $response` (Xano rewrites it) |
+| `no_null_response` | opt-in | warning | `response = null`; auto-fixable to `response = {}` with `--fix` |
 
 House style such as a `// Modified:` timestamp belongs in `custom_rules`, not in the default catalog:
 

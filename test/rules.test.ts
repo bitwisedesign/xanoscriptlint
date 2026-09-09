@@ -5,6 +5,7 @@ import { lintFile } from "../src/lint.js";
 import {
   CLEAN_XS,
   EMPTY_RUN_XS,
+  NULL_RESPONSE_XS,
   VAR_RESPONSE_XS,
 } from "./support.js";
 
@@ -60,6 +61,50 @@ describe("built-in rules", () => {
     assert.equal(
       on.some((v) => v.ruleId === "no_var_response"),
       true,
+    );
+  });
+
+  it("no_null_response is opt-in and skips comments and $response", () => {
+    const file = { path: "r.xs", text: NULL_RESPONSE_XS };
+    const off = lintFile(file, config());
+    assert.equal(
+      off.some((v) => v.ruleId === "no_null_response"),
+      false,
+    );
+    const on = lintFile(file, config({ opt_in_rules: ["no_null_response"] }));
+    assert.equal(
+      on.some((v) => v.ruleId === "no_null_response"),
+      true,
+    );
+
+    const commented = {
+      path: "c.xs",
+      text: `function "x" {\n  // response = null\n}`,
+    };
+    const none = lintFile(commented, config({ opt_in_rules: ["no_null_response"] }));
+    assert.equal(
+      none.some((v) => v.ruleId === "no_null_response"),
+      false,
+    );
+
+    const dollar = {
+      path: "d.xs",
+      text: `function "x" {\n  $response = null\n}`,
+    };
+    const skipped = lintFile(dollar, config({ opt_in_rules: ["no_null_response"] }));
+    assert.equal(
+      skipped.some((v) => v.ruleId === "no_null_response"),
+      false,
+    );
+
+    const quoted = {
+      path: "q.xs",
+      text: `function "x" {\n  value = "response = null"\n}`,
+    };
+    const inString = lintFile(quoted, config({ opt_in_rules: ["no_null_response"] }));
+    assert.equal(
+      inString.some((v) => v.ruleId === "no_null_response"),
+      false,
     );
   });
 
