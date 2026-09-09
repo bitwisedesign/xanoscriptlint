@@ -8,6 +8,8 @@
 | [`no_null_response`](#no_null_response) | opt-in | warning | yes | Do not assign `response = null` |
 | [`no_trailing_newline`](#no_trailing_newline) | on | error | yes | File must end with `}` and no trailing newline |
 | [`no_var_response`](#no_var_response) | opt-in | warning | no | Do not declare `var $response` |
+| [`no_zero_numeric_default`](#no_zero_numeric_default) | on | error | yes | Numeric defaults of `0` must be omitted |
+| [`quote_negative_numeric_default`](#quote_negative_numeric_default) | on | error | yes | Negative numeric defaults must be quoted |
 
 List the same catalog from the CLI with `xanoscriptlint rules`.
 
@@ -107,6 +109,32 @@ Auto-fixable with `--fix`: trailing whitespace after the closing `}` is stripped
 opt_in_rules:
   - no_var_response
 ```
+
+## no_zero_numeric_default
+
+Xano strips an explicit default of `0` from `int` and `decimal` declarations on push. The pulled file omits the default, so a local `=0` is push/pull churn. Nullable and array forms are included (`int?`, `decimal?`, `int[]`).
+
+```xs
+int retry_count?=0
+decimal offset?=0.0
+```
+
+Bare zeros (`0`, `0.0`, `.0`, `-0`, `+0`) and quoted zeros (`"0"`, `'0'`) are flagged. Non-zero defaults, and `filters=min:0` on the same line, are left alone.
+
+Auto-fixable with `--fix`: `int retry_count?=0` becomes `int retry_count?` and `decimal offset?=0.0` becomes `decimal offset?`. The optional marker stays; only the zero default is removed. A trailing `filters=` clause or metadata block is preserved.
+
+## quote_negative_numeric_default
+
+Xano quotes a negative `int` or `decimal` default on push. An unquoted `-1` becomes `"-1"`.
+
+```xs
+int quantity?=-1
+decimal drift?=-2.5
+```
+
+Already-quoted negatives are canonical. A negative zero (`-0`) is owned by `no_zero_numeric_default`, which omits the default instead of quoting it.
+
+Auto-fixable with `--fix`: the unquoted negative is wrapped in double quotes. Spacing around `=` and any trailing `filters=` clause or metadata block are preserved.
 
 ## Team-specific rules
 

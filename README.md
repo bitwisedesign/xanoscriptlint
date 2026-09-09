@@ -86,6 +86,8 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 | `no_null_response` | opt-in | warning | yes | `response = null` (use `response = {}`) |
 | `no_trailing_newline` | on | error | yes | File does not end with `}` (Xano pull strips trailing newlines) |
 | `no_var_response` | opt-in | warning | no | `var $response` (Xano rewrites it) |
+| `no_zero_numeric_default` | on | error | yes | Explicit numeric default of `0` (Xano strips it on push) |
+| `quote_negative_numeric_default` | on | error | yes | Unquoted negative numeric default (Xano quotes it on push) |
 
 House style such as a `// Modified:` timestamp belongs in `custom_rules`, not in the default catalog:
 

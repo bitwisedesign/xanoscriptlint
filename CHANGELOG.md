@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Default-on `fence_multiline_values` flags unfenced multiline `mock` and `input` values and auto-fixes eligible bare `{` / `[` values on the key line to Xano's push fence. Other reported values are left unchanged.
 - Default-on `align_object_colons` flags misaligned `key: value` colons in assignment objects (`input = {`, `mock = {`, and nested values) and auto-fixes them to Xano's push alignment.
 - Opt-in `no_null_response` flags `response = null` and auto-fixes to `response = {}`.
+- Default-on `no_zero_numeric_default` flags an explicit numeric default of `0` and auto-fixes by omitting it.
+- Default-on `quote_negative_numeric_default` flags an unquoted negative numeric default and auto-fixes by quoting it.
 
 ### Changed
 
