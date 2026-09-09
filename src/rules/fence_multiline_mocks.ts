@@ -93,7 +93,8 @@ function fenceEntry(records: LineRecord[], entry: MockEntry): boolean {
   const contentIndent = leadingSpaces(keyLine) + 2;
   const delta = contentIndent - leadingSpaces(endLine);
   const indent = " ".repeat(contentIndent);
-  const ending = records[entry.lineIndex].ending;
+  const keyEnding = records[entry.lineIndex].ending;
+  const closerEnding = records[entry.valueEndLine].ending;
   const shiftedLines: string[] = [];
   for (let i = entry.lineIndex + 1; i <= entry.valueEndLine; i += 1) {
     const shifted = shiftIndent(records[i].content, delta);
@@ -107,8 +108,12 @@ function fenceEntry(records: LineRecord[], entry: MockEntry): boolean {
   }
 
   records[entry.lineIndex].content = `${keyLine.slice(0, entry.colonIndex + 1)} \`\`\``;
-  records.splice(entry.lineIndex + 1, 0, { content: `${indent}${opener}`, ending });
-  records.splice(entry.valueEndLine + 2, 0, { content: `${indent}\`\`\``, ending });
+  records.splice(entry.lineIndex + 1, 0, { content: `${indent}${opener}`, ending: keyEnding });
+  const closerIndex = entry.valueEndLine + 1;
+  if (records[closerIndex].ending === "") {
+    records[closerIndex].ending = keyEnding;
+  }
+  records.splice(closerIndex + 1, 0, { content: `${indent}\`\`\``, ending: closerEnding });
   return true;
 }
 

@@ -251,12 +251,38 @@ describe("fixFile", () => {
       }
       if (i === keyIndex + 2) {
         parts.push(`          ]${endings[i]}`);
-        parts.push(`          \`\`\`${keyEnding}`);
+        parts.push(`          \`\`\`${endings[i]}`);
         continue;
       }
       parts.push(`${underLines[i]}${endings[i]}`);
     }
     assert.equal(result.text, parts.join(""));
+  });
+
+  it("keeps the closing fence at EOF when the mock value has no trailing newline", () => {
+    const text = `function "example" {
+  stack {
+    db.query item {
+      mock = {
+        "checkout lists open carts": [
+          {id: 8}
+        ]`;
+    const result = fixFile({ path: "eof.xs", text }, config());
+    assert.equal(result.changed, true);
+    assert.equal(
+      result.text,
+      `function "example" {
+  stack {
+    db.query item {
+      mock = {
+        "checkout lists open carts": \`\`\`
+          [
+            {id: 8}
+          ]
+          \`\`\``,
+    );
+    assert.equal(result.text.endsWith("```"), true);
+    assert.doesNotMatch(result.text, /\]```/);
   });
 
   it("aligns and fences a misaligned multiline mock in one pass", () => {
