@@ -183,6 +183,29 @@ function alignLine(line: string, entry: MockEntry, targetColon: number): string 
   return `${line.slice(0, keyEnd)}${" ".repeat(pad)}:${line.slice(entry.colonIndex + 1)}`;
 }
 
+interface LineRecord {
+  content: string;
+  ending: string;
+}
+
+function splitLineRecords(text: string): LineRecord[] {
+  const records: LineRecord[] = [];
+  let start = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    if (text[i] !== "\n") {
+      continue;
+    }
+    const crlf = i > start && text[i - 1] === "\r";
+    records.push({
+      content: text.slice(start, crlf ? i - 1 : i),
+      ending: crlf ? "\r\n" : "\n",
+    });
+    start = i + 1;
+  }
+  records.push({ content: text.slice(start), ending: "" });
+  return records;
+}
+
 function violationsFor(
   file: SourceFile,
   lines: string[],
@@ -221,7 +244,8 @@ export const alignMockColons: Rule = {
     return violationsFor(file, splitLines(file.text), severity);
   },
   fix(file: SourceFile): string | null {
-    const lines = splitLines(file.text);
+    const records = splitLineRecords(file.text);
+    const lines = records.map((record) => record.content);
     let changed = false;
     for (const block of findMockBlocks(lines)) {
       if (block.multiKeyLine || block.entries.length === 0) {
@@ -242,7 +266,6 @@ export const alignMockColons: Rule = {
     if (!changed) {
       return null;
     }
-    const nl = file.text.includes("\r\n") ? "\r\n" : "\n";
-    return lines.join(nl);
+    return records.map((record, i) => `${lines[i]}${record.ending}`).join("");
   },
 };

@@ -16,7 +16,7 @@ Xano realigns `mock` entry colons on push so they share one column, immediately 
 
 ```xs
 mock = {
-  "checkout short"                 : {id: 1}
+  "checkout short"                : {id: 1}
   "checkout longest_scenario_name": {id: 2}
 }
 ```

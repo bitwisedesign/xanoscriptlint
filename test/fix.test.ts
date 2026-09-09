@@ -9,6 +9,7 @@ import {
   MOCK_LONG_NAME,
   MOCK_SHORT_NAME,
   NULL_RESPONSE_XS,
+  OVERPADDED_LONG_MOCK_XS,
   UNDERPADDED_MOCK_XS,
   wrapMockBlock,
 } from "./support.js";
@@ -105,6 +106,10 @@ describe("fixFile", () => {
     assert.equal(result.corrections[0].ruleId, "align_mock_colons");
     assert.equal(result.corrections[0].file, "mock.xs");
 
+    const over = fixFile({ path: "over.xs", text: OVERPADDED_LONG_MOCK_XS }, config());
+    assert.equal(over.changed, true);
+    assert.equal(over.text, ALIGNED_MOCK_XS);
+
     const spaced = fixFile({ path: "spaces.xs", text: AFTER_COLON_SPACES_MOCK_XS }, config());
     assert.equal(spaced.changed, true);
     assert.match(spaced.text, new RegExp(`${MOCK_SHORT_NAME}\\s+:    \\{id: 1\\}`));
@@ -122,6 +127,21 @@ describe("fixFile", () => {
     assert.equal(fixedMulti.changed, true);
     assert.match(fixedMulti.text, /\[\s+\{id: 1\}\s+\]/);
     assert.doesNotMatch(fixedMulti.text, new RegExp(`${MOCK_SHORT_NAME}:\`\`\``));
+  });
+
+  it("preserves each line terminator when aligning mock colons", () => {
+    const underLines = UNDERPADDED_MOCK_XS.split("\n");
+    const alignedLines = ALIGNED_MOCK_XS.split("\n");
+    let mixed = "";
+    let expected = "";
+    for (let i = 0; i < underLines.length; i += 1) {
+      const ending = i < underLines.length - 1 ? (i % 2 === 0 ? "\r\n" : "\n") : "";
+      mixed += `${underLines[i]}${ending}`;
+      expected += `${alignedLines[i]}${ending}`;
+    }
+    const result = fixFile({ path: "mixed.xs", text: mixed }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
   });
 
   it("does not rewrite aligned mocks or a disabled align_mock_colons rule", () => {
