@@ -1,3 +1,4 @@
+import { isSuppressed, parseSuppressions } from "../suppress.js";
 import type { Rule, RuleOptions, SourceFile, Violation } from "./types.js";
 import { isCommentLine, splitLines } from "../util.js";
 
@@ -35,11 +36,18 @@ export const noNullResponse: Rule = {
     }
     return violations;
   },
-  fix(file: SourceFile): string | null {
+  fix(file: SourceFile, options: RuleOptions): string | null {
+    const suppressions = parseSuppressions(file.text);
+    const rewriteLines = new Set(
+      noNullResponse
+        .lint(file, options)
+        .filter((violation) => !isSuppressed(suppressions, violation.line, noNullResponse.id))
+        .map((violation) => violation.line),
+    );
     const lines = splitLines(file.text);
     let changed = false;
-    const next = lines.map((line) => {
-      if (isCommentLine(line)) {
+    const next = lines.map((line, i) => {
+      if (!rewriteLines.has(i + 1)) {
         return line;
       }
       const rewritten = rewriteLine(line);

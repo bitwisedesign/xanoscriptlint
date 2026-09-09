@@ -98,4 +98,28 @@ describe("fixFile", () => {
     assert.equal(result.text, text);
     assert.deepEqual(result.corrections, []);
   });
+
+  it("rewrites only unsuppressed response = null lines", () => {
+    const text = `function "x" {
+  // xanoscriptlint:disable:next no_null_response
+  response = null
+  response = null
+}`;
+    const result = fixFile(
+      { path: "mixed.xs", text },
+      config({ opt_in_rules: ["no_null_response"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(
+      result.text,
+      `function "x" {
+  // xanoscriptlint:disable:next no_null_response
+  response = null
+  response = {}
+}`,
+    );
+    assert.equal(result.corrections.length, 1);
+    assert.equal(result.corrections[0].ruleId, "no_null_response");
+    assert.equal(result.corrections[0].line, 4);
+  });
 });
