@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-09
+
 ### Added
 
 - Default-on `fence_multiline_values` flags unfenced multiline `mock` and `input` values and auto-fixes eligible bare `{` / `[` values on the key line to Xano's push fence. Other reported values are left unchanged.
