@@ -3,6 +3,14 @@ function "example" {
   }
 
   stack {
+    function.run "Orders/dispatch" {
+      input = {
+        items: [
+          {id: 1}
+        ]
+      }
+    } as $dispatch
+
     db.query item {
       mock = {
         "checkout applies gift wrap": {

@@ -4,12 +4,17 @@ export interface ObjectEntry {
   key: string;
   colonIndex: number;
   valueStart: number;
+  valueEndLine: number;
+  valueEndCol: number;
+  fenced: boolean;
   ownLine: boolean;
 }
 
 export interface ObjectBlock {
   ownLine: ObjectEntry[];
   inline: ObjectEntry[];
+  owner: string | null;
+  depth: number;
 }
 
 interface Frame {
@@ -17,6 +22,15 @@ interface Frame {
   ownLine: ObjectEntry[];
   inline: ObjectEntry[];
   align: boolean;
+  owner: string | null;
+  depth: number;
+  lastAdded?: ObjectEntry;
+  valueOf?: ObjectEntry;
+}
+
+interface Lookbehind {
+  kind: "=" | ":" | "return";
+  name: string | null;
 }
 
 function isKeyStart(ch: string | undefined): boolean {
@@ -94,12 +108,16 @@ function parseEntry(
   if (line[colonIndex] !== ":") {
     return null;
   }
+  const valueStart = skipSpaces(line, colonIndex + 1);
   return {
     lineIndex,
     keyStart: start,
     key: parsed.key,
     colonIndex,
-    valueStart: skipSpaces(line, colonIndex + 1),
+    valueStart,
+    valueEndLine: lineIndex,
+    valueEndCol: valueStart,
+    fenced: line.startsWith("```", valueStart),
     ownLine,
   };
 }
@@ -115,6 +133,7 @@ function addEntry(frame: Frame, entry: ObjectEntry): void {
   } else {
     frame.inline.push(entry);
   }
+  frame.lastAdded = entry;
 }
 
 function tryInline(
@@ -131,7 +150,26 @@ function tryInline(
   return parseEntry(line, start, lineIndex, false);
 }
 
-function precedingOpener(line: string, braceCol: number): "=" | ":" | "return" | null {
+function assignmentName(line: string, eqIndex: number): string | null {
+  let end = eqIndex - 1;
+  while (end >= 0 && (line[end] === " " || line[end] === "\t")) {
+    end -= 1;
+  }
+  if (end < 0) {
+    return null;
+  }
+  let start = end;
+  while (start >= 0 && /[A-Za-z0-9_$.]/.test(line[start])) {
+    start -= 1;
+  }
+  const token = line.slice(start + 1, end + 1);
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(token)) {
+    return null;
+  }
+  return token;
+}
+
+function lookbehind(line: string, braceCol: number): Lookbehind | null {
   let i = braceCol - 1;
   while (i >= 0 && (line[i] === " " || line[i] === "\t")) {
     i -= 1;
@@ -140,10 +178,10 @@ function precedingOpener(line: string, braceCol: number): "=" | ":" | "return" |
     return null;
   }
   if (line[i] === "=") {
-    return "=";
+    return { kind: "=", name: assignmentName(line, i) };
   }
   if (line[i] === ":") {
-    return ":";
+    return { kind: ":", name: null };
   }
   if (!/[A-Za-z0-9_]/.test(line[i])) {
     return null;
@@ -152,32 +190,64 @@ function precedingOpener(line: string, braceCol: number): "=" | ":" | "return" |
   while (start >= 0 && /[A-Za-z0-9_]/.test(line[start])) {
     start -= 1;
   }
-  return line.slice(start + 1, i + 1) === "return" ? "return" : null;
-}
-
-function frameAligns(line: string, braceCol: number, stack: Frame[]): boolean {
-  const kind = precedingOpener(line, braceCol);
-  if (kind === "=" || kind === "return") {
-    return true;
+  if (line.slice(start + 1, i + 1) === "return") {
+    return { kind: "return", name: "return" };
   }
-  return kind === ":" && currentObject(stack)?.align === true;
+  return null;
 }
 
-function closeFrame(stack: Frame[], blocks: ObjectBlock[]): void {
+function frameMeta(
+  line: string,
+  braceCol: number,
+  stack: Frame[],
+): { align: boolean; owner: string | null; depth: number } {
+  const behind = lookbehind(line, braceCol);
+  if (behind?.kind === "=") {
+    return { align: true, owner: behind.name, depth: 0 };
+  }
+  if (behind?.kind === "return") {
+    return { align: true, owner: "return", depth: 0 };
+  }
+  const parent = currentObject(stack);
+  if (behind?.kind === ":" && parent?.align) {
+    return { align: true, owner: parent.owner, depth: parent.depth + 1 };
+  }
+  return { align: false, owner: null, depth: 0 };
+}
+
+function closeTop(
+  stack: Frame[],
+  blocks: ObjectBlock[],
+  lineIndex: number,
+  col: number,
+): void {
   const frame = stack.pop();
-  if (frame === undefined || frame.kind !== "{" || !frame.align) {
+  if (frame === undefined) {
+    return;
+  }
+  if (frame.valueOf) {
+    frame.valueOf.valueEndLine = lineIndex;
+    frame.valueOf.valueEndCol = col;
+  }
+  if (frame.kind !== "{" || !frame.align) {
     return;
   }
   if (frame.ownLine.length === 0 && frame.inline.length === 0) {
     return;
   }
-  blocks.push({ ownLine: frame.ownLine, inline: frame.inline });
+  blocks.push({
+    ownLine: frame.ownLine,
+    inline: frame.inline,
+    owner: frame.owner,
+    depth: frame.depth,
+  });
 }
 
 export function findObjectBlocks(lines: string[]): ObjectBlock[] {
   const blocks: ObjectBlock[] = [];
   let mode: "code" | "double" | "single" | "fence" | "triple" | "comment" = "code";
   let escape = false;
+  let pendingFenced: ObjectEntry | null = null;
   const stack: Frame[] = [];
 
   for (let i = 0; i < lines.length; i += 1) {
@@ -211,6 +281,11 @@ export function findObjectBlocks(lines: string[]): ObjectBlock[] {
       if (mode === "fence") {
         if (ch === "`" && line.startsWith("```", col)) {
           mode = "code";
+          if (pendingFenced) {
+            pendingFenced.valueEndLine = i;
+            pendingFenced.valueEndCol = col;
+            pendingFenced = null;
+          }
           col += 3;
           continue;
         }
@@ -244,8 +319,14 @@ export function findObjectBlocks(lines: string[]): ObjectBlock[] {
           const entry = parseEntry(line, col, i, true);
           if (entry !== null) {
             addEntry(frame, entry);
-            col = entry.valueStart;
             atLineStart = false;
+            if (entry.fenced) {
+              mode = "fence";
+              pendingFenced = entry;
+              col = entry.valueStart + 3;
+              continue;
+            }
+            col = entry.valueStart;
             continue;
           }
         }
@@ -275,13 +356,31 @@ export function findObjectBlocks(lines: string[]): ObjectBlock[] {
       }
 
       if (ch === "{" || ch === "[") {
-        const align = ch === "{" && frameAligns(line, col, stack);
-        stack.push({ kind: ch, ownLine: [], inline: [], align });
+        const parent = currentObject(stack);
+        const last = parent?.lastAdded;
+        const valueOf = last && !last.fenced && last.valueStart === col ? last : undefined;
+        const meta =
+          ch === "{" ? frameMeta(line, col, stack) : { align: false, owner: null, depth: 0 };
+        stack.push({
+          kind: ch,
+          ownLine: [],
+          inline: [],
+          align: meta.align,
+          owner: meta.owner,
+          depth: meta.depth,
+          valueOf,
+        });
         col += 1;
         if (ch === "{") {
           const entry = tryInline(line, col, i, stack);
           if (entry !== null) {
             addEntry(stack[stack.length - 1], entry);
+            if (entry.fenced) {
+              mode = "fence";
+              pendingFenced = entry;
+              col = entry.valueStart + 3;
+              continue;
+            }
             col = entry.valueStart;
           }
         }
@@ -291,11 +390,7 @@ export function findObjectBlocks(lines: string[]): ObjectBlock[] {
       if (ch === "}" || ch === "]") {
         const open = ch === "}" ? "{" : "[";
         if (stack[stack.length - 1]?.kind === open) {
-          if (open === "{") {
-            closeFrame(stack, blocks);
-          } else {
-            stack.pop();
-          }
+          closeTop(stack, blocks, i, col);
         }
         col += 1;
         continue;
@@ -306,6 +401,12 @@ export function findObjectBlocks(lines: string[]): ObjectBlock[] {
         const entry = tryInline(line, col, i, stack);
         if (entry !== null) {
           addEntry(stack[stack.length - 1], entry);
+          if (entry.fenced) {
+            mode = "fence";
+            pendingFenced = entry;
+            col = entry.valueStart + 3;
+            continue;
+          }
           col = entry.valueStart;
         }
         continue;
@@ -316,7 +417,7 @@ export function findObjectBlocks(lines: string[]): ObjectBlock[] {
   }
 
   while (stack.length > 0) {
-    closeFrame(stack, blocks);
+    closeTop(stack, blocks, Math.max(0, lines.length - 1), 0);
   }
   return blocks;
 }
