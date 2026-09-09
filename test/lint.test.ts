@@ -49,12 +49,12 @@ describe("fixture linting", () => {
       true,
     );
 
-    const mockColons = {
-      path: path.join(fixtures, "violations/align_mock_colons.xs"),
-      text: readFileSync(path.join(fixtures, "violations/align_mock_colons.xs"), "utf8"),
+    const objectColons = {
+      path: path.join(fixtures, "violations/align_object_colons.xs"),
+      text: readFileSync(path.join(fixtures, "violations/align_object_colons.xs"), "utf8"),
     };
     assert.equal(
-      lintFiles([mockColons], config).some((v) => v.ruleId === "align_mock_colons"),
+      lintFiles([objectColons], config).some((v) => v.ruleId === "align_object_colons"),
       true,
     );
 

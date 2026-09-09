@@ -115,26 +115,26 @@ export const AFTER_COLON_SPACES_MOCK_XS = wrapMockBlock(
 );
 
 export const UNFENCED_MULTILINE_OBJECT_ENTRIES = `        "checkout applies gift wrap": {
-          issued               : []
-          already_issued       : []
-          skipped              : []
-          failed               : []
-          issued_count         : 0
-          already_issued_count : 0
-          skipped_count        : 0
-          failed_count         : 0
+          issued              : []
+          already_issued      : []
+          skipped             : []
+          failed              : []
+          issued_count        : 0
+          already_issued_count: 0
+          skipped_count       : 0
+          failed_count        : 0
         }`;
 
 export const FENCED_MULTILINE_OBJECT_ENTRIES = `        "checkout applies gift wrap": \`\`\`
           {
-            issued               : []
-            already_issued       : []
-            skipped              : []
-            failed               : []
-            issued_count         : 0
-            already_issued_count : 0
-            skipped_count        : 0
-            failed_count         : 0
+            issued              : []
+            already_issued      : []
+            skipped             : []
+            failed              : []
+            issued_count        : 0
+            already_issued_count: 0
+            skipped_count       : 0
+            failed_count        : 0
           }
           \`\`\``;
 

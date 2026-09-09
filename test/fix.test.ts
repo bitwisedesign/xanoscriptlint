@@ -105,12 +105,12 @@ describe("fixFile", () => {
     assert.deepEqual(result.corrections, []);
   });
 
-  it("aligns mock colons and leaves text after the colon alone", () => {
+  it("aligns object colons and normalizes the space after the colon", () => {
     const result = fixFile({ path: "mock.xs", text: UNDERPADDED_MOCK_XS }, config());
     assert.equal(result.changed, true);
     assert.equal(result.text, ALIGNED_MOCK_XS);
     assert.equal(result.corrections.length, 1);
-    assert.equal(result.corrections[0].ruleId, "align_mock_colons");
+    assert.equal(result.corrections[0].ruleId, "align_object_colons");
     assert.equal(result.corrections[0].file, "mock.xs");
 
     const over = fixFile({ path: "over.xs", text: OVERPADDED_LONG_MOCK_XS }, config());
@@ -119,8 +119,7 @@ describe("fixFile", () => {
 
     const spaced = fixFile({ path: "spaces.xs", text: AFTER_COLON_SPACES_MOCK_XS }, config());
     assert.equal(spaced.changed, true);
-    assert.match(spaced.text, new RegExp(`${MOCK_SHORT_NAME}\\s+:    \\{id: 1\\}`));
-    assert.match(spaced.text, new RegExp(`${MOCK_LONG_NAME}: \\{id: 2\\}`));
+    assert.equal(spaced.text, ALIGNED_MOCK_XS);
 
     const multiline = wrapMockBlock(
       `        ${MOCK_SHORT_NAME}: \`\`\`
@@ -136,7 +135,7 @@ describe("fixFile", () => {
     assert.doesNotMatch(fixedMulti.text, new RegExp(`${MOCK_SHORT_NAME}:\`\`\``));
   });
 
-  it("preserves each line terminator when aligning mock colons", () => {
+  it("preserves each line terminator when aligning object colons", () => {
     const underLines = UNDERPADDED_MOCK_XS.split("\n");
     const alignedLines = ALIGNED_MOCK_XS.split("\n");
     let mixed = "";
@@ -151,17 +150,104 @@ describe("fixFile", () => {
     assert.equal(result.text, expected);
   });
 
-  it("does not rewrite aligned mocks or a disabled align_mock_colons rule", () => {
+  it("does not rewrite aligned objects or a disabled align_object_colons rule", () => {
     const clean = fixFile({ path: "ok.xs", text: ALIGNED_MOCK_XS }, config());
     assert.equal(clean.changed, false);
     assert.equal(clean.text, ALIGNED_MOCK_XS);
 
     const off = fixFile(
       { path: "mock.xs", text: UNDERPADDED_MOCK_XS },
-      config({ disabled_rules: ["align_mock_colons"] }),
+      config({ disabled_rules: ["align_object_colons"] }),
     );
     assert.equal(off.changed, false);
     assert.equal(off.text, UNDERPADDED_MOCK_XS);
+  });
+
+  it("aligns input blocks, nested objects independently, and inline pairs", () => {
+    const input = `function "example" {
+  input {
+  }
+
+  stack {
+    function.run "Orders/dispatch" {
+      input = {
+        user_id: $input.user_id
+        award_uuid: $input.award_uuid
+      }
+    } as $dispatch
+  }
+
+  response = $dispatch
+}`;
+    const fixedInput = fixFile({ path: "input.xs", text: input }, config());
+    assert.equal(fixedInput.changed, true);
+    assert.match(fixedInput.text, /user_id {3}: \$input\.user_id/);
+    assert.match(fixedInput.text, /award_uuid: \$input\.award_uuid/);
+
+    const nested = `function "example" {
+  input {
+  }
+
+  stack {
+    db.add job {
+      data = {
+        short: 1
+        nested: {
+          inner_longer: 2
+          x: 3
+        }
+      }
+    }
+  }
+
+  response = $job
+}`;
+    const fixedNested = fixFile({ path: "nested.xs", text: nested }, config());
+    assert.equal(fixedNested.changed, true);
+    assert.match(fixedNested.text, /short : 1/);
+    assert.match(fixedNested.text, /nested: \{/);
+    assert.match(fixedNested.text, /inner_longer: 2/);
+    assert.match(fixedNested.text, /x {11}: 3/);
+    assert.doesNotMatch(fixedNested.text, /short\s{2,}:/);
+
+    const inline = `function "example" {
+  input {
+  }
+
+  stack {
+    function.run "Orders/dispatch" {
+      input = {user_id  : 1, amount: 2}
+    } as $dispatch
+  }
+
+  response = $dispatch
+}`;
+    const fixedInline = fixFile({ path: "inline.xs", text: inline }, config());
+    assert.equal(fixedInline.changed, true);
+    assert.match(fixedInline.text, /input = \{user_id: 1, amount: 2\}/);
+  });
+
+  it("does not fix a suppressed align_object_colons violation", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    function.run "Orders/dispatch" {
+      input = {
+        // xanoscriptlint:disable:next align_object_colons
+        id: 1
+        extra_long_name: 2
+      }
+    } as $dispatch
+  }
+
+  response = $dispatch
+}`;
+    const result = fixFile({ path: "suppressed.xs", text }, config());
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
+    assert.deepEqual(result.corrections, []);
   });
 
   it("does not fix a suppressed no_null_response violation", () => {
@@ -293,7 +379,7 @@ describe("fixFile", () => {
     assert.equal(result.changed, true);
     assert.equal(result.text, ALIGNED_FENCED_MULTILINE_XS);
     assert.equal(
-      result.corrections.some((c) => c.ruleId === "align_mock_colons"),
+      result.corrections.some((c) => c.ruleId === "align_object_colons"),
       true,
     );
     assert.equal(
