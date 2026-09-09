@@ -7,11 +7,17 @@ import {
   ALIGNED_MOCK_XS,
   CLEAN_XS,
   EMPTY_RUN_XS,
+  FENCED_MULTILINE_ARRAY_XS,
+  FENCED_MULTILINE_OBJECT_XS,
   MOCK_LONG_NAME,
   MOCK_SHORT_NAME,
+  NONCANONICAL_MULTILINE_MOCK_XS,
   NULL_RESPONSE_XS,
   OVERPADDED_LONG_MOCK_XS,
   UNDERPADDED_MOCK_XS,
+  UNFENCED_MULTILINE_ARRAY_XS,
+  UNFENCED_MULTILINE_OBJECT_ENTRIES,
+  UNFENCED_MULTILINE_OBJECT_XS,
   VAR_RESPONSE_XS,
   wrapMockBlock,
 } from "./support.js";
@@ -235,6 +241,144 @@ ${ALIGNED_MOCK_ENTRIES}`,
       disabled.some((v) => v.ruleId === "align_mock_colons"),
       false,
     );
+  });
+
+  it("fence_multiline_mocks flags unfenced multiline objects and arrays", () => {
+    const objectHits = lintFile(
+      { path: "obj.xs", text: UNFENCED_MULTILINE_OBJECT_XS },
+      config(),
+    ).filter((v) => v.ruleId === "fence_multiline_mocks");
+    assert.equal(objectHits.length, 1);
+    assert.equal(objectHits[0]?.line, 8);
+    assert.equal(objectHits[0]?.severity, "error");
+
+    const arrayHits = lintFile(
+      { path: "arr.xs", text: UNFENCED_MULTILINE_ARRAY_XS },
+      config(),
+    ).filter((v) => v.ruleId === "fence_multiline_mocks");
+    assert.equal(arrayHits.length, 1);
+    assert.equal(arrayHits[0]?.line, 8);
+  });
+
+  it("fence_multiline_mocks ignores fenced, single-line, nested, and non-mock values", () => {
+    const alreadyObject = lintFile(
+      { path: "fenced-obj.xs", text: FENCED_MULTILINE_OBJECT_XS },
+      config(),
+    );
+    assert.equal(
+      alreadyObject.some((v) => v.ruleId === "fence_multiline_mocks"),
+      false,
+    );
+
+    const alreadyArray = lintFile(
+      { path: "fenced-arr.xs", text: FENCED_MULTILINE_ARRAY_XS },
+      config(),
+    );
+    assert.equal(
+      alreadyArray.some((v) => v.ruleId === "fence_multiline_mocks"),
+      false,
+    );
+
+    const inline = wrapMockBlock(
+      `        "checkout short": {id: 1}
+        "checkout none": null
+        "checkout empty": []
+        "checkout tick": \`[]\``,
+    );
+    const scalars = lintFile({ path: "inline.xs", text: inline }, config());
+    assert.equal(
+      scalars.some((v) => v.ruleId === "fence_multiline_mocks"),
+      false,
+    );
+
+    const nested = wrapMockBlock(
+      `        "checkout applies gift wrap": \`\`\`
+          {
+            source: {
+              version: 1
+            }
+          }
+          \`\`\``,
+    );
+    const nestedHits = lintFile({ path: "nested.xs", text: nested }, config());
+    assert.equal(
+      nestedHits.some((v) => v.ruleId === "fence_multiline_mocks"),
+      false,
+    );
+
+    const notMock = `function "example" {
+  input {
+  }
+
+  stack {
+    var $row {
+      value = {
+        issued : []
+        skipped: []
+      }
+    }
+    db.query item {
+      input = {
+        source: {
+          version: 1
+        }
+      }
+    }
+  }
+
+  response = $row
+}`;
+    const ignored = lintFile({ path: "outside.xs", text: notMock }, config());
+    assert.equal(
+      ignored.some((v) => v.ruleId === "fence_multiline_mocks"),
+      false,
+    );
+
+    const noncanonical = lintFile(
+      { path: "odd.xs", text: NONCANONICAL_MULTILINE_MOCK_XS },
+      config(),
+    );
+    assert.equal(
+      noncanonical.some((v) => v.ruleId === "fence_multiline_mocks"),
+      true,
+    );
+
+    const commented = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query item {
+      mock = {
+        // xanoscriptlint:disable:next fence_multiline_mocks
+${UNFENCED_MULTILINE_OBJECT_ENTRIES}
+      }
+    }
+  }
+
+  response = $item
+}`;
+    const suppressed = lintFile({ path: "suppressed.xs", text: commented }, config());
+    assert.equal(
+      suppressed.some((v) => v.ruleId === "fence_multiline_mocks"),
+      false,
+    );
+
+    const disabled = lintFile(
+      { path: "off.xs", text: UNFENCED_MULTILINE_OBJECT_XS },
+      config({ disabled_rules: ["fence_multiline_mocks"] }),
+    );
+    assert.equal(
+      disabled.some((v) => v.ruleId === "fence_multiline_mocks"),
+      false,
+    );
+
+    const warned = lintFile(
+      { path: "warn.xs", text: UNFENCED_MULTILINE_OBJECT_XS },
+      config({ fence_multiline_mocks: "warning" }),
+    );
+    const warnHit = warned.find((v) => v.ruleId === "fence_multiline_mocks");
+    assert.equal(warnHit?.severity, "warning");
   });
 
   it("per-rule severity override applies", () => {

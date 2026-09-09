@@ -78,13 +78,14 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 
 ## Built-in rules
 
-| Id | Default | Severity | What it catches |
-| --- | --- | --- | --- |
-| `align_mock_colons` | on | error | Mock entry colons must align to the longest name (Xano rewrites this on push); auto-fixable with `--fix` |
-| `empty_function_run` | on | error | `function.run ""` / `function.run ''` |
-| `no_trailing_newline` | on | error | File does not end with `}` (Xano pull strips trailing newlines); auto-fixable with `--fix` |
-| `no_var_response` | opt-in | warning | `var $response` (Xano rewrites it) |
-| `no_null_response` | opt-in | warning | `response = null`; auto-fixable to `response = {}` with `--fix` |
+| Id | Default | Severity | Auto-fix | What it catches |
+| --- | --- | --- | --- | --- |
+| `align_mock_colons` | on | error | yes | Mock entry colons must align to the longest name (Xano rewrites this on push) |
+| `empty_function_run` | on | error | no | `function.run ""` / `function.run ''` |
+| `fence_multiline_mocks` | on | error | yes | Multiline mock value not wrapped in a triple-backtick fence (Xano fences it on push) |
+| `no_null_response` | opt-in | warning | yes | `response = null` (use `response = {}`) |
+| `no_trailing_newline` | on | error | yes | File does not end with `}` (Xano pull strips trailing newlines) |
+| `no_var_response` | opt-in | warning | no | `var $response` (Xano rewrites it) |
 
 House style such as a `// Modified:` timestamp belongs in `custom_rules`, not in the default catalog:
 
