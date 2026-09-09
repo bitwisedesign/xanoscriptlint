@@ -7,13 +7,13 @@ function rewriteLine(line: string): string {
   return line.replace(RESPONSE_NULL, "response$1{}");
 }
 
-export const noNilResponse: Rule = {
-  id: "no_nil_response",
+export const noNullResponse: Rule = {
+  id: "no_null_response",
   description: "Do not assign response = null; use an empty object",
   defaultEnabled: false,
   defaultSeverity: "warning",
   lint(file: SourceFile, options: RuleOptions): Violation[] {
-    const severity = options.severity ?? noNilResponse.defaultSeverity;
+    const severity = options.severity ?? noNullResponse.defaultSeverity;
     const violations: Violation[] = [];
     const lines = splitLines(file.text);
     for (let i = 0; i < lines.length; i += 1) {
@@ -24,7 +24,7 @@ export const noNilResponse: Rule = {
       const match = RESPONSE_NULL.exec(line);
       if (match) {
         violations.push({
-          ruleId: noNilResponse.id,
+          ruleId: noNullResponse.id,
           message: "response = null is not allowed; use response = {}",
           severity,
           file: file.path,

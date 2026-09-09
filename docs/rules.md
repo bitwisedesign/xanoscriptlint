@@ -5,7 +5,7 @@
 | [`empty_function_run`](#empty_function_run) | on | error | `function.run` must not be called with an empty name |
 | [`no_trailing_newline`](#no_trailing_newline) | on | error | File must end with `}` and no trailing newline (auto-fixable) |
 | [`no_var_response`](#no_var_response) | opt-in | warning | Do not declare `var $response` |
-| [`no_nil_response`](#no_nil_response) | opt-in | warning | Do not assign `response = null` (auto-fixable) |
+| [`no_null_response`](#no_null_response) | opt-in | warning | Do not assign `response = null` (auto-fixable) |
 
 List the same catalog from the CLI with `xanoscriptlint rules`.
 
@@ -35,13 +35,13 @@ opt_in_rules:
   - no_var_response
 ```
 
-## no_nil_response
+## no_null_response
 
 `response = null` is not allowed; use an empty object instead. Off by default; enable with `opt_in_rules`.
 
 ```yaml
 opt_in_rules:
-  - no_nil_response
+  - no_null_response
 ```
 
 ```xs

@@ -63,7 +63,7 @@ export const VAR_RESPONSE_XS = `function "example" {
   response = $response
 }`;
 
-export const NIL_RESPONSE_XS = `function "example" {
+export const NULL_RESPONSE_XS = `function "example" {
   input {
   }
 
