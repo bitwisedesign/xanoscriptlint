@@ -16,6 +16,8 @@ import {
   MISALIGNED_UNFENCED_MULTILINE_XS,
   MOCK_LONG_NAME,
   MOCK_SHORT_NAME,
+  NEGATIVE_DEFAULT_FIXED_XS,
+  NEGATIVE_DEFAULT_XS,
   NONCANONICAL_MULTILINE_MOCK_XS,
   NULL_RESPONSE_XS,
   OVERPADDED_LONG_MOCK_XS,
@@ -24,6 +26,9 @@ import {
   UNFENCED_INPUT_OBJECT_XS,
   UNFENCED_MULTILINE_ARRAY_XS,
   UNFENCED_MULTILINE_OBJECT_XS,
+  ZERO_DEFAULT_FIXED_XS,
+  ZERO_DEFAULT_XS,
+  wrapInputDecls,
   wrapMockBlock,
 } from "./support.js";
 
@@ -501,5 +506,78 @@ describe("fixFile", () => {
     const result = fixFile({ path: "data.xs", text }, config());
     assert.equal(result.changed, false);
     assert.equal(result.text, text);
+  });
+
+  it("strips a zero numeric default and quotes a negative numeric default", () => {
+    const zero = fixFile({ path: "zero.xs", text: ZERO_DEFAULT_XS }, config());
+    assert.equal(zero.changed, true);
+    assert.equal(zero.text, ZERO_DEFAULT_FIXED_XS);
+    assert.equal(zero.corrections.length, 6);
+    assert.equal(zero.corrections[0]?.ruleId, "no_zero_numeric_default");
+    assert.equal(zero.corrections[0]?.file, "zero.xs");
+    assert.equal(zero.corrections[0]?.line, 3);
+
+    const again = fixFile({ path: "zero.xs", text: zero.text }, config());
+    assert.equal(again.changed, false);
+    assert.equal(again.text, ZERO_DEFAULT_FIXED_XS);
+
+    const negative = fixFile({ path: "neg.xs", text: NEGATIVE_DEFAULT_XS }, config());
+    assert.equal(negative.changed, true);
+    assert.equal(negative.text, NEGATIVE_DEFAULT_FIXED_XS);
+    assert.equal(negative.corrections.length, 6);
+    assert.equal(negative.corrections[0]?.ruleId, "quote_negative_numeric_default");
+    assert.equal(negative.corrections[0]?.line, 3);
+
+    const againNeg = fixFile({ path: "neg.xs", text: negative.text }, config());
+    assert.equal(againNeg.changed, false);
+    assert.equal(againNeg.text, NEGATIVE_DEFAULT_FIXED_XS);
+  });
+
+  it("preserves line endings and suppressions when rewriting numeric defaults", () => {
+    const zeroLines = ZERO_DEFAULT_XS.split("\n");
+    const fixedLines = ZERO_DEFAULT_FIXED_XS.split("\n");
+    let mixed = "";
+    let expected = "";
+    for (let i = 0; i < zeroLines.length; i += 1) {
+      const ending = i < zeroLines.length - 1 ? (i % 2 === 0 ? "\r\n" : "\n") : "";
+      mixed += `${zeroLines[i]}${ending}`;
+      expected += `${fixedLines[i]}${ending}`;
+    }
+    const mixedResult = fixFile({ path: "mixed.xs", text: mixed }, config());
+    assert.equal(mixedResult.changed, true);
+    assert.equal(mixedResult.text, expected);
+
+    const suppressed = wrapInputDecls(
+      `    // xanoscriptlint:disable:next no_zero_numeric_default
+    int retry_count?=0
+    int page?=1`,
+    );
+    const kept = fixFile({ path: "suppressed.xs", text: suppressed }, config());
+    assert.equal(kept.changed, false);
+    assert.equal(kept.text, suppressed);
+
+    const negativeSuppressed = wrapInputDecls(
+      `    // xanoscriptlint:disable:next quote_negative_numeric_default
+    int quantity?=-1
+    int page?=1`,
+    );
+    const keptNeg = fixFile({ path: "suppressed-neg.xs", text: negativeSuppressed }, config());
+    assert.equal(keptNeg.changed, false);
+    assert.equal(keptNeg.text, negativeSuppressed);
+  });
+
+  it("strips a negative zero instead of quoting it", () => {
+    const text = wrapInputDecls(`    int offset?=-0`);
+    const result = fixFile({ path: "negzero.xs", text }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, wrapInputDecls(`    int offset?`));
+    assert.equal(
+      result.corrections.some((c) => c.ruleId === "no_zero_numeric_default"),
+      true,
+    );
+    assert.equal(
+      result.corrections.some((c) => c.ruleId === "quote_negative_numeric_default"),
+      false,
+    );
   });
 });

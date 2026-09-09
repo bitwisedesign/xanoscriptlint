@@ -14,6 +14,8 @@ import {
   MOCK_LONG_NAME,
   MOCK_SHORT_NAME,
   NONCANONICAL_MULTILINE_MOCK_XS,
+  NEGATIVE_DEFAULT_FIXED_XS,
+  NEGATIVE_DEFAULT_XS,
   NULL_RESPONSE_XS,
   OVERPADDED_LONG_MOCK_XS,
   UNDERPADDED_MOCK_XS,
@@ -23,6 +25,9 @@ import {
   UNFENCED_MULTILINE_OBJECT_ENTRIES,
   UNFENCED_MULTILINE_OBJECT_XS,
   VAR_RESPONSE_XS,
+  ZERO_DEFAULT_FIXED_XS,
+  ZERO_DEFAULT_XS,
+  wrapInputDecls,
   wrapInputBlock,
   wrapMockBlock,
 } from "./support.js";
@@ -678,6 +683,248 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     );
     const warnHit = warned.find((v) => v.ruleId === "fence_multiline_values");
     assert.equal(warnHit?.severity, "warning");
+  });
+
+  it("no_zero_numeric_default flags explicit zero defaults", () => {
+    const hits = lintFile({ path: "zero.xs", text: ZERO_DEFAULT_XS }, config()).filter(
+      (v) => v.ruleId === "no_zero_numeric_default",
+    );
+    assert.equal(hits.length, 6);
+    assert.equal(hits[0]?.line, 3);
+    assert.equal(hits[0]?.severity, "error");
+    assert.equal(hits[0]?.message, "numeric default of 0 must be omitted; Xano strips it on push");
+
+    const clean = lintFile({ path: "ok.xs", text: ZERO_DEFAULT_FIXED_XS }, config());
+    assert.equal(
+      clean.some((v) => v.ruleId === "no_zero_numeric_default"),
+      false,
+    );
+
+    const forms = wrapInputDecls(
+      `    int bare?=0
+    decimal tenths?=0.0
+    decimal hundredths?=0.00
+    decimal dot?=.0
+    int neg?=-0
+    int plus?=+0
+    int quoted?="0"
+    int single?='0'
+    int spaced? = 0`,
+    );
+    const formHits = lintFile({ path: "forms.xs", text: forms }, config()).filter(
+      (v) => v.ruleId === "no_zero_numeric_default",
+    );
+    assert.equal(formHits.length, 9);
+
+    const allowed = wrapInputDecls(
+      `    int page?=1
+    decimal weight?=0.5
+    int padded?=01
+    int cap? filters=min:0
+    bool enabled?=false
+    timestamp created_at?=0
+    int quantity?="-1"`,
+    );
+    assert.equal(
+      lintFile({ path: "keep.xs", text: allowed }, config()).some(
+        (v) => v.ruleId === "no_zero_numeric_default",
+      ),
+      false,
+    );
+
+    const commented = wrapInputDecls(`    // int retry_count?=0`);
+    assert.equal(
+      lintFile({ path: "c.xs", text: commented }, config()).some(
+        (v) => v.ruleId === "no_zero_numeric_default",
+      ),
+      false,
+    );
+
+    const fenced = `function "example" {
+  input {
+  }
+
+  stack {
+    var $agent {
+      value = {
+        prompt: \`\`\`
+          int retry_count?=0
+          \`\`\`
+      }
+    }
+  }
+
+  response = $ok
+}`;
+    assert.equal(
+      lintFile({ path: "fence.xs", text: fenced }, config()).some(
+        (v) => v.ruleId === "no_zero_numeric_default",
+      ),
+      false,
+    );
+
+    const triple = `function "example" {
+  input {
+  }
+
+  stack {
+    var $agent {
+      value = {
+        system_prompt: """
+          int retry_count?=0
+          """
+      }
+    }
+  }
+
+  response = $ok
+}`;
+    assert.equal(
+      lintFile({ path: "triple.xs", text: triple }, config()).some(
+        (v) => v.ruleId === "no_zero_numeric_default",
+      ),
+      false,
+    );
+
+    const disabled = lintFile(
+      { path: "off.xs", text: ZERO_DEFAULT_XS },
+      config({ disabled_rules: ["no_zero_numeric_default"] }),
+    );
+    assert.equal(
+      disabled.some((v) => v.ruleId === "no_zero_numeric_default"),
+      false,
+    );
+
+    const warned = lintFile(
+      { path: "warn.xs", text: ZERO_DEFAULT_XS },
+      config({ no_zero_numeric_default: "warning" }),
+    );
+    assert.equal(
+      warned.find((v) => v.ruleId === "no_zero_numeric_default")?.severity,
+      "warning",
+    );
+  });
+
+  it("quote_negative_numeric_default flags unquoted negative defaults", () => {
+    const hits = lintFile({ path: "neg.xs", text: NEGATIVE_DEFAULT_XS }, config()).filter(
+      (v) => v.ruleId === "quote_negative_numeric_default",
+    );
+    assert.equal(hits.length, 6);
+    assert.equal(hits[0]?.line, 3);
+    assert.equal(hits[0]?.severity, "error");
+    assert.equal(
+      hits[0]?.message,
+      "negative numeric default must be quoted; Xano quotes it on push",
+    );
+
+    const clean = lintFile({ path: "ok.xs", text: NEGATIVE_DEFAULT_FIXED_XS }, config());
+    assert.equal(
+      clean.some((v) => v.ruleId === "quote_negative_numeric_default"),
+      false,
+    );
+
+    const forms = wrapInputDecls(
+      `    int quantity?=-1
+    decimal drift?=-2.5
+    decimal leading?=-.5
+    int spaced? = -4`,
+    );
+    const formHits = lintFile({ path: "forms.xs", text: forms }, config()).filter(
+      (v) => v.ruleId === "quote_negative_numeric_default",
+    );
+    assert.equal(formHits.length, 4);
+
+    const allowed = wrapInputDecls(
+      `    int page?=1
+    decimal weight?=0.5
+    int quantity?="-1"
+    int cap? filters=min:0
+    bool enabled?=false
+    timestamp created_at?=0
+    timestamp created_at?=now
+    int zero?=-0`,
+    );
+    const allowedHits = lintFile({ path: "keep.xs", text: allowed }, config());
+    assert.equal(
+      allowedHits.some((v) => v.ruleId === "quote_negative_numeric_default"),
+      false,
+    );
+    assert.equal(
+      allowedHits.some((v) => v.ruleId === "no_zero_numeric_default"),
+      true,
+    );
+
+    const commented = wrapInputDecls(`    // int quantity?=-1`);
+    assert.equal(
+      lintFile({ path: "c.xs", text: commented }, config()).some(
+        (v) => v.ruleId === "quote_negative_numeric_default",
+      ),
+      false,
+    );
+
+    const fenced = `function "example" {
+  input {
+  }
+
+  stack {
+    var $agent {
+      value = {
+        prompt: \`\`\`
+          int quantity?=-1
+          \`\`\`
+      }
+    }
+  }
+
+  response = $ok
+}`;
+    assert.equal(
+      lintFile({ path: "fence.xs", text: fenced }, config()).some(
+        (v) => v.ruleId === "quote_negative_numeric_default",
+      ),
+      false,
+    );
+
+    const triple = `function "example" {
+  input {
+  }
+
+  stack {
+    var $agent {
+      value = {
+        system_prompt: """
+          int quantity?=-1
+          """
+      }
+    }
+  }
+
+  response = $ok
+}`;
+    assert.equal(
+      lintFile({ path: "triple.xs", text: triple }, config()).some(
+        (v) => v.ruleId === "quote_negative_numeric_default",
+      ),
+      false,
+    );
+
+    const disabled = lintFile(
+      { path: "off.xs", text: NEGATIVE_DEFAULT_XS },
+      config({ disabled_rules: ["quote_negative_numeric_default"] }),
+    );
+    assert.equal(
+      disabled.some((v) => v.ruleId === "quote_negative_numeric_default"),
+      false,
+    );
+
+    const warned = lintFile(
+      { path: "warn.xs", text: NEGATIVE_DEFAULT_XS },
+      config({ quote_negative_numeric_default: "warning" }),
+    );
+    assert.equal(
+      warned.find((v) => v.ruleId === "quote_negative_numeric_default")?.severity,
+      "warning",
+    );
   });
 
   it("per-rule severity override applies", () => {

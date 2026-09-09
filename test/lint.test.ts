@@ -66,6 +66,29 @@ describe("fixture linting", () => {
       lintFiles([fenceValues], config).some((v) => v.ruleId === "fence_multiline_values"),
       true,
     );
+
+    const zeroDefault = {
+      path: path.join(fixtures, "violations/zero_numeric_default.xs"),
+      text: readFileSync(path.join(fixtures, "violations/zero_numeric_default.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([zeroDefault], config).some((v) => v.ruleId === "no_zero_numeric_default"),
+      true,
+    );
+
+    const negativeDefault = {
+      path: path.join(fixtures, "violations/quote_negative_numeric_default.xs"),
+      text: readFileSync(
+        path.join(fixtures, "violations/quote_negative_numeric_default.xs"),
+        "utf8",
+      ),
+    };
+    assert.equal(
+      lintFiles([negativeDefault], config).some(
+        (v) => v.ruleId === "quote_negative_numeric_default",
+      ),
+      true,
+    );
   });
 
   it("CLI lints a violations directory and exits 2", async () => {

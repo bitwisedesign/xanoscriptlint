@@ -94,6 +94,57 @@ ${entries}
 }`;
 }
 
+export function wrapInputDecls(decls: string): string {
+  return `function "example" {
+  input {
+${decls}
+  }
+
+  stack {
+  }
+
+  response = $ok
+}`;
+}
+
+export const ZERO_DEFAULT_DECLS = `    int retry_count?=0
+    decimal offset?=0.0
+    int? page?=0
+    int[] ids?=0
+    int cap?=0 filters=min:1
+    int quoted?="0"`;
+
+export const ZERO_DEFAULT_FIXED_DECLS = `    int retry_count?
+    decimal offset?
+    int? page?
+    int[] ids?
+    int cap? filters=min:1
+    int quoted?`;
+
+export const ZERO_DEFAULT_XS = wrapInputDecls(ZERO_DEFAULT_DECLS);
+export const ZERO_DEFAULT_FIXED_XS = wrapInputDecls(ZERO_DEFAULT_FIXED_DECLS);
+
+export const NEGATIVE_DEFAULT_DECLS = `    int quantity?=-1
+    decimal drift?=-2.5
+    int? floor?=-3
+    int[] slots?=-4
+    int retries?=-1 filters=min:0
+    int owner_id?=-1 {
+      table = "user"
+    }`;
+
+export const NEGATIVE_DEFAULT_FIXED_DECLS = `    int quantity?="-1"
+    decimal drift?="-2.5"
+    int? floor?="-3"
+    int[] slots?="-4"
+    int retries?="-1" filters=min:0
+    int owner_id?="-1" {
+      table = "user"
+    }`;
+
+export const NEGATIVE_DEFAULT_XS = wrapInputDecls(NEGATIVE_DEFAULT_DECLS);
+export const NEGATIVE_DEFAULT_FIXED_XS = wrapInputDecls(NEGATIVE_DEFAULT_FIXED_DECLS);
+
 export function wrapInputBlock(entries: string): string {
   return `function "example" {
   input {
