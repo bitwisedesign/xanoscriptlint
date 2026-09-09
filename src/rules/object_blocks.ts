@@ -15,6 +15,10 @@ export interface ObjectBlock {
   inline: ObjectEntry[];
   owner: string | null;
   depth: number;
+  inFunctionRun: boolean;
+  functionRunId: number | null;
+  openLine: number;
+  closeLine: number;
 }
 
 interface Frame {
@@ -24,6 +28,9 @@ interface Frame {
   align: boolean;
   owner: string | null;
   depth: number;
+  inFunctionRun: boolean;
+  functionRunId: number | null;
+  openLine: number;
   lastAdded?: ObjectEntry;
   valueOf?: ObjectEntry;
 }
@@ -125,6 +132,48 @@ function parseEntry(
 function currentObject(stack: Frame[]): Frame | undefined {
   const top = stack[stack.length - 1];
   return top?.kind === "{" ? top : undefined;
+}
+
+function runContext(stack: Frame[]): { inFunctionRun: boolean; functionRunId: number | null } {
+  for (let i = stack.length - 1; i >= 0; i -= 1) {
+    if (stack[i].inFunctionRun) {
+      return { inFunctionRun: true, functionRunId: stack[i].functionRunId };
+    }
+  }
+  return { inFunctionRun: false, functionRunId: null };
+}
+
+function isWordChar(ch: string | undefined): boolean {
+  return ch !== undefined && /[A-Za-z0-9_]/.test(ch);
+}
+
+function hasFunctionRunToken(line: string, end: number): boolean {
+  let col = 0;
+  while (col < end) {
+    const ch = line[col];
+    if (ch === '"' || ch === "'") {
+      const parsed = readQuoted(line, col, ch);
+      if (parsed === null) {
+        return false;
+      }
+      col = parsed.end;
+      continue;
+    }
+    if (
+      line.startsWith("function.run", col) &&
+      !isWordChar(line[col - 1]) &&
+      !isWordChar(line[col + 12])
+    ) {
+      return true;
+    }
+    col += 1;
+  }
+  return false;
+}
+
+function isFunctionRunBrace(line: string, braceCol: number): boolean {
+  const prefix = line.slice(0, braceCol);
+  return !prefix.includes("{") && hasFunctionRunToken(line, braceCol);
 }
 
 function addEntry(frame: Frame, entry: ObjectEntry): void {
@@ -240,6 +289,10 @@ function closeTop(
     inline: frame.inline,
     owner: frame.owner,
     depth: frame.depth,
+    inFunctionRun: frame.inFunctionRun,
+    functionRunId: frame.functionRunId,
+    openLine: frame.openLine,
+    closeLine: lineIndex,
   });
 }
 
@@ -249,6 +302,7 @@ export function findObjectBlocks(lines: string[]): ObjectBlock[] {
   let escape = false;
   let pendingFenced: ObjectEntry | null = null;
   const stack: Frame[] = [];
+  let nextFunctionRunId = 0;
 
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
@@ -361,6 +415,8 @@ export function findObjectBlocks(lines: string[]): ObjectBlock[] {
         const valueOf = last && !last.fenced && last.valueStart === col ? last : undefined;
         const meta =
           ch === "{" ? frameMeta(line, col, stack) : { align: false, owner: null, depth: 0 };
+        const isRun = ch === "{" && isFunctionRunBrace(line, col);
+        const inherited = runContext(stack);
         stack.push({
           kind: ch,
           ownLine: [],
@@ -368,6 +424,9 @@ export function findObjectBlocks(lines: string[]): ObjectBlock[] {
           align: meta.align,
           owner: meta.owner,
           depth: meta.depth,
+          inFunctionRun: isRun || inherited.inFunctionRun,
+          functionRunId: isRun ? (nextFunctionRunId += 1) : inherited.functionRunId,
+          openLine: i,
           valueOf,
         });
         col += 1;

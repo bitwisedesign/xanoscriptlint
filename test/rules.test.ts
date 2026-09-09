@@ -11,6 +11,8 @@ import {
   FENCED_INPUT_OBJECT_XS,
   FENCED_MULTILINE_ARRAY_XS,
   FENCED_MULTILINE_OBJECT_XS,
+  INVALID_DOUBLE_OPENER_XS,
+  INVALID_FUNCTION_RUN_OUTDENTED_MOCK_XS,
   MOCK_LONG_NAME,
   MOCK_SHORT_NAME,
   NONCANONICAL_MULTILINE_MOCK_XS,
@@ -21,9 +23,12 @@ import {
   UNDERPADDED_MOCK_XS,
   UNFENCED_INPUT_ARRAY_XS,
   UNFENCED_INPUT_OBJECT_XS,
+  UNFENCED_FUNCTION_RUN_MULTILINE_MOCK_XS,
   UNFENCED_MULTILINE_ARRAY_XS,
   UNFENCED_MULTILINE_OBJECT_ENTRIES,
   UNFENCED_MULTILINE_OBJECT_XS,
+  VALID_FUNCTION_RUN_COMPACT_MOCK_XS,
+  VALID_SIBLING_FENCES_XS,
   VAR_RESPONSE_XS,
   ZERO_DEFAULT_FIXED_XS,
   ZERO_DEFAULT_XS,
@@ -472,6 +477,29 @@ ${ALIGNED_MOCK_ENTRIES}`,
     ).filter((v) => v.ruleId === "fence_multiline_values");
     assert.equal(inputArray.length, 1);
     assert.equal(inputArray[0]?.line, 8);
+
+    const quotedName = `function "Orders/function.run" {
+  input {
+  }
+
+  stack {
+    db.query item {
+      mock = {
+        "checkout applies gift wrap": {
+          queued: []
+        }
+      }
+    }
+  }
+
+  response = $item
+}`;
+    const quotedHits = lintFile({ path: "quoted-run.xs", text: quotedName }, config()).filter(
+      (v) => v.ruleId === "fence_multiline_values",
+    );
+    assert.equal(quotedHits.length, 1);
+    assert.equal(quotedHits[0]?.line, 8);
+    assert.equal(quotedHits[0]?.column, 39);
   });
 
   it("fence_multiline_values ignores fenced, single-line, nested, and non-mock values", () => {
@@ -683,6 +711,82 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     );
     const warnHit = warned.find((v) => v.ruleId === "fence_multiline_values");
     assert.equal(warnHit?.severity, "warning");
+  });
+
+  it("fence_multiline_values flags shared fence openers and an outdented function.run mock", () => {
+    const double = lintFile({ path: "double.xs", text: INVALID_DOUBLE_OPENER_XS }, config()).filter(
+      (v) => v.ruleId === "fence_multiline_values",
+    );
+    assert.equal(double.length, 1);
+    assert.match(double[0]?.message ?? "", /consecutive fence openers/);
+    assert.equal(double[0]?.line, 9);
+    assert.equal(double[0]?.column, 9);
+
+    const outdented = lintFile(
+      { path: "outdent.xs", text: INVALID_FUNCTION_RUN_OUTDENTED_MOCK_XS },
+      config(),
+    ).filter((v) => v.ruleId === "fence_multiline_values");
+    assert.equal(outdented.length, 1);
+    assert.match(outdented[0]?.message ?? "", /indented with input inside function\.run/);
+    assert.equal(outdented[0]?.line, 16);
+    assert.equal(outdented[0]?.column, 11);
+
+    const validFences = lintFile({ path: "ok-fence.xs", text: VALID_SIBLING_FENCES_XS }, config());
+    assert.equal(
+      validFences.some((v) => v.ruleId === "fence_multiline_values"),
+      false,
+    );
+
+    const compact = lintFile(
+      { path: "ok-run.xs", text: VALID_FUNCTION_RUN_COMPACT_MOCK_XS },
+      config(),
+    );
+    assert.equal(
+      compact.some((v) => v.ruleId === "fence_multiline_values"),
+      false,
+    );
+
+    const multilineRun = lintFile(
+      { path: "run-multi.xs", text: UNFENCED_FUNCTION_RUN_MULTILINE_MOCK_XS },
+      config(),
+    );
+    assert.equal(
+      multilineRun.some((v) => v.ruleId === "fence_multiline_values"),
+      false,
+    );
+
+    const sameLineOpen = `function "example" {
+  input {
+  }
+
+  stack {
+    conditional {
+      if ($ok) {
+        foreach ($items) {
+          each {
+            function.run "Orders/apply_discounts" { input = {
+                user_id: $cart_user_id
+              }
+
+          mock = {
+            "checkout empty cart": {queued: [], sent: [], done: false}
+          }
+            } as $discount_result
+          }
+        }
+      }
+    }
+  }
+
+  response = $ok
+}`;
+    const sameLineHits = lintFile({ path: "same-line.xs", text: sameLineOpen }, config()).filter(
+      (v) => v.ruleId === "fence_multiline_values",
+    );
+    assert.equal(sameLineHits.length, 1);
+    assert.match(sameLineHits[0]?.message ?? "", /indented with input inside function\.run/);
+    assert.equal(sameLineHits[0]?.line, 14);
+    assert.equal(sameLineHits[0]?.column, 11);
   });
 
   it("no_zero_numeric_default flags explicit zero defaults", () => {

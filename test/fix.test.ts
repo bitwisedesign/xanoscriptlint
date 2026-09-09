@@ -12,6 +12,8 @@ import {
   FENCED_INPUT_OBJECT_XS,
   FENCED_MULTILINE_ARRAY_XS,
   FENCED_MULTILINE_OBJECT_XS,
+  INVALID_DOUBLE_OPENER_XS,
+  INVALID_FUNCTION_RUN_OUTDENTED_MOCK_XS,
   MISALIGNED_UNFENCED_INPUT_XS,
   MISALIGNED_UNFENCED_MULTILINE_XS,
   MOCK_LONG_NAME,
@@ -24,8 +26,11 @@ import {
   UNDERPADDED_MOCK_XS,
   UNFENCED_INPUT_ARRAY_XS,
   UNFENCED_INPUT_OBJECT_XS,
+  UNFENCED_FUNCTION_RUN_MULTILINE_MOCK_XS,
   UNFENCED_MULTILINE_ARRAY_XS,
   UNFENCED_MULTILINE_OBJECT_XS,
+  VALID_FUNCTION_RUN_COMPACT_MOCK_XS,
+  VALID_SIBLING_FENCES_XS,
   ZERO_DEFAULT_FIXED_XS,
   ZERO_DEFAULT_XS,
   wrapInputDecls,
@@ -466,6 +471,93 @@ describe("fixFile", () => {
     );
     assert.equal(result.changed, false);
     assert.equal(result.text, NONCANONICAL_MULTILINE_MOCK_XS);
+  });
+
+  it("does not share one fence body across sibling mock keys", () => {
+    const aligned = fixFile({ path: "siblings.xs", text: VALID_SIBLING_FENCES_XS }, config());
+    assert.doesNotMatch(
+      aligned.text,
+      /:\s*```\n[^\n]*:\s*```/,
+    );
+    assert.equal((aligned.text.match(/```/g) ?? []).length, 4);
+    assert.match(aligned.text, /id {5}: 1/);
+    assert.match(aligned.text, /coupon_code/);
+
+    const invalid = fixFile({ path: "double.xs", text: INVALID_DOUBLE_OPENER_XS }, config());
+    assert.match(invalid.text, /:\s*```\n[^\n]*:\s*```/);
+  });
+
+  it("does not fence function.run mocks or outdent mock from input", () => {
+    const compact = fixFile(
+      { path: "run.xs", text: VALID_FUNCTION_RUN_COMPACT_MOCK_XS },
+      config(),
+    );
+    assert.doesNotMatch(compact.text, /```/);
+    assert.match(compact.text, /\{queued: \[\], sent: \[\], done: false\}/);
+    const compactLines = compact.text.split("\n");
+    const inputLine = compactLines.find((line) => line.trimStart().startsWith("input ="));
+    const mockLine = compactLines.find((line) => line.trimStart().startsWith("mock ="));
+    assert.equal(inputLine !== undefined && mockLine !== undefined, true);
+    assert.equal(inputLine?.match(/^ */)?.[0].length, mockLine?.match(/^ */)?.[0].length);
+
+    const multiline = fixFile(
+      { path: "run-multi.xs", text: UNFENCED_FUNCTION_RUN_MULTILINE_MOCK_XS },
+      config(),
+    );
+    assert.doesNotMatch(multiline.text, /```/);
+    assert.match(multiline.text, /"checkout empty cart"\s*:\s*\{\n/);
+
+    const outdented = fixFile(
+      { path: "outdent.xs", text: INVALID_FUNCTION_RUN_OUTDENTED_MOCK_XS },
+      config(),
+    );
+    assert.equal(outdented.changed, true);
+    const fixedLines = outdented.text.split("\n");
+    const fixedInput = fixedLines.find((line) => line.trimStart().startsWith("input ="));
+    const fixedMock = fixedLines.find((line) => line.trimStart().startsWith("mock ="));
+    assert.equal(fixedInput !== undefined && fixedMock !== undefined, true);
+    assert.equal(fixedInput?.match(/^ */)?.[0].length, fixedMock?.match(/^ */)?.[0].length);
+    assert.match(outdented.text, /function\.run[^\n]*\{\n(?:.*\n)* *mock = \{/);
+
+    const suppressedOutdent = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query item {
+      mock = {
+        "checkout applies gift wrap": {
+          queued: []
+        }
+      }
+    }
+    conditional {
+      if ($ok) {
+        foreach ($items) {
+          each {
+            function.run "Orders/apply_discounts" {
+              input = {
+                user_id: $cart_user_id
+                reason : "manual"
+              }
+
+              // xanoscriptlint:disable:next fence_multiline_values
+          mock = {
+            "checkout empty cart": {queued: [], sent: [], done: false}
+          }
+            } as $discount_result
+          }
+        }
+      }
+    }
+  }
+
+  response = $ok
+}`;
+    const kept = fixFile({ path: "suppressed-outdent.xs", text: suppressedOutdent }, config());
+    assert.equal(kept.changed, true);
+    assert.match(kept.text, /"checkout applies gift wrap": ```/);
+    assert.match(kept.text, /\n {10}mock = \{\n/);
   });
 
   it("does not rewrite a tab-indented multiline value", () => {

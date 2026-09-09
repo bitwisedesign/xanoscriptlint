@@ -4,12 +4,21 @@ import { findObjectBlocks } from "./object_blocks.js";
 import type { ObjectBlock, ObjectEntry } from "./object_blocks.js";
 import type { Rule, RuleOptions, SourceFile, Violation } from "./types.js";
 import { isSuppressed, parseSuppressions } from "../suppress.js";
-import { splitLines } from "../util.js";
+import { isCommentLine, splitLines } from "../util.js";
 
 const FENCE_OWNERS = new Set(["mock", "input"]);
+const FENCE_OPENER = /^(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[A-Za-z_][A-Za-z0-9_]*)\s*:\s*```\s*$/;
+const SIBLING_STATEMENT = /^(?:mock|input)\s*=/;
+
+function isFenceOpenerLine(line: string): boolean {
+  return FENCE_OPENER.test(line.trimStart());
+}
 
 function isFenceBlock(block: ObjectBlock): boolean {
-  return block.depth === 0 && block.owner !== null && FENCE_OWNERS.has(block.owner);
+  if (block.depth !== 0 || block.owner === null || !FENCE_OWNERS.has(block.owner)) {
+    return false;
+  }
+  return !(block.owner === "mock" && block.inFunctionRun);
 }
 
 function isUnfencedMultiline(entry: ObjectEntry): boolean {
@@ -69,6 +78,16 @@ function openerOnKeyLine(line: string, entry: ObjectEntry): "{" | "[" | null {
   return null;
 }
 
+function rangeIncludesSiblingStatement(records: LineRecord[], entry: ObjectEntry): boolean {
+  for (let i = entry.lineIndex + 1; i <= entry.valueEndLine; i += 1) {
+    const trimmed = records[i].content.trimStart();
+    if (SIBLING_STATEMENT.test(trimmed) || trimmed.startsWith("function.run")) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function canFence(records: LineRecord[], entry: ObjectEntry): boolean {
   const keyLine = records[entry.lineIndex]?.content;
   const endLine = records[entry.valueEndLine]?.content;
@@ -84,6 +103,17 @@ function canFence(records: LineRecord[], entry: ObjectEntry): boolean {
     return false;
   }
   if (endLine.slice(entry.valueEndCol + 1).trim() !== "") {
+    return false;
+  }
+  const nextLine = records[entry.lineIndex + 1]?.content;
+  if (
+    nextLine !== undefined &&
+    isFenceOpenerLine(nextLine) &&
+    leadingSpaces(nextLine) === leadingSpaces(keyLine)
+  ) {
+    return false;
+  }
+  if (rangeIncludesSiblingStatement(records, entry)) {
     return false;
   }
   for (let i = entry.lineIndex; i <= entry.valueEndLine; i += 1) {
@@ -140,6 +170,124 @@ function fenceEntry(records: LineRecord[], entry: ObjectEntry): boolean {
   return true;
 }
 
+interface RunPair {
+  input: ObjectBlock;
+  mock: ObjectBlock;
+}
+
+function functionRunPairs(lines: string[]): RunPair[] {
+  const byRun = new Map<number, { input?: ObjectBlock; mock?: ObjectBlock }>();
+  for (const block of findObjectBlocks(lines)) {
+    if (!block.inFunctionRun || block.depth !== 0 || block.functionRunId === null) {
+      continue;
+    }
+    if (block.owner !== "mock" && block.owner !== "input") {
+      continue;
+    }
+    const slot = byRun.get(block.functionRunId) ?? {};
+    if (block.owner === "mock") {
+      slot.mock = block;
+    } else {
+      slot.input = block;
+    }
+    byRun.set(block.functionRunId, slot);
+  }
+  const pairs: RunPair[] = [];
+  for (const slot of byRun.values()) {
+    if (slot.input !== undefined && slot.mock !== undefined) {
+      pairs.push({ input: slot.input, mock: slot.mock });
+    }
+  }
+  return pairs;
+}
+
+function consecutiveFenceOpenerViolations(
+  file: SourceFile,
+  lines: string[],
+  severity: Violation["severity"],
+): Violation[] {
+  const violations: Violation[] = [];
+  for (let i = 0; i < lines.length - 1; i += 1) {
+    if (isCommentLine(lines[i]) || isCommentLine(lines[i + 1])) {
+      continue;
+    }
+    if (!isFenceOpenerLine(lines[i]) || !isFenceOpenerLine(lines[i + 1])) {
+      continue;
+    }
+    if (leadingSpaces(lines[i]) !== leadingSpaces(lines[i + 1])) {
+      continue;
+    }
+    violations.push({
+      ruleId: fenceMultilineValues.id,
+      message: "consecutive fence openers; each fenced key must have its own closed ``` body",
+      severity,
+      file: file.path,
+      line: i + 2,
+      column: leadingSpaces(lines[i + 1]) + 1,
+    });
+  }
+  return violations;
+}
+
+function functionRunMockIndentViolations(
+  file: SourceFile,
+  lines: string[],
+  severity: Violation["severity"],
+): Violation[] {
+  const violations: Violation[] = [];
+  for (const { input, mock } of functionRunPairs(lines)) {
+    const inputIndent = leadingSpaces(lines[input.openLine]);
+    const mockIndent = leadingSpaces(lines[mock.openLine]);
+    if (inputIndent === mockIndent) {
+      continue;
+    }
+    violations.push({
+      ruleId: fenceMultilineValues.id,
+      message: "mock must be indented with input inside function.run",
+      severity,
+      file: file.path,
+      line: mock.openLine + 1,
+      column: mockIndent + 1,
+    });
+  }
+  return violations;
+}
+
+function fixFunctionRunMockIndents(records: LineRecord[], permittedLines: Set<number>): boolean {
+  const lines = records.map((record) => record.content);
+  let changed = false;
+  const pairs = functionRunPairs(lines).sort((a, b) => b.mock.openLine - a.mock.openLine);
+  for (const { input, mock } of pairs) {
+    if (!permittedLines.has(mock.openLine + 1)) {
+      continue;
+    }
+    const inputIndent = leadingSpaces(records[input.openLine].content);
+    const mockIndent = leadingSpaces(records[mock.openLine].content);
+    const delta = inputIndent - mockIndent;
+    if (delta === 0) {
+      continue;
+    }
+    let ok = true;
+    const shifted: string[] = [];
+    for (let i = mock.openLine; i <= mock.closeLine; i += 1) {
+      const next = shiftIndent(records[i].content, delta);
+      if (next === null) {
+        ok = false;
+        break;
+      }
+      shifted.push(next);
+    }
+    if (!ok) {
+      continue;
+    }
+    for (let i = 0; i < shifted.length; i += 1) {
+      records[mock.openLine + i].content = shifted[i];
+    }
+    changed = true;
+  }
+  return changed;
+}
+
 function violationsFor(
   file: SourceFile,
   lines: string[],
@@ -156,6 +304,8 @@ function violationsFor(
       column: entry.valueStart + 1,
     });
   }
+  violations.push(...consecutiveFenceOpenerViolations(file, lines, severity));
+  violations.push(...functionRunMockIndentViolations(file, lines, severity));
   return violations;
 }
 
@@ -176,9 +326,6 @@ export const fenceMultilineValues: Rule = {
         .filter((violation) => !isSuppressed(suppressions, violation.line, fenceMultilineValues.id))
         .map((violation) => violation.line),
     );
-    if (rewriteLines.size === 0) {
-      return null;
-    }
     const records = splitLineRecords(file.text);
     const lines = records.map((record) => record.content);
     const entries = fenceEntries(lines)
@@ -186,6 +333,9 @@ export const fenceMultilineValues: Rule = {
       .filter((entry) => rewriteLines.has(entry.lineIndex + 1))
       .sort((a, b) => b.lineIndex - a.lineIndex || b.colonIndex - a.colonIndex);
     let changed = false;
+    if (fixFunctionRunMockIndents(records, rewriteLines)) {
+      changed = true;
+    }
     for (const entry of entries) {
       if (fenceEntry(records, entry)) {
         changed = true;
