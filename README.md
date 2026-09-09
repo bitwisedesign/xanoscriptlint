@@ -80,6 +80,7 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 
 | Id | Default | Severity | What it catches |
 | --- | --- | --- | --- |
+| `align_mock_colons` | on | error | Mock entry colons must align to the longest name (Xano rewrites this on push); auto-fixable with `--fix` |
 | `empty_function_run` | on | error | `function.run ""` / `function.run ''` |
 | `no_trailing_newline` | on | error | File does not end with `}` (Xano pull strips trailing newlines); auto-fixable with `--fix` |
 | `no_var_response` | opt-in | warning | `var $response` (Xano rewrites it) |

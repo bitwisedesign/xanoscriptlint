@@ -73,6 +73,47 @@ export const NULL_RESPONSE_XS = `function "example" {
   response = null
 }`;
 
+export const MOCK_SHORT_NAME = '"checkout short"';
+export const MOCK_LONG_NAME = '"checkout longest_scenario_name"';
+export const MOCK_NAME_PAD = MOCK_LONG_NAME.length - MOCK_SHORT_NAME.length;
+
+export function wrapMockBlock(entries: string): string {
+  return `function "example" {
+  input {
+  }
+
+  stack {
+    db.query item {
+      mock = {
+${entries}
+      }
+    }
+  }
+
+  response = $item
+}`;
+}
+
+export const ALIGNED_MOCK_ENTRIES = `        ${MOCK_SHORT_NAME}${" ".repeat(MOCK_NAME_PAD)}: {id: 1}
+        ${MOCK_LONG_NAME}: {id: 2}`;
+
+export const ALIGNED_MOCK_XS = wrapMockBlock(ALIGNED_MOCK_ENTRIES);
+
+export const UNDERPADDED_MOCK_XS = wrapMockBlock(
+  `        ${MOCK_SHORT_NAME}: {id: 1}
+        ${MOCK_LONG_NAME}: {id: 2}`,
+);
+
+export const OVERPADDED_LONG_MOCK_XS = wrapMockBlock(
+  `        ${MOCK_SHORT_NAME}${" ".repeat(MOCK_NAME_PAD)}: {id: 1}
+        ${MOCK_LONG_NAME}  : {id: 2}`,
+);
+
+export const AFTER_COLON_SPACES_MOCK_XS = wrapMockBlock(
+  `        ${MOCK_SHORT_NAME}:    {id: 1}
+        ${MOCK_LONG_NAME}: {id: 2}`,
+);
+
 export function collectStream(): {
   stream: Writable;
   text: () => string;

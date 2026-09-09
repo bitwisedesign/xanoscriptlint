@@ -1,19 +1,15 @@
-// Clean example
 function "example" {
   input {
   }
 
   stack {
-    var $ok {
-      value = 1
-    }
     db.query item {
       mock = {
-        "checkout short"                : {id: 1}
+        "checkout short": {id: 1}
         "checkout longest_scenario_name": {id: 2}
       }
     }
   }
 
-  response = $ok
+  response = $item
 }

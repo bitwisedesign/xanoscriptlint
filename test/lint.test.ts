@@ -48,6 +48,15 @@ describe("fixture linting", () => {
       lintFiles([trailing], config).some((v) => v.ruleId === "no_trailing_newline"),
       true,
     );
+
+    const mockColons = {
+      path: path.join(fixtures, "violations/align_mock_colons.xs"),
+      text: readFileSync(path.join(fixtures, "violations/align_mock_colons.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([mockColons], config).some((v) => v.ruleId === "align_mock_colons"),
+      true,
+    );
   });
 
   it("CLI lints a violations directory and exits 2", async () => {
