@@ -4,7 +4,7 @@
 | --- | --- | --- | --- | --- |
 | [`align_object_colons`](#align_object_colons) | on | error | yes | Object entry colons must align to the longest name |
 | [`empty_function_run`](#empty_function_run) | on | error | no | `function.run` must not be called with an empty name |
-| [`fence_multiline_mocks`](#fence_multiline_mocks) | on | error | yes | Multiline mock values must be wrapped in a triple-backtick fence |
+| [`fence_multiline_values`](#fence_multiline_values) | on | error | yes | Multiline mock and input values must be wrapped in a triple-backtick fence |
 | [`no_null_response`](#no_null_response) | opt-in | warning | yes | Do not assign `response = null` |
 | [`no_trailing_newline`](#no_trailing_newline) | on | error | yes | File must end with `}` and no trailing newline |
 | [`no_var_response`](#no_var_response) | opt-in | warning | no | Do not declare `var $response` |
@@ -46,11 +46,19 @@ function.run ''
 
 Comment lines are ignored.
 
-## fence_multiline_mocks
+## fence_multiline_values
 
-Xano wraps multiline object and array values in `mock` blocks in a triple-backtick fence on push. Single-line values (`null`, numbers, strings, inline `{...}` / `[...]`) stay unfenced. An unfenced multiline value is push/pull churn.
+Xano wraps multiline object and array values in `mock` and `input` blocks in a triple-backtick fence on push. Single-line values (`null`, numbers, strings, inline `{...}` / `[...]`) stay unfenced. An unfenced multiline value is push/pull churn.
 
 ````xs
+input = {
+  items: ```
+    [
+      {id: 8}
+    ]
+    ```
+}
+
 mock = {
   "checkout applies gift wrap": ```
     {
@@ -66,7 +74,7 @@ mock = {
 }
 ````
 
-Only top-level `mock = { ... }` entries are checked. Nested properties inside an already-fenced value, and multiline objects outside `mock`, are ignored.
+Only top-level entries of `mock = { ... }` and `input = { ... }` are checked. Nested properties inside an already-fenced value, and multiline objects in other contexts (`data`, `join`, `value`), are ignored because Xano does not fence those.
 
 Auto-fixable with `--fix`: the value is wrapped in a fence, the opening `{` or `[` moves onto the next line, and the body is indented two spaces relative to the key. Values that are not a bare `{` or `[` on the key line are reported but not rewritten.
 

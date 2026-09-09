@@ -94,6 +94,23 @@ ${entries}
 }`;
 }
 
+export function wrapInputBlock(entries: string): string {
+  return `function "example" {
+  input {
+  }
+
+  stack {
+    function.run "Orders/dispatch" {
+      input = {
+${entries}
+      }
+    } as $dispatch
+  }
+
+  response = $dispatch
+}`;
+}
+
 export const ALIGNED_MOCK_ENTRIES = `        ${MOCK_SHORT_NAME}${" ".repeat(MOCK_NAME_PAD)}: {id: 1}
         ${MOCK_LONG_NAME}: {id: 2}`;
 
@@ -154,6 +171,33 @@ export const FENCED_MULTILINE_ARRAY_ENTRIES = `        "checkout lists open cart
 export const UNFENCED_MULTILINE_ARRAY_XS = wrapMockBlock(UNFENCED_MULTILINE_ARRAY_ENTRIES);
 export const FENCED_MULTILINE_ARRAY_XS = wrapMockBlock(FENCED_MULTILINE_ARRAY_ENTRIES);
 
+export const UNFENCED_INPUT_OBJECT_ENTRIES = `        payload: {
+          user_id: 7
+          reason : "manual"
+        }`;
+
+export const FENCED_INPUT_OBJECT_ENTRIES = `        payload: \`\`\`
+          {
+            user_id: 7
+            reason : "manual"
+          }
+          \`\`\``;
+
+export const UNFENCED_INPUT_ARRAY_ENTRIES = `        items: [
+          {id: 1}
+        ]`;
+
+export const FENCED_INPUT_ARRAY_ENTRIES = `        items: \`\`\`
+          [
+            {id: 1}
+          ]
+          \`\`\``;
+
+export const UNFENCED_INPUT_OBJECT_XS = wrapInputBlock(UNFENCED_INPUT_OBJECT_ENTRIES);
+export const FENCED_INPUT_OBJECT_XS = wrapInputBlock(FENCED_INPUT_OBJECT_ENTRIES);
+export const UNFENCED_INPUT_ARRAY_XS = wrapInputBlock(UNFENCED_INPUT_ARRAY_ENTRIES);
+export const FENCED_INPUT_ARRAY_XS = wrapInputBlock(FENCED_INPUT_ARRAY_ENTRIES);
+
 export const NONCANONICAL_MULTILINE_MOCK_XS = wrapMockBlock(
   `        "checkout applies gift wrap": {issued: []
           skipped: []
@@ -174,6 +218,22 @@ export const ALIGNED_FENCED_MULTILINE_XS = wrapMockBlock(
           }
           \`\`\`
         ${MOCK_LONG_NAME}: []`,
+);
+
+export const MISALIGNED_UNFENCED_INPUT_XS = wrapInputBlock(
+  `        id: 7
+        payload: {
+          inner: 1
+        }`,
+);
+
+export const ALIGNED_FENCED_INPUT_XS = wrapInputBlock(
+  `        id     : 7
+        payload: \`\`\`
+          {
+            inner: 1
+          }
+          \`\`\``,
 );
 
 export function collectStream(): {

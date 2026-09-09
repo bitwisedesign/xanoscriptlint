@@ -58,12 +58,12 @@ describe("fixture linting", () => {
       true,
     );
 
-    const fenceMocks = {
-      path: path.join(fixtures, "violations/fence_multiline_mocks.xs"),
-      text: readFileSync(path.join(fixtures, "violations/fence_multiline_mocks.xs"), "utf8"),
+    const fenceValues = {
+      path: path.join(fixtures, "violations/fence_multiline_values.xs"),
+      text: readFileSync(path.join(fixtures, "violations/fence_multiline_values.xs"), "utf8"),
     };
     assert.equal(
-      lintFiles([fenceMocks], config).some((v) => v.ruleId === "fence_multiline_mocks"),
+      lintFiles([fenceValues], config).some((v) => v.ruleId === "fence_multiline_values"),
       true,
     );
   });

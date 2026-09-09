@@ -1,4 +1,4 @@
-import { joinLineRecords, splitLineRecords } from "./mock_blocks.js";
+import { joinLineRecords, splitLineRecords } from "./line_records.js";
 import { findObjectBlocks } from "./object_blocks.js";
 import type { ObjectEntry } from "./object_blocks.js";
 import type { Rule, RuleOptions, SourceFile, Violation } from "./types.js";

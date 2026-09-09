@@ -1,11 +1,34 @@
-import { findMockBlocks, joinLineRecords, splitLineRecords } from "./mock_blocks.js";
-import type { LineRecord, MockEntry } from "./mock_blocks.js";
+import { joinLineRecords, splitLineRecords } from "./line_records.js";
+import type { LineRecord } from "./line_records.js";
+import { findObjectBlocks } from "./object_blocks.js";
+import type { ObjectBlock, ObjectEntry } from "./object_blocks.js";
 import type { Rule, RuleOptions, SourceFile, Violation } from "./types.js";
 import { isSuppressed, parseSuppressions } from "../suppress.js";
 import { splitLines } from "../util.js";
 
-function isUnfencedMultiline(entry: MockEntry): boolean {
+const FENCE_OWNERS = new Set(["mock", "input"]);
+
+function isFenceBlock(block: ObjectBlock): boolean {
+  return block.depth === 0 && block.owner !== null && FENCE_OWNERS.has(block.owner);
+}
+
+function isUnfencedMultiline(entry: ObjectEntry): boolean {
   return !entry.fenced && entry.valueEndLine > entry.lineIndex;
+}
+
+function fenceEntries(lines: string[]): Array<{ entry: ObjectEntry; owner: string }> {
+  const found: Array<{ entry: ObjectEntry; owner: string }> = [];
+  for (const block of findObjectBlocks(lines)) {
+    if (!isFenceBlock(block) || block.owner === null) {
+      continue;
+    }
+    for (const entry of [...block.ownLine, ...block.inline]) {
+      if (isUnfencedMultiline(entry)) {
+        found.push({ entry, owner: block.owner });
+      }
+    }
+  }
+  return found;
 }
 
 function leadingSpaces(line: string): number {
@@ -38,7 +61,7 @@ function shiftIndent(line: string, delta: number): string | null {
   return line;
 }
 
-function openerOnKeyLine(line: string, entry: MockEntry): "{" | "[" | null {
+function openerOnKeyLine(line: string, entry: ObjectEntry): "{" | "[" | null {
   const fragment = line.slice(entry.valueStart).trim();
   if (fragment === "{" || fragment === "[") {
     return fragment;
@@ -46,7 +69,7 @@ function openerOnKeyLine(line: string, entry: MockEntry): "{" | "[" | null {
   return null;
 }
 
-function canFence(records: LineRecord[], entry: MockEntry): boolean {
+function canFence(records: LineRecord[], entry: ObjectEntry): boolean {
   const keyLine = records[entry.lineIndex]?.content;
   const endLine = records[entry.valueEndLine]?.content;
   if (keyLine === undefined || endLine === undefined) {
@@ -80,7 +103,7 @@ function canFence(records: LineRecord[], entry: MockEntry): boolean {
   return true;
 }
 
-function fenceEntry(records: LineRecord[], entry: MockEntry): boolean {
+function fenceEntry(records: LineRecord[], entry: ObjectEntry): boolean {
   if (!canFence(records, entry)) {
     return false;
   }
@@ -123,39 +146,34 @@ function violationsFor(
   severity: Violation["severity"],
 ): Violation[] {
   const violations: Violation[] = [];
-  for (const block of findMockBlocks(lines)) {
-    for (const entry of block.entries) {
-      if (!isUnfencedMultiline(entry)) {
-        continue;
-      }
-      violations.push({
-        ruleId: fenceMultilineMocks.id,
-        message: "multiline mock value must be wrapped in a ``` fence",
-        severity,
-        file: file.path,
-        line: entry.lineIndex + 1,
-        column: entry.valueStart + 1,
-      });
-    }
+  for (const { entry, owner } of fenceEntries(lines)) {
+    violations.push({
+      ruleId: fenceMultilineValues.id,
+      message: `multiline ${owner} value must be wrapped in a \`\`\` fence`,
+      severity,
+      file: file.path,
+      line: entry.lineIndex + 1,
+      column: entry.valueStart + 1,
+    });
   }
   return violations;
 }
 
-export const fenceMultilineMocks: Rule = {
-  id: "fence_multiline_mocks",
-  description: "Multiline mock values must be wrapped in a ``` fence",
+export const fenceMultilineValues: Rule = {
+  id: "fence_multiline_values",
+  description: "Multiline mock and input values must be wrapped in a ``` fence",
   defaultEnabled: true,
   defaultSeverity: "error",
   lint(file: SourceFile, options: RuleOptions): Violation[] {
-    const severity = options.severity ?? fenceMultilineMocks.defaultSeverity;
+    const severity = options.severity ?? fenceMultilineValues.defaultSeverity;
     return violationsFor(file, splitLines(file.text), severity);
   },
   fix(file: SourceFile, options: RuleOptions): string | null {
     const suppressions = parseSuppressions(file.text);
     const rewriteLines = new Set(
-      fenceMultilineMocks
+      fenceMultilineValues
         .lint(file, options)
-        .filter((violation) => !isSuppressed(suppressions, violation.line, fenceMultilineMocks.id))
+        .filter((violation) => !isSuppressed(suppressions, violation.line, fenceMultilineValues.id))
         .map((violation) => violation.line),
     );
     if (rewriteLines.size === 0) {
@@ -163,9 +181,9 @@ export const fenceMultilineMocks: Rule = {
     }
     const records = splitLineRecords(file.text);
     const lines = records.map((record) => record.content);
-    const entries = findMockBlocks(lines)
-      .flatMap((block) => (block.multiKeyLine ? [] : block.entries))
-      .filter((entry) => isUnfencedMultiline(entry) && rewriteLines.has(entry.lineIndex + 1))
+    const entries = fenceEntries(lines)
+      .map(({ entry }) => entry)
+      .filter((entry) => rewriteLines.has(entry.lineIndex + 1))
       .sort((a, b) => b.lineIndex - a.lineIndex || b.colonIndex - a.colonIndex);
     let changed = false;
     for (const entry of entries) {

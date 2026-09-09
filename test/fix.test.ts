@@ -4,11 +4,15 @@ import { resolveConfig } from "../src/config.js";
 import { fixFile } from "../src/lint.js";
 import {
   AFTER_COLON_SPACES_MOCK_XS,
+  ALIGNED_FENCED_INPUT_XS,
   ALIGNED_FENCED_MULTILINE_XS,
   ALIGNED_MOCK_XS,
   CLEAN_XS,
+  FENCED_INPUT_ARRAY_XS,
+  FENCED_INPUT_OBJECT_XS,
   FENCED_MULTILINE_ARRAY_XS,
   FENCED_MULTILINE_OBJECT_XS,
+  MISALIGNED_UNFENCED_INPUT_XS,
   MISALIGNED_UNFENCED_MULTILINE_XS,
   MOCK_LONG_NAME,
   MOCK_SHORT_NAME,
@@ -16,6 +20,8 @@ import {
   NULL_RESPONSE_XS,
   OVERPADDED_LONG_MOCK_XS,
   UNDERPADDED_MOCK_XS,
+  UNFENCED_INPUT_ARRAY_XS,
+  UNFENCED_INPUT_OBJECT_XS,
   UNFENCED_MULTILINE_ARRAY_XS,
   UNFENCED_MULTILINE_OBJECT_XS,
   wrapMockBlock,
@@ -293,7 +299,7 @@ describe("fixFile", () => {
     assert.equal(object.changed, true);
     assert.equal(object.text, FENCED_MULTILINE_OBJECT_XS);
     assert.equal(object.corrections.length, 1);
-    assert.equal(object.corrections[0].ruleId, "fence_multiline_mocks");
+    assert.equal(object.corrections[0].ruleId, "fence_multiline_values");
     assert.equal(object.corrections[0].file, "obj.xs");
     assert.equal(object.corrections[0].line, 8);
 
@@ -307,6 +313,18 @@ describe("fixFile", () => {
     const again = fixFile({ path: "obj.xs", text: object.text }, config());
     assert.equal(again.changed, false);
     assert.equal(again.text, FENCED_MULTILINE_OBJECT_XS);
+  });
+
+  it("fences unfenced multiline input objects and arrays", () => {
+    const object = fixFile({ path: "in-obj.xs", text: UNFENCED_INPUT_OBJECT_XS }, config());
+    assert.equal(object.changed, true);
+    assert.equal(object.text, FENCED_INPUT_OBJECT_XS);
+    assert.equal(object.corrections[0]?.ruleId, "fence_multiline_values");
+    assert.equal(object.corrections[0]?.line, 8);
+
+    const array = fixFile({ path: "in-arr.xs", text: UNFENCED_INPUT_ARRAY_XS }, config());
+    assert.equal(array.changed, true);
+    assert.equal(array.text, FENCED_INPUT_ARRAY_XS);
   });
 
   it("preserves each line terminator when fencing multiline mocks", () => {
@@ -383,19 +401,33 @@ describe("fixFile", () => {
       true,
     );
     assert.equal(
-      result.corrections.some((c) => c.ruleId === "fence_multiline_mocks"),
+      result.corrections.some((c) => c.ruleId === "fence_multiline_values"),
       true,
     );
   });
 
-  it("does not rewrite fenced mocks, disabled fence_multiline_mocks, or suppressed lines", () => {
+  it("aligns and fences a misaligned multiline input value in one pass", () => {
+    const result = fixFile({ path: "in-both.xs", text: MISALIGNED_UNFENCED_INPUT_XS }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, ALIGNED_FENCED_INPUT_XS);
+    assert.equal(
+      result.corrections.some((c) => c.ruleId === "align_object_colons"),
+      true,
+    );
+    assert.equal(
+      result.corrections.some((c) => c.ruleId === "fence_multiline_values"),
+      true,
+    );
+  });
+
+  it("does not rewrite fenced mocks, disabled fence_multiline_values, or suppressed lines", () => {
     const clean = fixFile({ path: "ok.xs", text: FENCED_MULTILINE_OBJECT_XS }, config());
     assert.equal(clean.changed, false);
     assert.equal(clean.text, FENCED_MULTILINE_OBJECT_XS);
 
     const off = fixFile(
       { path: "obj.xs", text: UNFENCED_MULTILINE_OBJECT_XS },
-      config({ disabled_rules: ["fence_multiline_mocks"] }),
+      config({ disabled_rules: ["fence_multiline_values"] }),
     );
     assert.equal(off.changed, false);
     assert.equal(off.text, UNFENCED_MULTILINE_OBJECT_XS);
@@ -407,7 +439,7 @@ describe("fixFile", () => {
   stack {
     db.query item {
       mock = {
-        // xanoscriptlint:disable:next fence_multiline_mocks
+        // xanoscriptlint:disable:next fence_multiline_values
         "checkout applies gift wrap": {
           issued: []
         }
@@ -429,5 +461,45 @@ describe("fixFile", () => {
     );
     assert.equal(result.changed, false);
     assert.equal(result.text, NONCANONICAL_MULTILINE_MOCK_XS);
+  });
+
+  it("does not rewrite a tab-indented multiline value", () => {
+    const text = wrapMockBlock(
+      `        "checkout lists open carts": [
+\t  {id: 8}
+        ]`,
+    );
+    const result = fixFile({ path: "tabs.xs", text }, config());
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
+  });
+
+  it("does not rewrite data or join multiline values", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    db.add job {
+      data = {
+        input: {
+          round_uuid: $round
+        }
+      }
+    }
+    db.query item {
+      join = {
+        other: {
+          table: "other"
+        }
+      }
+    }
+  }
+
+  response = $job
+}`;
+    const result = fixFile({ path: "data.xs", text }, config());
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
   });
 });
