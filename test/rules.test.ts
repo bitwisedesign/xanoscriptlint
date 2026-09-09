@@ -691,6 +691,7 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     );
     assert.equal(hits.length, 6);
     assert.equal(hits[0]?.line, 3);
+    assert.equal(hits[0]?.column, 21);
     assert.equal(hits[0]?.severity, "error");
     assert.equal(hits[0]?.message, "numeric default of 0 must be omitted; Xano strips it on push");
 
@@ -811,6 +812,7 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     );
     assert.equal(hits.length, 6);
     assert.equal(hits[0]?.line, 3);
+    assert.equal(hits[0]?.column, 19);
     assert.equal(hits[0]?.severity, "error");
     assert.equal(
       hits[0]?.message,
