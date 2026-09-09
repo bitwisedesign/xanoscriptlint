@@ -143,9 +143,37 @@ function runContext(stack: Frame[]): { inFunctionRun: boolean; functionRunId: nu
   return { inFunctionRun: false, functionRunId: null };
 }
 
+function isWordChar(ch: string | undefined): boolean {
+  return ch !== undefined && /[A-Za-z0-9_]/.test(ch);
+}
+
+function hasFunctionRunToken(line: string, end: number): boolean {
+  let col = 0;
+  while (col < end) {
+    const ch = line[col];
+    if (ch === '"' || ch === "'") {
+      const parsed = readQuoted(line, col, ch);
+      if (parsed === null) {
+        return false;
+      }
+      col = parsed.end;
+      continue;
+    }
+    if (
+      line.startsWith("function.run", col) &&
+      !isWordChar(line[col - 1]) &&
+      !isWordChar(line[col + 12])
+    ) {
+      return true;
+    }
+    col += 1;
+  }
+  return false;
+}
+
 function isFunctionRunBrace(line: string, braceCol: number): boolean {
   const prefix = line.slice(0, braceCol);
-  return /\bfunction\.run\b/.test(prefix) && !prefix.includes("{");
+  return !prefix.includes("{") && hasFunctionRunToken(line, braceCol);
 }
 
 function addEntry(frame: Frame, entry: ObjectEntry): void {

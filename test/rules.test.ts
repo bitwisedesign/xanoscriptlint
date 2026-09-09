@@ -477,6 +477,29 @@ ${ALIGNED_MOCK_ENTRIES}`,
     ).filter((v) => v.ruleId === "fence_multiline_values");
     assert.equal(inputArray.length, 1);
     assert.equal(inputArray[0]?.line, 8);
+
+    const quotedName = `function "Orders/function.run" {
+  input {
+  }
+
+  stack {
+    db.query item {
+      mock = {
+        "checkout applies gift wrap": {
+          queued: []
+        }
+      }
+    }
+  }
+
+  response = $item
+}`;
+    const quotedHits = lintFile({ path: "quoted-run.xs", text: quotedName }, config()).filter(
+      (v) => v.ruleId === "fence_multiline_values",
+    );
+    assert.equal(quotedHits.length, 1);
+    assert.equal(quotedHits[0]?.line, 8);
+    assert.equal(quotedHits[0]?.column, 39);
   });
 
   it("fence_multiline_values ignores fenced, single-line, nested, and non-mock values", () => {
@@ -760,8 +783,10 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     const sameLineHits = lintFile({ path: "same-line.xs", text: sameLineOpen }, config()).filter(
       (v) => v.ruleId === "fence_multiline_values",
     );
-    assert.equal(sameLineHits.length >= 1, true);
+    assert.equal(sameLineHits.length, 1);
     assert.match(sameLineHits[0]?.message ?? "", /indented with input inside function\.run/);
+    assert.equal(sameLineHits[0]?.line, 14);
+    assert.equal(sameLineHits[0]?.column, 11);
   });
 
   it("no_zero_numeric_default flags explicit zero defaults", () => {
