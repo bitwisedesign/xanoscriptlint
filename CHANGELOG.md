@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-09
+
+### Fixed
+
+- `fence_multiline_values` no longer fences `function.run` mock values, never emits two consecutive fence openers, and re-indents an outdented `mock` so it stays a sibling of `input`. Check mode flags those invalid forms; Xano CLI push rejects them even when the language server does not.
+
 ## [0.2.0] - 2026-09-09
 
 ### Added

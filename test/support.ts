@@ -287,6 +287,162 @@ export const ALIGNED_FENCED_INPUT_XS = wrapInputBlock(
           \`\`\``,
 );
 
+export const VALID_SIBLING_FENCES_XS = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query cart {
+      mock = {
+        "checkout marks cart paid": \`\`\`
+          {
+            id     : 1
+            status : "open"
+          }
+          \`\`\`
+        "checkout applies gift wrap to open cart": \`\`\`
+          {
+            id          : 1
+            status      : "open"
+            coupon_code : "SAVE10"
+          }
+          \`\`\`
+      }
+    }
+  }
+
+  response = $cart
+}`;
+
+export const INVALID_DOUBLE_OPENER_XS = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query cart {
+      mock = {
+        "checkout marks cart paid"               : \`\`\`
+        "checkout applies gift wrap to open cart": \`\`\`
+          {
+            id          : 1
+            status      : "open"
+            coupon_code : "SAVE10"
+          }
+          \`\`\`
+      }
+    }
+  }
+
+  response = $cart
+}`;
+
+export const VALID_FUNCTION_RUN_COMPACT_MOCK_XS = `function "example" {
+  input {
+  }
+
+  stack {
+    conditional {
+      if ($ok) {
+        foreach ($items) {
+          each {
+            function.run "Orders/apply_discounts" {
+              input = {
+                user_id: $cart_user_id
+                reason : "manual"
+              }
+
+              mock = {
+                "checkout empty cart"                    : {queued: [], sent: [], done: false}
+                "checkout applies gift wrap to open cart": {queued: [{sku: "box"}], sent: [{sku: "box"}], done: true}
+              }
+            } as $discount_result
+          }
+        }
+      }
+    }
+  }
+
+  response = $ok
+}`;
+
+export const INVALID_FUNCTION_RUN_OUTDENTED_MOCK_XS = `function "example" {
+  input {
+  }
+
+  stack {
+    conditional {
+      if ($ok) {
+        foreach ($items) {
+          each {
+            function.run "Orders/apply_discounts" {
+              input = {
+                user_id: $cart_user_id
+                reason : "manual"
+              }
+
+          mock = {
+            "checkout empty cart"                    : \`\`\`
+              {
+                queued : []
+                sent   : []
+                done   : false
+              }
+              \`\`\`
+            "checkout applies gift wrap to open cart": \`\`\`
+              {
+                queued : [{sku: "box"}]
+                sent   : [{sku: "box"}]
+                done   : true
+              }
+              \`\`\`
+          }
+            } as $discount_result
+          }
+        }
+      }
+    }
+  }
+
+  response = $ok
+}`;
+
+export const UNFENCED_FUNCTION_RUN_MULTILINE_MOCK_XS = `function "example" {
+  input {
+  }
+
+  stack {
+    conditional {
+      if ($ok) {
+        foreach ($items) {
+          each {
+            function.run "Orders/apply_discounts" {
+              input = {
+                user_id: $cart_user_id
+                reason : "manual"
+              }
+
+              mock = {
+                "checkout empty cart": {
+                  queued: []
+                  sent: []
+                  done: false
+                }
+                "checkout applies gift wrap to open cart": {
+                  queued: [{sku: "box"}]
+                  sent: [{sku: "box"}]
+                  done: true
+                }
+              }
+            } as $discount_result
+          }
+        }
+      }
+    }
+  }
+
+  response = $ok
+}`;
+
 export function collectStream(): {
   stream: Writable;
   text: () => string;

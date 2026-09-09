@@ -11,6 +11,8 @@ import {
   FENCED_INPUT_OBJECT_XS,
   FENCED_MULTILINE_ARRAY_XS,
   FENCED_MULTILINE_OBJECT_XS,
+  INVALID_DOUBLE_OPENER_XS,
+  INVALID_FUNCTION_RUN_OUTDENTED_MOCK_XS,
   MOCK_LONG_NAME,
   MOCK_SHORT_NAME,
   NONCANONICAL_MULTILINE_MOCK_XS,
@@ -21,9 +23,12 @@ import {
   UNDERPADDED_MOCK_XS,
   UNFENCED_INPUT_ARRAY_XS,
   UNFENCED_INPUT_OBJECT_XS,
+  UNFENCED_FUNCTION_RUN_MULTILINE_MOCK_XS,
   UNFENCED_MULTILINE_ARRAY_XS,
   UNFENCED_MULTILINE_OBJECT_ENTRIES,
   UNFENCED_MULTILINE_OBJECT_XS,
+  VALID_FUNCTION_RUN_COMPACT_MOCK_XS,
+  VALID_SIBLING_FENCES_XS,
   VAR_RESPONSE_XS,
   ZERO_DEFAULT_FIXED_XS,
   ZERO_DEFAULT_XS,
@@ -683,6 +688,45 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     );
     const warnHit = warned.find((v) => v.ruleId === "fence_multiline_values");
     assert.equal(warnHit?.severity, "warning");
+  });
+
+  it("fence_multiline_values flags shared fence openers and an outdented function.run mock", () => {
+    const double = lintFile({ path: "double.xs", text: INVALID_DOUBLE_OPENER_XS }, config()).filter(
+      (v) => v.ruleId === "fence_multiline_values",
+    );
+    assert.equal(double.length >= 1, true);
+    assert.match(double[0]?.message ?? "", /consecutive fence openers/);
+
+    const outdented = lintFile(
+      { path: "outdent.xs", text: INVALID_FUNCTION_RUN_OUTDENTED_MOCK_XS },
+      config(),
+    ).filter((v) => v.ruleId === "fence_multiline_values");
+    assert.equal(outdented.length >= 1, true);
+    assert.match(outdented[0]?.message ?? "", /indented with input inside function\.run/);
+
+    const validFences = lintFile({ path: "ok-fence.xs", text: VALID_SIBLING_FENCES_XS }, config());
+    assert.equal(
+      validFences.some((v) => v.ruleId === "fence_multiline_values"),
+      false,
+    );
+
+    const compact = lintFile(
+      { path: "ok-run.xs", text: VALID_FUNCTION_RUN_COMPACT_MOCK_XS },
+      config(),
+    );
+    assert.equal(
+      compact.some((v) => v.ruleId === "fence_multiline_values"),
+      false,
+    );
+
+    const multilineRun = lintFile(
+      { path: "run-multi.xs", text: UNFENCED_FUNCTION_RUN_MULTILINE_MOCK_XS },
+      config(),
+    );
+    assert.equal(
+      multilineRun.some((v) => v.ruleId === "fence_multiline_values"),
+      false,
+    );
   });
 
   it("no_zero_numeric_default flags explicit zero defaults", () => {

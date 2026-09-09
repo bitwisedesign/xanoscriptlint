@@ -82,7 +82,7 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 | --- | --- | --- | --- | --- |
 | `align_object_colons` | on | error | yes | Object entry colons must align to the longest name (Xano rewrites this on push) |
 | `empty_function_run` | on | error | no | `function.run ""` / `function.run ''` |
-| `fence_multiline_values` | on | error | yes | Multiline mock or input value not wrapped in a triple-backtick fence (Xano fences it on push) |
+| `fence_multiline_values` | on | error | yes | Multiline mock or input value not wrapped in a triple-backtick fence (Xano fences it on push); `function.run` mocks stay compact |
 | `no_null_response` | opt-in | warning | yes | `response = null` (use `response = {}`) |
 | `no_trailing_newline` | on | error | yes | File does not end with `}` (Xano pull strips trailing newlines) |
 | `no_var_response` | opt-in | warning | no | `var $response` (Xano rewrites it) |
