@@ -114,6 +114,68 @@ export const AFTER_COLON_SPACES_MOCK_XS = wrapMockBlock(
         ${MOCK_LONG_NAME}: {id: 2}`,
 );
 
+export const UNFENCED_MULTILINE_OBJECT_ENTRIES = `        "checkout applies gift wrap": {
+          issued               : []
+          already_issued       : []
+          skipped              : []
+          failed               : []
+          issued_count         : 0
+          already_issued_count : 0
+          skipped_count        : 0
+          failed_count         : 0
+        }`;
+
+export const FENCED_MULTILINE_OBJECT_ENTRIES = `        "checkout applies gift wrap": \`\`\`
+          {
+            issued               : []
+            already_issued       : []
+            skipped              : []
+            failed               : []
+            issued_count         : 0
+            already_issued_count : 0
+            skipped_count        : 0
+            failed_count         : 0
+          }
+          \`\`\``;
+
+export const UNFENCED_MULTILINE_OBJECT_XS = wrapMockBlock(UNFENCED_MULTILINE_OBJECT_ENTRIES);
+export const FENCED_MULTILINE_OBJECT_XS = wrapMockBlock(FENCED_MULTILINE_OBJECT_ENTRIES);
+
+export const UNFENCED_MULTILINE_ARRAY_ENTRIES = `        "checkout lists open carts": [
+          {id: 8}
+        ]`;
+
+export const FENCED_MULTILINE_ARRAY_ENTRIES = `        "checkout lists open carts": \`\`\`
+          [
+            {id: 8}
+          ]
+          \`\`\``;
+
+export const UNFENCED_MULTILINE_ARRAY_XS = wrapMockBlock(UNFENCED_MULTILINE_ARRAY_ENTRIES);
+export const FENCED_MULTILINE_ARRAY_XS = wrapMockBlock(FENCED_MULTILINE_ARRAY_ENTRIES);
+
+export const NONCANONICAL_MULTILINE_MOCK_XS = wrapMockBlock(
+  `        "checkout applies gift wrap": {issued: []
+          skipped: []
+        }`,
+);
+
+export const MISALIGNED_UNFENCED_MULTILINE_XS = wrapMockBlock(
+  `        ${MOCK_SHORT_NAME}: {
+          id: 1
+        }
+        ${MOCK_LONG_NAME}: []`,
+);
+
+export const ALIGNED_FENCED_MULTILINE_XS = wrapMockBlock(
+  `        ${MOCK_SHORT_NAME}${" ".repeat(MOCK_NAME_PAD)}: \`\`\`
+          {
+            id: 1
+          }
+          \`\`\`
+        ${MOCK_LONG_NAME}: []`,
+);
+
 export function collectStream(): {
   stream: Writable;
   text: () => string;

@@ -4,13 +4,20 @@ import { resolveConfig } from "../src/config.js";
 import { fixFile } from "../src/lint.js";
 import {
   AFTER_COLON_SPACES_MOCK_XS,
+  ALIGNED_FENCED_MULTILINE_XS,
   ALIGNED_MOCK_XS,
   CLEAN_XS,
+  FENCED_MULTILINE_ARRAY_XS,
+  FENCED_MULTILINE_OBJECT_XS,
+  MISALIGNED_UNFENCED_MULTILINE_XS,
   MOCK_LONG_NAME,
   MOCK_SHORT_NAME,
+  NONCANONICAL_MULTILINE_MOCK_XS,
   NULL_RESPONSE_XS,
   OVERPADDED_LONG_MOCK_XS,
   UNDERPADDED_MOCK_XS,
+  UNFENCED_MULTILINE_ARRAY_XS,
+  UNFENCED_MULTILINE_OBJECT_XS,
   wrapMockBlock,
 } from "./support.js";
 
@@ -190,5 +197,151 @@ describe("fixFile", () => {
     assert.equal(result.corrections.length, 1);
     assert.equal(result.corrections[0].ruleId, "no_null_response");
     assert.equal(result.corrections[0].line, 4);
+  });
+
+  it("fences unfenced multiline mock objects and arrays", () => {
+    const object = fixFile(
+      { path: "obj.xs", text: UNFENCED_MULTILINE_OBJECT_XS },
+      config(),
+    );
+    assert.equal(object.changed, true);
+    assert.equal(object.text, FENCED_MULTILINE_OBJECT_XS);
+    assert.equal(object.corrections.length, 1);
+    assert.equal(object.corrections[0].ruleId, "fence_multiline_mocks");
+    assert.equal(object.corrections[0].file, "obj.xs");
+    assert.equal(object.corrections[0].line, 8);
+
+    const array = fixFile(
+      { path: "arr.xs", text: UNFENCED_MULTILINE_ARRAY_XS },
+      config(),
+    );
+    assert.equal(array.changed, true);
+    assert.equal(array.text, FENCED_MULTILINE_ARRAY_XS);
+
+    const again = fixFile({ path: "obj.xs", text: object.text }, config());
+    assert.equal(again.changed, false);
+    assert.equal(again.text, FENCED_MULTILINE_OBJECT_XS);
+  });
+
+  it("preserves each line terminator when fencing multiline mocks", () => {
+    const underLines = UNFENCED_MULTILINE_ARRAY_XS.split("\n");
+    const endings = underLines.map((_, i) =>
+      i < underLines.length - 1 ? (i % 2 === 0 ? "\r\n" : "\n") : "",
+    );
+    let mixed = "";
+    for (let i = 0; i < underLines.length; i += 1) {
+      mixed += `${underLines[i]}${endings[i]}`;
+    }
+
+    const result = fixFile({ path: "mixed.xs", text: mixed }, config());
+    assert.equal(result.changed, true);
+
+    const keyIndex = underLines.findIndex((line) => line.includes(": ["));
+    const keyEnding = endings[keyIndex];
+    const parts: string[] = [];
+    for (let i = 0; i < underLines.length; i += 1) {
+      if (i === keyIndex) {
+        parts.push(`${underLines[i].replace(/: \[$/, ": ```")}${endings[i]}`);
+        parts.push(`          [${keyEnding}`);
+        continue;
+      }
+      if (i === keyIndex + 1) {
+        parts.push(`            {id: 8}${endings[i]}`);
+        continue;
+      }
+      if (i === keyIndex + 2) {
+        parts.push(`          ]${endings[i]}`);
+        parts.push(`          \`\`\`${endings[i]}`);
+        continue;
+      }
+      parts.push(`${underLines[i]}${endings[i]}`);
+    }
+    assert.equal(result.text, parts.join(""));
+  });
+
+  it("keeps the closing fence at EOF when the mock value has no trailing newline", () => {
+    const text = `function "example" {
+  stack {
+    db.query item {
+      mock = {
+        "checkout lists open carts": [
+          {id: 8}
+        ]`;
+    const result = fixFile({ path: "eof.xs", text }, config());
+    assert.equal(result.changed, true);
+    assert.equal(
+      result.text,
+      `function "example" {
+  stack {
+    db.query item {
+      mock = {
+        "checkout lists open carts": \`\`\`
+          [
+            {id: 8}
+          ]
+          \`\`\``,
+    );
+    assert.equal(result.text.endsWith("```"), true);
+    assert.doesNotMatch(result.text, /\]```/);
+  });
+
+  it("aligns and fences a misaligned multiline mock in one pass", () => {
+    const result = fixFile(
+      { path: "both.xs", text: MISALIGNED_UNFENCED_MULTILINE_XS },
+      config(),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, ALIGNED_FENCED_MULTILINE_XS);
+    assert.equal(
+      result.corrections.some((c) => c.ruleId === "align_mock_colons"),
+      true,
+    );
+    assert.equal(
+      result.corrections.some((c) => c.ruleId === "fence_multiline_mocks"),
+      true,
+    );
+  });
+
+  it("does not rewrite fenced mocks, disabled fence_multiline_mocks, or suppressed lines", () => {
+    const clean = fixFile({ path: "ok.xs", text: FENCED_MULTILINE_OBJECT_XS }, config());
+    assert.equal(clean.changed, false);
+    assert.equal(clean.text, FENCED_MULTILINE_OBJECT_XS);
+
+    const off = fixFile(
+      { path: "obj.xs", text: UNFENCED_MULTILINE_OBJECT_XS },
+      config({ disabled_rules: ["fence_multiline_mocks"] }),
+    );
+    assert.equal(off.changed, false);
+    assert.equal(off.text, UNFENCED_MULTILINE_OBJECT_XS);
+
+    const suppressedText = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query item {
+      mock = {
+        // xanoscriptlint:disable:next fence_multiline_mocks
+        "checkout applies gift wrap": {
+          issued: []
+        }
+      }
+    }
+  }
+
+  response = $item
+}`;
+    const suppressed = fixFile({ path: "suppressed.xs", text: suppressedText }, config());
+    assert.equal(suppressed.changed, false);
+    assert.equal(suppressed.text, suppressedText);
+  });
+
+  it("reports a non-canonical multiline mock without rewriting it", () => {
+    const result = fixFile(
+      { path: "odd.xs", text: NONCANONICAL_MULTILINE_MOCK_XS },
+      config(),
+    );
+    assert.equal(result.changed, false);
+    assert.equal(result.text, NONCANONICAL_MULTILINE_MOCK_XS);
   });
 });
