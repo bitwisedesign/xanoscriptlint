@@ -96,6 +96,16 @@ describe("built-in rules", () => {
       skipped.some((v) => v.ruleId === "no_null_response"),
       false,
     );
+
+    const quoted = {
+      path: "q.xs",
+      text: `function "x" {\n  value = "response = null"\n}`,
+    };
+    const inString = lintFile(quoted, config({ opt_in_rules: ["no_null_response"] }));
+    assert.equal(
+      inString.some((v) => v.ruleId === "no_null_response"),
+      false,
+    );
   });
 
   it("per-rule severity override applies", () => {

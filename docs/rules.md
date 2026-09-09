@@ -48,7 +48,7 @@ opt_in_rules:
 response = null
 ```
 
-Auto-fixable with `--fix`: `response = null` becomes `response = {}`. Comment lines and `$response = null` are ignored.
+Auto-fixable with `--fix`: `response = null` becomes `response = {}`. Comment lines, `$response = null`, and the text inside string literals are ignored.
 
 ## Team-specific rules
 

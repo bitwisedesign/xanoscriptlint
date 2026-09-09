@@ -1,7 +1,7 @@
 import type { Rule, RuleOptions, SourceFile, Violation } from "./types.js";
 import { isCommentLine, splitLines } from "../util.js";
 
-const RESPONSE_NULL = /(?<!\$)\bresponse(\s*=\s*)null\b/;
+const RESPONSE_NULL = /(?<=^\s*)response(\s*=\s*)null\b/;
 
 function rewriteLine(line: string): string {
   return line.replace(RESPONSE_NULL, "response$1{}");

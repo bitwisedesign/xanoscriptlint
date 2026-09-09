@@ -77,6 +77,17 @@ describe("fixFile", () => {
     assert.deepEqual(result.corrections, []);
   });
 
+  it("does not rewrite response = null inside a string literal", () => {
+    const text = `function "x" {\n  value = "response = null"\n}`;
+    const result = fixFile(
+      { path: "quoted.xs", text },
+      config({ opt_in_rules: ["no_null_response"] }),
+    );
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
+    assert.deepEqual(result.corrections, []);
+  });
+
   it("does not fix a suppressed no_null_response violation", () => {
     const text = `function "x" {\n  // xanoscriptlint:disable:next no_null_response\n  response = null\n}`;
     const result = fixFile(
