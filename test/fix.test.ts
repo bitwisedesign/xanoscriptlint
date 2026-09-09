@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { resolveConfig } from "../src/config.js";
 import { fixFile } from "../src/lint.js";
-import { CLEAN_XS } from "./support.js";
+import { CLEAN_XS, NIL_RESPONSE_XS } from "./support.js";
 
 function config(overrides: Parameters<typeof resolveConfig>[0] = {}) {
   return resolveConfig(overrides, "/tmp", null);
@@ -56,6 +56,35 @@ describe("fixFile", () => {
     const result = fixFile(file, config({ disabled_rules: ["no_trailing_newline"] }));
     assert.equal(result.changed, false);
     assert.equal(result.text, file.text);
+    assert.deepEqual(result.corrections, []);
+  });
+
+  it("rewrites response = null when no_nil_response is opted in", () => {
+    const file = { path: "nil.xs", text: NIL_RESPONSE_XS };
+    const result = fixFile(file, config({ opt_in_rules: ["no_nil_response"] }));
+    assert.equal(result.changed, true);
+    assert.equal(result.text, NIL_RESPONSE_XS.replace("response = null", "response = {}"));
+    assert.equal(result.corrections.length, 1);
+    assert.equal(result.corrections[0].ruleId, "no_nil_response");
+    assert.equal(result.corrections[0].file, "nil.xs");
+  });
+
+  it("does not rewrite response = null when no_nil_response is off", () => {
+    const file = { path: "nil.xs", text: NIL_RESPONSE_XS };
+    const result = fixFile(file, config());
+    assert.equal(result.changed, false);
+    assert.equal(result.text, NIL_RESPONSE_XS);
+    assert.deepEqual(result.corrections, []);
+  });
+
+  it("does not fix a suppressed no_nil_response violation", () => {
+    const text = `function "x" {\n  // xanoscriptlint:disable:next no_nil_response\n  response = null\n}`;
+    const result = fixFile(
+      { path: "suppressed.xs", text },
+      config({ opt_in_rules: ["no_nil_response"] }),
+    );
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
     assert.deepEqual(result.corrections, []);
   });
 });
