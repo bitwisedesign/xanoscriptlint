@@ -568,6 +568,32 @@ ${ALIGNED_MOCK_ENTRIES}`,
       false,
     );
 
+    const notPlainOwner = `function "example" {
+  input {
+  }
+
+  stack {
+    $mock = {
+      issued: [
+        {id: 1}
+      ]
+    }
+    payload.input = {
+      items: [
+        {id: 1}
+      ]
+    }
+  }
+
+  response = $mock
+}`;
+    assert.equal(
+      lintFile({ path: "sigil.xs", text: notPlainOwner }, config()).some(
+        (v) => v.ruleId === "fence_multiline_values",
+      ),
+      false,
+    );
+
     const arrayElement = `function "example" {
   input {
   }

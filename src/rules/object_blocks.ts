@@ -150,6 +150,25 @@ function tryInline(
   return parseEntry(line, start, lineIndex, false);
 }
 
+function assignmentName(line: string, eqIndex: number): string | null {
+  let end = eqIndex - 1;
+  while (end >= 0 && (line[end] === " " || line[end] === "\t")) {
+    end -= 1;
+  }
+  if (end < 0) {
+    return null;
+  }
+  let start = end;
+  while (start >= 0 && /[A-Za-z0-9_$.]/.test(line[start])) {
+    start -= 1;
+  }
+  const token = line.slice(start + 1, end + 1);
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(token)) {
+    return null;
+  }
+  return token;
+}
+
 function lookbehind(line: string, braceCol: number): Lookbehind | null {
   let i = braceCol - 1;
   while (i >= 0 && (line[i] === " " || line[i] === "\t")) {
@@ -159,16 +178,7 @@ function lookbehind(line: string, braceCol: number): Lookbehind | null {
     return null;
   }
   if (line[i] === "=") {
-    let j = i - 1;
-    while (j >= 0 && (line[j] === " " || line[j] === "\t")) {
-      j -= 1;
-    }
-    let start = j;
-    while (start >= 0 && /[A-Za-z0-9_]/.test(line[start])) {
-      start -= 1;
-    }
-    const name = line.slice(start + 1, j + 1);
-    return { kind: "=", name: name.length > 0 ? name : null };
+    return { kind: "=", name: assignmentName(line, i) };
   }
   if (line[i] === ":") {
     return { kind: ":", name: null };
