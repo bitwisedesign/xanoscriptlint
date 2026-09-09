@@ -2,12 +2,28 @@
 
 | Id | Default | Severity | Description |
 | --- | --- | --- | --- |
+| [`align_mock_colons`](#align_mock_colons) | on | error | Mock entry colons must align to the longest name (auto-fixable) |
 | [`empty_function_run`](#empty_function_run) | on | error | `function.run` must not be called with an empty name |
 | [`no_trailing_newline`](#no_trailing_newline) | on | error | File must end with `}` and no trailing newline (auto-fixable) |
 | [`no_var_response`](#no_var_response) | opt-in | warning | Do not declare `var $response` |
 | [`no_null_response`](#no_null_response) | opt-in | warning | Do not assign `response = null` (auto-fixable) |
 
 List the same catalog from the CLI with `xanoscriptlint rules`.
+
+## align_mock_colons
+
+Xano realigns `mock` entry colons on push so they share one column, immediately after the longest quoted name in that block. The pulled file is canonical; local misalignment is push/pull churn.
+
+```xs
+mock = {
+  "checkout short"                 : {id: 1}
+  "checkout longest_scenario_name": {id: 2}
+}
+```
+
+Each `mock = { ... }` block is aligned independently. Text after the colon is left unchanged, including multiline and triple-backtick values. Quoted keys outside `mock` are ignored.
+
+Auto-fixable with `--fix`: spaces between the closing `"` and `:` are inserted or removed until the colons line up.
 
 ## empty_function_run
 

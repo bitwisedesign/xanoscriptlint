@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Default-on `align_mock_colons` flags misaligned `mock` entry colons and auto-fixes them to Xano's push alignment.
 - Opt-in `no_null_response` flags `response = null` and auto-fixes to `response = {}`.
 
 ## [0.1.0] - 2026-09-08

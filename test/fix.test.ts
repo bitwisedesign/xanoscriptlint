@@ -2,7 +2,16 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { resolveConfig } from "../src/config.js";
 import { fixFile } from "../src/lint.js";
-import { CLEAN_XS, NULL_RESPONSE_XS } from "./support.js";
+import {
+  AFTER_COLON_SPACES_MOCK_XS,
+  ALIGNED_MOCK_XS,
+  CLEAN_XS,
+  MOCK_LONG_NAME,
+  MOCK_SHORT_NAME,
+  NULL_RESPONSE_XS,
+  UNDERPADDED_MOCK_XS,
+  wrapMockBlock,
+} from "./support.js";
 
 function config(overrides: Parameters<typeof resolveConfig>[0] = {}) {
   return resolveConfig(overrides, "/tmp", null);
@@ -86,6 +95,46 @@ describe("fixFile", () => {
     assert.equal(result.changed, false);
     assert.equal(result.text, text);
     assert.deepEqual(result.corrections, []);
+  });
+
+  it("aligns mock colons and leaves text after the colon alone", () => {
+    const result = fixFile({ path: "mock.xs", text: UNDERPADDED_MOCK_XS }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, ALIGNED_MOCK_XS);
+    assert.equal(result.corrections.length, 1);
+    assert.equal(result.corrections[0].ruleId, "align_mock_colons");
+    assert.equal(result.corrections[0].file, "mock.xs");
+
+    const spaced = fixFile({ path: "spaces.xs", text: AFTER_COLON_SPACES_MOCK_XS }, config());
+    assert.equal(spaced.changed, true);
+    assert.match(spaced.text, new RegExp(`${MOCK_SHORT_NAME}\\s+:    \\{id: 1\\}`));
+    assert.match(spaced.text, new RegExp(`${MOCK_LONG_NAME}: \\{id: 2\\}`));
+
+    const multiline = wrapMockBlock(
+      `        ${MOCK_SHORT_NAME}: \`\`\`
+          [
+            {id: 1}
+          ]
+          \`\`\`
+        ${MOCK_LONG_NAME}: []`,
+    );
+    const fixedMulti = fixFile({ path: "multi.xs", text: multiline }, config());
+    assert.equal(fixedMulti.changed, true);
+    assert.match(fixedMulti.text, /\[\s+\{id: 1\}\s+\]/);
+    assert.doesNotMatch(fixedMulti.text, new RegExp(`${MOCK_SHORT_NAME}:\`\`\``));
+  });
+
+  it("does not rewrite aligned mocks or a disabled align_mock_colons rule", () => {
+    const clean = fixFile({ path: "ok.xs", text: ALIGNED_MOCK_XS }, config());
+    assert.equal(clean.changed, false);
+    assert.equal(clean.text, ALIGNED_MOCK_XS);
+
+    const off = fixFile(
+      { path: "mock.xs", text: UNDERPADDED_MOCK_XS },
+      config({ disabled_rules: ["align_mock_colons"] }),
+    );
+    assert.equal(off.changed, false);
+    assert.equal(off.text, UNDERPADDED_MOCK_XS);
   });
 
   it("does not fix a suppressed no_null_response violation", () => {
