@@ -289,6 +289,12 @@ function parseValuesSite(
   };
 }
 
+export function enumValuesOpenLines(lines: string[]): Set<number> {
+  return new Set(
+    findEnumValues(lines, literalLines(lines)).map((site) => site.valuesLine),
+  );
+}
+
 function findEnumValues(
   lines: string[],
   literals: Set<number>,

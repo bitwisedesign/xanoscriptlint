@@ -39,6 +39,13 @@ import {
   ZERO_DEFAULT_XS,
   wrapInputDecls,
   wrapMockBlock,
+  wrapAssign,
+  inlineAssignObj,
+  wrappedAssignObj,
+  inlineAssignArr,
+  wrappedAssignArr,
+  ASSIGN_LINE_63,
+  ASSIGN_LINE_64,
 } from "./support.js";
 
 function config(overrides: Parameters<typeof resolveConfig>[0] = {}) {
@@ -193,6 +200,7 @@ describe("fixFile", () => {
       input = {
         user_id: $input.user_id
         award_uuid: $input.award_uuid
+        reason: $input.reason
       }
     } as $dispatch
   }
@@ -211,7 +219,7 @@ describe("fixFile", () => {
   stack {
     db.add job {
       data = {
-        short: 1
+        short: "keep_parent_assignment_wrapped"
         nested: {
           inner_longer: 2
           x: 3
@@ -224,7 +232,7 @@ describe("fixFile", () => {
 }`;
     const fixedNested = fixFile({ path: "nested.xs", text: nested }, config());
     assert.equal(fixedNested.changed, true);
-    assert.match(fixedNested.text, /short : 1/);
+    assert.match(fixedNested.text, /short : "keep_parent_assignment_wrapped"/);
     assert.match(fixedNested.text, /nested: \{/);
     assert.match(fixedNested.text, /inner_longer: 2/);
     assert.match(fixedNested.text, /x {11}: 3/);
@@ -532,6 +540,8 @@ describe("fixFile", () => {
       mock = {
         "checkout applies gift wrap": {
           queued: []
+          sent: []
+          extra: "keep_parent_assignment_wrapped"
         }
       }
     }
@@ -543,11 +553,12 @@ describe("fixFile", () => {
               input = {
                 user_id: $cart_user_id
                 reason : "manual"
+                extra  : "keep_parent_assignment_wrapped"
               }
 
               // xanoscriptlint:disable:next fence_multiline_values
           mock = {
-            "checkout empty cart": {queued: [], sent: [], done: false}
+            "checkout empty cart": {queued: [], sent: [], done: false, extra: "keep_parent_assignment_wrapped"}
           }
             } as $discount_result
           }
@@ -584,14 +595,16 @@ describe("fixFile", () => {
     db.add job {
       data = {
         input: {
-          round_uuid: $round
+          round_uuid : $round
+          extra_field: "keep_parent_assignment_wrapped"
         }
       }
     }
     db.query item {
       join = {
         other: {
-          table: "other"
+          table      : "other"
+          extra_field: "keep_parent_assignment_wrapped"
         }
       }
     }
@@ -748,5 +761,79 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
     assert.equal(result.text.includes("```"), false);
     assert.equal(result.text.includes(wrappedEnumDecl("enum lane", ENUM_V64)), true);
     assert.match(result.text, /"checkout short"\s+: \{id: 1\}/);
+  });
+
+  it("collapses an under-threshold assignment object and is idempotent", () => {
+    const text = wrapAssign("input", wrappedAssignObj(ASSIGN_LINE_63));
+    const expected = wrapAssign("input", inlineAssignObj(ASSIGN_LINE_63));
+    const result = fixFile({ path: "collapse.xs", text }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.equal(result.corrections[0]?.ruleId, "collapse_assignment_values");
+    const again = fixFile({ path: "collapse.xs", text: result.text }, config());
+    assert.equal(again.changed, false);
+    assert.equal(again.text, expected);
+  });
+
+  it("collapses an under-threshold assignment array", () => {
+    const text = wrapAssign("output", wrappedAssignArr("x"));
+    const expected = wrapAssign("output", inlineAssignArr("x"));
+    const result = fixFile({ path: "arr-in.xs", text }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+  });
+
+  it("does not expand a long inline assignment", () => {
+    const text = wrapAssign("input", inlineAssignObj(ASSIGN_LINE_64));
+    const result = fixFile({ path: "inline.xs", text }, config());
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
+  });
+
+  it("does not collapse when the one-line form reaches the threshold", () => {
+    const text = wrapAssign("input", wrappedAssignObj(ASSIGN_LINE_64));
+    const result = fixFile({ path: "keep.xs", text }, config());
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
+  });
+
+  it("collapses a parent and keeps nested containers inline", () => {
+    const text = wrapAssign(
+      "input",
+      `{
+        outer: {inner_a: 1, inner_b: 2}
+      }`,
+    );
+    const result = fixFile({ path: "nested.xs", text }, config());
+    assert.equal(result.changed, true);
+    assert.match(result.text, /input = \{outer: \{inner_a: 1, inner_b: 2\}\}/);
+    assert.doesNotMatch(result.text, /inner_a:\n/);
+  });
+
+  it("preserves CRLF when collapsing assignment values", () => {
+    const source = wrapAssign("input", wrappedAssignObj(ASSIGN_LINE_63));
+    const expected = wrapAssign("input", inlineAssignObj(ASSIGN_LINE_63));
+    const crlf = source.replace(/\n/g, "\r\n");
+    const result = fixFile({ path: "crlf-assign.xs", text: crlf }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected.replace(/\n/g, "\r\n"));
+  });
+
+  it("does not rewrite a piped container", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    var $url {
+      value = ["${"a".repeat(70)}"]|join:"/"
+    }
+  }
+
+  response = $url
+}`;
+    const result = fixFile({ path: "pipe.xs", text }, config());
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
   });
 });

@@ -81,6 +81,7 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 | Id | Default | Severity | Auto-fix | What it catches |
 | --- | --- | --- | --- | --- |
 | `align_object_colons` | on | error | yes | Object entry colons must align to the longest name (Xano rewrites this on push) |
+| `collapse_assignment_values` | on | error | yes | Wrapped assignment object or array whose one-line form is under 64 characters (Xano collapses it on push) |
 | `empty_function_run` | on | error | no | `function.run ""` / `function.run ''` |
 | `fence_multiline_values` | on | error | yes | Multiline mock or input value not wrapped in a triple-backtick fence (Xano fences it on push); `function.run` mocks stay compact |
 | `no_null_response` | opt-in | warning | yes | `response = null` (use `response = {}`) |

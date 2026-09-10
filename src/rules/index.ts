@@ -1,4 +1,5 @@
 import { alignObjectColons } from "./align_object_colons.js";
+import { collapseAssignmentValues } from "./collapse_assignment_values.js";
 import { emptyFunctionRun } from "./empty_function_run.js";
 import { fenceMultilineValues } from "./fence_multiline_values.js";
 import { noNullResponse } from "./no_null_response.js";
@@ -10,6 +11,7 @@ import { wrapEnumValues } from "./wrap_enum_values.js";
 import type { Rule } from "./types.js";
 
 export const builtinRules: Rule[] = [
+  collapseAssignmentValues,
   alignObjectColons,
   fenceMultilineValues,
   wrapEnumValues,
