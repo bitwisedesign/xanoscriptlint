@@ -107,6 +107,15 @@ describe("fixture linting", () => {
       lintFiles([collapseAssign], config).some((v) => v.ruleId === "collapse_assignment_values"),
       true,
     );
+
+    const guidPlacement = {
+      path: path.join(fixtures, "violations/guid_placement.xs"),
+      text: readFileSync(path.join(fixtures, "violations/guid_placement.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([guidPlacement], config).some((v) => v.ruleId === "guid_placement"),
+      true,
+    );
   });
 
   it("CLI lints a violations directory and exits 2", async () => {

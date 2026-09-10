@@ -15,6 +15,7 @@ describe("config enablement", () => {
     assert.equal(config.enabledRuleIds.has("fence_multiline_values"), true);
     assert.equal(config.enabledRuleIds.has("wrap_enum_values"), true);
     assert.equal(config.enabledRuleIds.has("collapse_assignment_values"), true);
+    assert.equal(config.enabledRuleIds.has("guid_placement"), true);
     assert.equal(config.enabledRuleIds.has("no_var_response"), false);
     assert.deepEqual(config.included, ["**/*.xs"]);
   });

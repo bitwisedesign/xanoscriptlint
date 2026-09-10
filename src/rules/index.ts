@@ -2,6 +2,7 @@ import { alignObjectColons } from "./align_object_colons.js";
 import { collapseAssignmentValues } from "./collapse_assignment_values.js";
 import { emptyFunctionRun } from "./empty_function_run.js";
 import { fenceMultilineValues } from "./fence_multiline_values.js";
+import { guidPlacement } from "./guid_placement.js";
 import { noNullResponse } from "./no_null_response.js";
 import { noTrailingNewline } from "./no_trailing_newline.js";
 import { noVarResponse } from "./no_var_response.js";
@@ -16,6 +17,7 @@ export const builtinRules: Rule[] = [
   fenceMultilineValues,
   wrapEnumValues,
   emptyFunctionRun,
+  guidPlacement,
   noTrailingNewline,
   noVarResponse,
   noNullResponse,
