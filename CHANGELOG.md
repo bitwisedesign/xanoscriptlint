@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Default-on `no_trailing_comments` flags a `//` above `guid` or after the file's closing `}`. Xano moves those comments to the file header on push (`guid` is invisible in the editor, so a comment above it is really a trailing comment). Nested trailing comments are left alone. There is no auto-fix.
 - Default-on `guid_placement` flags a `guid` that is missing a blank line after a `}` / `]` closer, or that has a blank line after a single-line value, and auto-fixes the spacing. A missing `guid` is allowed.
 - Default-on `collapse_assignment_values` flags a wrapped assignment object or array whose one-line form is shorter than 64 characters, and auto-fixes it to Xano's collapsed push form. Long one-liners are left as-is. Enum `values` stay with `wrap_enum_values`. The cutoff is configurable with `wrap_at`.
 - Default-on `wrap_enum_values` flags enum `values` arrays that are inline at compact JSON length 64 or longer, or wrapped below that cutoff, and auto-fixes them to Xano's push form. The cutoff is configurable with `wrap_at`.

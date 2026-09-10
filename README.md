@@ -86,6 +86,7 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 | `fence_multiline_values` | on | error | yes | Multiline mock or input value not wrapped in a triple-backtick fence (Xano fences it on push); `function.run` mocks stay compact |
 | `guid_placement` | on | warning | yes | `guid` with a blank line after a single-line value, or without one after a `}` / `]` closer |
 | `no_null_response` | opt-in | warning | yes | `response = null` (use `response = {}`) |
+| `no_trailing_comments` | on | warning | no | `//` above `guid` or after the file's closing `}` (Xano moves it to the header on push) |
 | `no_trailing_newline` | on | error | yes | File does not end with `}` (Xano pull strips trailing newlines) |
 | `no_var_response` | opt-in | warning | no | `var $response` (Xano rewrites it) |
 | `no_zero_numeric_default` | on | error | yes | Explicit numeric default of `0` (Xano strips it on push) |

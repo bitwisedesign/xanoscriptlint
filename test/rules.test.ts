@@ -59,6 +59,15 @@ function guidHits(text: string, overrides: Parameters<typeof resolveConfig>[0] =
   );
 }
 
+function trailingCommentHits(
+  text: string,
+  overrides: Parameters<typeof resolveConfig>[0] = {},
+) {
+  return lintFile({ path: "a.xs", text }, config(overrides)).filter(
+    (v) => v.ruleId === "no_trailing_comments",
+  );
+}
+
 describe("built-in rules", () => {
   it("empty_function_run flags empty names and skips comments", () => {
     const file = { path: "a.xs", text: EMPTY_RUN_XS };
@@ -1827,6 +1836,186 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
   guid = "g1"
 }`;
     assert.equal(guidHits(suppressed).length, 0);
+  });
+
+  it("no_trailing_comments flags comments in the construct tail", () => {
+    const aboveGuid = `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+  // leftover
+  guid = "g1"
+}`;
+    const aboveHits = trailingCommentHits(aboveGuid);
+    assert.equal(aboveHits.length, 1);
+    assert.equal(aboveHits[0]?.line, 9);
+    assert.equal(aboveHits[0]?.column, 3);
+    assert.equal(aboveHits[0]?.severity, "warning");
+    assert.equal(
+      aboveHits[0]?.message,
+      "trailing comment will be moved to the file header on push",
+    );
+
+    const afterGuid = `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+  guid = "g1"
+  // leftover
+}`;
+    const afterHits = trailingCommentHits(afterGuid);
+    assert.equal(afterHits.length, 1);
+    assert.equal(afterHits[0]?.line, 10);
+    assert.equal(
+      afterHits[0]?.message,
+      "trailing comment will be moved to the file header on push",
+    );
+
+    const blankSeparated = `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+
+  // leftover
+
+  guid = "g1"
+}`;
+    assert.equal(trailingCommentHits(blankSeparated).length, 1);
+
+    const stacked = `function "example" {
+  response = $ok
+  // first
+  // second
+  guid = "g1"
+}`;
+    const stackedHits = trailingCommentHits(stacked);
+    assert.equal(stackedHits.length, 2);
+    assert.deepEqual(
+      stackedHits.map((v) => v.line),
+      [3, 4],
+    );
+
+    const afterCloser = `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+  guid = "g1"
+}
+// after closer`;
+    const closerHits = trailingCommentHits(afterCloser);
+    assert.equal(closerHits.length, 1);
+    assert.equal(closerHits[0]?.line, 11);
+    assert.equal(
+      closerHits[0]?.message,
+      "comment after the closing } is invalid XanoScript and will be moved to the file header on push",
+    );
+
+    const onlyBody = `function "example" {
+  // only
+}`;
+    const onlyHits = trailingCommentHits(onlyBody);
+    assert.equal(onlyHits.length, 1);
+    assert.equal(onlyHits[0]?.line, 2);
+    assert.equal(
+      onlyHits[0]?.message,
+      "trailing comment will be moved to the file header on push",
+    );
+
+    const directive = `function "example" {
+  response = $ok
+  // xanoscriptlint:disable:next guid_placement
+  guid = "g1"
+}`;
+    const directiveHits = trailingCommentHits(directive);
+    assert.equal(directiveHits.length, 1);
+    assert.equal(directiveHits[0]?.line, 3);
+  });
+
+  it("no_trailing_comments ignores nested comments, headers, and fenced text", () => {
+    assert.deepEqual(trailingCommentHits(CLEAN_XS), []);
+
+    const nestedInStack = `function "example" {
+  input {
+  }
+
+  stack {
+    var $ok {
+      value = 1
+    }
+    // nested, survives push
+  }
+
+  response = $ok
+  guid = "g1"
+}`;
+    assert.deepEqual(trailingCommentHits(nestedInStack), []);
+
+    const nestedLastBody = `function "example" {
+  input {
+  }
+
+  stack {
+    var $ok {
+      value = 1
+    }
+    // nested last in stack
+  }
+}`;
+    assert.deepEqual(trailingCommentHits(nestedLastBody), []);
+
+    const fenced = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query item {
+      mock = {
+        sample: \`\`\`
+          // not a real comment
+          \`\`\`
+      }
+    }
+  }
+}`;
+    assert.deepEqual(trailingCommentHits(fenced), []);
+  });
+
+  it("no_trailing_comments is on by default and honors disable directives", () => {
+    const text = `function "example" {
+  response = $ok
+  // leftover
+  guid = "g1"
+}`;
+    const hits = trailingCommentHits(text);
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.severity, "warning");
+
+    const disabled = trailingCommentHits(text, { disabled_rules: ["no_trailing_comments"] });
+    assert.equal(disabled.length, 0);
+
+    const suppressed = `function "example" {
+  response = $ok
+  // xanoscriptlint:disable no_trailing_comments
+  // leftover
+  guid = "g1"
+}`;
+    assert.equal(trailingCommentHits(suppressed).length, 0);
   });
 
   it("per-rule severity override applies", () => {
