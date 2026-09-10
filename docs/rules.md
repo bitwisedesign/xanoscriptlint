@@ -116,7 +116,7 @@ Auto-fixable with `--fix`: an eligible value is wrapped in a fence, the opening 
 
 When `guid` is present, Xano places it as the last property of the top-level construct. Presence itself is not required: a file that has not yet been pushed and pulled from Xano has no `guid`, and that is valid for this rule.
 
-The blank line is decided by the predecessor, not the key name. Exactly one blank line above `guid` when the nearest preceding non-blank line is a bare `}` or `]`. No blank line otherwise.
+The blank line is decided by the previous statement, not the key name. Comments immediately above `guid` are skipped so the predecessor is the last real statement: Xano moves those comments to the file header on push. Exactly one blank line above `guid` when that statement is a bare `}` or `]`. No blank line otherwise.
 
 ```xs
 response = $result
@@ -135,7 +135,7 @@ Observed blank-line predecessors include a `}` that closes `test`, a multiline `
 
 A multiline `tags` array has not been seen in a Xano-pulled file. The closer rule would require a blank line above `guid` if `tags` ended on its own `]`, matching every other multiline array. That shape is inferred, not observed.
 
-A comment directly above `guid` is left alone. Default severity is warning.
+Default severity is warning.
 
 Auto-fixable with `--fix`: a missing blank line is inserted, a forbidden blank line is removed, and extra blank lines collapse to one.
 

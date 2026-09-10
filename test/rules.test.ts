@@ -1698,7 +1698,7 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     }
   });
 
-  it("guid_placement ignores a missing guid, fenced text, and a comment predecessor", () => {
+  it("guid_placement looks through comments to the previous statement", () => {
     assert.deepEqual(
       guidHits(`function "example" {
   input {
@@ -1727,12 +1727,84 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
 }`;
     assert.deepEqual(guidHits(fenced), []);
 
-    const commented = `function "example" {
+    const flushComment = `function "example" {
   response = $ok
-  // keep this identifier
+  // note
   guid = "g1"
 }`;
-    assert.deepEqual(guidHits(commented), []);
+    assert.deepEqual(guidHits(flushComment), []);
+
+    const blankThenComment = `function "example" {
+  response = $ok
+
+  // note
+  guid = "g1"
+}`;
+    const blankThenCommentHits = guidHits(blankThenComment);
+    assert.equal(blankThenCommentHits.length, 1);
+    assert.equal(blankThenCommentHits[0]?.line, 5);
+    assert.equal(
+      blankThenCommentHits[0]?.message,
+      "guid must not have a blank line above it when it follows a single-line value",
+    );
+
+    const commentThenBlank = `function "example" {
+  response = $ok
+  // note
+
+  guid = "g1"
+}`;
+    const commentThenBlankHits = guidHits(commentThenBlank);
+    assert.equal(commentThenBlankHits.length, 1);
+    assert.equal(
+      commentThenBlankHits[0]?.message,
+      "guid must not have a blank line above it when it follows a single-line value",
+    );
+
+    const closerFlushComment = `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+
+  test "ok" {
+    expect.to_equal ($ok) {
+      value = 1
+    }
+  }
+  // note
+  guid = "g1"
+}`;
+    const closerFlushHits = guidHits(closerFlushComment);
+    assert.equal(closerFlushHits.length, 1);
+    assert.equal(closerFlushHits[0]?.line, 16);
+    assert.equal(
+      closerFlushHits[0]?.message,
+      "guid must have a blank line above it when it follows a block closer",
+    );
+
+    const closerBlankComment = `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+
+  test "ok" {
+    expect.to_equal ($ok) {
+      value = 1
+    }
+  }
+
+  // note
+  guid = "g1"
+}`;
+    assert.deepEqual(guidHits(closerBlankComment), []);
   });
 
   it("guid_placement is on by default and honors disable:next", () => {

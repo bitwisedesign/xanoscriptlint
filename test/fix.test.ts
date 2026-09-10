@@ -976,6 +976,76 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
     assert.equal(result.text, expected.replace(/\n/g, "\r\n"));
   });
 
+  it("removes a blank line between a comment and guid after a single-line value", () => {
+    const afterComment = `function "example" {
+  response = $ok
+  // note
+
+  guid = "g1"
+}`;
+    const beforeComment = `function "example" {
+  response = $ok
+
+  // note
+  guid = "g1"
+}`;
+    const expected = `function "example" {
+  response = $ok
+  // note
+  guid = "g1"
+}`;
+    const after = fixFile({ path: "guid-comment-after.xs", text: afterComment }, config());
+    assert.equal(after.changed, true);
+    assert.equal(after.text, expected);
+    assert.equal(after.corrections[0]?.ruleId, "guid_placement");
+
+    const before = fixFile({ path: "guid-comment-before.xs", text: beforeComment }, config());
+    assert.equal(before.changed, true);
+    assert.equal(before.text, expected);
+  });
+
+  it("inserts a blank line before guid when a comment follows a block closer", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+
+  test "ok" {
+    expect.to_equal ($ok) {
+      value = 1
+    }
+  }
+  // note
+  guid = "g1"
+}`;
+    const expected = `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+
+  test "ok" {
+    expect.to_equal ($ok) {
+      value = 1
+    }
+  }
+  // note
+
+  guid = "g1"
+}`;
+    const result = fixFile({ path: "guid-closer-comment.xs", text }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.equal(result.corrections[0]?.ruleId, "guid_placement");
+  });
+
   it("does not fix a suppressed guid_placement violation", () => {
     const text = `function "example" {
   response = $ok

@@ -13,7 +13,7 @@ const MSG_NO_BLANK = "guid must not have a blank line above it when it follows a
 interface GuidSite {
   lineIndex: number;
   blankCount: number;
-  firstBlankIndex: number;
+  blankIndices: number[];
   expectBlank: boolean;
   column: number;
 }
@@ -34,19 +34,27 @@ function findGuidSites(lines: string[]): GuidSite[] {
     if (literals.has(i) || !GUID_LINE.test(lines[i])) {
       continue;
     }
+    const blankIndices: number[] = [];
     let j = i - 1;
-    let blankCount = 0;
-    while (j >= 0 && isBlankLine(lines[j])) {
-      blankCount += 1;
-      j -= 1;
+    while (j >= 0) {
+      if (isBlankLine(lines[j])) {
+        blankIndices.push(j);
+        j -= 1;
+        continue;
+      }
+      if (isCommentLine(lines[j])) {
+        j -= 1;
+        continue;
+      }
+      break;
     }
-    if (j < 0 || isCommentLine(lines[j])) {
+    if (j < 0) {
       continue;
     }
     sites.push({
       lineIndex: i,
-      blankCount,
-      firstBlankIndex: blankCount === 0 ? i : j + 1,
+      blankCount: blankIndices.length,
+      blankIndices,
       expectBlank: isCloserLine(lines[j]),
       column: indentColumn(lines[i]),
     });
@@ -102,13 +110,17 @@ function applyFix(records: ReturnType<typeof splitLineRecords>, site: GuidSite):
       return true;
     }
     if (site.blankCount > 1) {
-      records.splice(site.firstBlankIndex + 1, site.blankCount - 1);
+      for (const index of site.blankIndices.slice(1)) {
+        records.splice(index, 1);
+      }
       return true;
     }
     return false;
   }
   if (site.blankCount > 0) {
-    records.splice(site.firstBlankIndex, site.blankCount);
+    for (const index of site.blankIndices) {
+      records.splice(index, 1);
+    }
     return true;
   }
   return false;
