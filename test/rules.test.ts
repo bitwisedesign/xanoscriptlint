@@ -1250,6 +1250,14 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
       wrapped62[0]?.message,
       "input value of line length 62 must be inline (threshold 64)",
     );
+
+    const spacedPad = `${"x".repeat(40)}  x`;
+    assert.equal(lineOf(spacedPad).length, 64);
+    const wrappedSpaced = lintFile(
+      { path: "w-spaces.xs", text: wrapAssign("input", wrappedAssignObj(spacedPad)) },
+      config(),
+    ).filter((v) => v.ruleId === "collapse_assignment_values");
+    assert.equal(wrappedSpaced.length, 0);
   });
 
   it("collapse_assignment_values flags assignment owners including return", () => {

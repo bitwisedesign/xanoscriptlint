@@ -775,6 +775,15 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
     assert.equal(again.text, expected);
   });
 
+  it("preserves repeated spaces inside quoted scalars when collapsing", () => {
+    const text = wrapAssign("input", wrappedAssignObj("a  b"));
+    const expected = wrapAssign("input", inlineAssignObj("a  b"));
+    const result = fixFile({ path: "quoted-spaces.xs", text }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.match(result.text, /"a  b"/);
+  });
+
   it("collapses an under-threshold assignment array", () => {
     const text = wrapAssign("output", wrappedAssignArr("x"));
     const expected = wrapAssign("output", inlineAssignArr("x"));

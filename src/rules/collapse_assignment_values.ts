@@ -294,7 +294,7 @@ function renderInline(node: Node): string {
   if (node.kind === "array") {
     return `[${node.items.map((item) => renderInline(item)).join(", ")}]`;
   }
-  return node.text.split(/\s+/).join(" ");
+  return node.text;
 }
 
 function offsetToLineCol(lines: string[], offset: number): { line: number; col: number } {
