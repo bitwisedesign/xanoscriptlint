@@ -4,6 +4,7 @@ import { emptyFunctionRun } from "./empty_function_run.js";
 import { fenceMultilineValues } from "./fence_multiline_values.js";
 import { guidPlacement } from "./guid_placement.js";
 import { noNullResponse } from "./no_null_response.js";
+import { noTrailingComments } from "./no_trailing_comments.js";
 import { noTrailingNewline } from "./no_trailing_newline.js";
 import { noVarResponse } from "./no_var_response.js";
 import { noZeroNumericDefault } from "./no_zero_numeric_default.js";
@@ -18,6 +19,7 @@ export const builtinRules: Rule[] = [
   wrapEnumValues,
   emptyFunctionRun,
   guidPlacement,
+  noTrailingComments,
   noTrailingNewline,
   noVarResponse,
   noNullResponse,

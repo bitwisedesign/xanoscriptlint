@@ -8,6 +8,7 @@
 | [`fence_multiline_values`](#fence_multiline_values) | on | error | yes | Multiline mock and input values must be wrapped in a triple-backtick fence |
 | [`guid_placement`](#guid_placement) | on | warning | yes | `guid` needs a blank line above it only when it follows a block closer |
 | [`no_null_response`](#no_null_response) | opt-in | warning | yes | Do not assign `response = null` |
+| [`no_trailing_comments`](#no_trailing_comments) | on | warning | no | `//` above `guid` or after the file's closing `}` |
 | [`no_trailing_newline`](#no_trailing_newline) | on | error | yes | File must end with `}` and no trailing newline |
 | [`no_var_response`](#no_var_response) | opt-in | warning | no | Do not declare `var $response` |
 | [`no_zero_numeric_default`](#no_zero_numeric_default) | on | error | yes | Numeric defaults of `0` must be omitted |
@@ -153,6 +154,43 @@ response = null
 ```
 
 Auto-fixable with `--fix`: `response = null` becomes `response = {}`. Comment lines, `$response = null`, and the text inside string literals are ignored.
+
+## no_trailing_comments
+
+On push, Xano moves a `//` that sits immediately before the file's closing `}` to the file header, appending it to any existing header comments. The comment's original context is lost.
+
+`guid` is backend-managed metadata that Xano does not show in its source editor, so a comment above `guid` (or after `guid` still inside the body) is the same shape. Nested comments — last line inside `stack {` or a `conditional` / `try` body — are left alone; those survive push.
+
+```xs
+  response = $ok
+  // leftover — flagged
+  guid = "..."
+}
+```
+
+```xs
+  response = $ok
+  // leftover — flagged
+}
+```
+
+```xs
+  stack {
+    // nested — not flagged
+  }
+
+  response = $ok
+  guid = "..."
+}
+```
+
+A comment after the closing `}` is invalid XanoScript (`expecting EOF`). Xano's CLI still pushes it and pull relocates it to the header; this rule reports that shape with a distinct message.
+
+`guid_placement --fix` may insert or remove the blank line above `guid` while leaving the comment in place. Moving the comment is left to the developer; this rule has no auto-fix.
+
+A `// xanoscriptlint:` directive in the tail is still a comment. Xano will move it to the header like any other. Suppress this rule with a file-header or region `disable`, not a tail `disable:next`.
+
+Default severity is warning.
 
 ## no_trailing_newline
 

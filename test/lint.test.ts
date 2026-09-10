@@ -116,6 +116,15 @@ describe("fixture linting", () => {
       lintFiles([guidPlacement], config).some((v) => v.ruleId === "guid_placement"),
       true,
     );
+
+    const trailingComments = {
+      path: path.join(fixtures, "violations/no_trailing_comments.xs"),
+      text: readFileSync(path.join(fixtures, "violations/no_trailing_comments.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([trailingComments], config).some((v) => v.ruleId === "no_trailing_comments"),
+      true,
+    );
   });
 
   it("CLI lints a violations directory and exits 2", async () => {
