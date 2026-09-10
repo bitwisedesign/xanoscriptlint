@@ -40,6 +40,13 @@ import {
   wrapInputDecls,
   wrapInputBlock,
   wrapMockBlock,
+  wrapAssign,
+  wrapReturn,
+  inlineAssignObj,
+  wrappedAssignObj,
+  ASSIGN_LINE_62,
+  ASSIGN_LINE_63,
+  ASSIGN_LINE_64,
 } from "./support.js";
 
 function config(overrides: Parameters<typeof resolveConfig>[0] = {}) {
@@ -1194,6 +1201,206 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     );
     assert.equal(
       lowered.some((v) => v.ruleId === "wrap_enum_values"),
+      false,
+    );
+  });
+
+  it("collapse_assignment_values uses collapsed line length, not entry count", () => {
+    const lineOf = (pad: string) => wrapAssign("input", inlineAssignObj(pad)).split("\n")[6] ?? "";
+    assert.equal(lineOf(ASSIGN_LINE_62).length, 62);
+    assert.equal(lineOf(ASSIGN_LINE_63).length, 63);
+    assert.equal(lineOf(ASSIGN_LINE_64).length, 64);
+
+    const inline63 = lintFile(
+      { path: "i63.xs", text: wrapAssign("input", inlineAssignObj(ASSIGN_LINE_63)) },
+      config(),
+    ).filter((v) => v.ruleId === "collapse_assignment_values");
+    assert.equal(inline63.length, 0);
+
+    const inline64 = lintFile(
+      { path: "i64.xs", text: wrapAssign("input", inlineAssignObj(ASSIGN_LINE_64)) },
+      config(),
+    ).filter((v) => v.ruleId === "collapse_assignment_values");
+    assert.equal(inline64.length, 0);
+
+    const wrapped63 = lintFile(
+      { path: "w63.xs", text: wrapAssign("input", wrappedAssignObj(ASSIGN_LINE_63)) },
+      config(),
+    ).filter((v) => v.ruleId === "collapse_assignment_values");
+    assert.equal(wrapped63.length, 1);
+    assert.equal(wrapped63[0]?.line, 7);
+    assert.equal(wrapped63[0]?.severity, "error");
+    assert.equal(
+      wrapped63[0]?.message,
+      "input value of line length 63 must be inline (threshold 64)",
+    );
+
+    const wrapped64 = lintFile(
+      { path: "w64.xs", text: wrapAssign("input", wrappedAssignObj(ASSIGN_LINE_64)) },
+      config(),
+    ).filter((v) => v.ruleId === "collapse_assignment_values");
+    assert.equal(wrapped64.length, 0);
+
+    const wrapped62 = lintFile(
+      { path: "w62.xs", text: wrapAssign("input", wrappedAssignObj(ASSIGN_LINE_62)) },
+      config(),
+    ).filter((v) => v.ruleId === "collapse_assignment_values");
+    assert.equal(wrapped62.length, 1);
+    assert.equal(
+      wrapped62[0]?.message,
+      "input value of line length 62 must be inline (threshold 64)",
+    );
+
+    const spacedPad = `${"x".repeat(40)}  x`;
+    assert.equal(lineOf(spacedPad).length, 64);
+    const wrappedSpaced = lintFile(
+      { path: "w-spaces.xs", text: wrapAssign("input", wrappedAssignObj(spacedPad)) },
+      config(),
+    ).filter((v) => v.ruleId === "collapse_assignment_values");
+    assert.equal(wrappedSpaced.length, 0);
+  });
+
+  it("collapse_assignment_values flags assignment owners including return", () => {
+    for (const owner of ["input", "data", "mock", "response", "output", "sort"]) {
+      const hits = lintFile(
+        { path: `${owner}.xs`, text: wrapAssign(owner, wrappedAssignObj("x")) },
+        config(),
+      ).filter((v) => v.ruleId === "collapse_assignment_values");
+      assert.equal(hits.length, 1, owner);
+      assert.match(hits[0]?.message ?? "", new RegExp(`^${owner} value of line length \\d+ must be inline`));
+    }
+
+    const returned = lintFile(
+      { path: "return.xs", text: wrapReturn(wrappedAssignObj("x")) },
+      config(),
+    ).filter((v) => v.ruleId === "collapse_assignment_values");
+    assert.equal(returned.length, 1);
+    assert.match(returned[0]?.message ?? "", /^return value of line length \d+ must be inline/);
+  });
+
+  it("collapse_assignment_values skips pipes, comments, fences, non-colon objects, tabs, and enum values", () => {
+    const piped = `function "example" {
+  input {
+  }
+
+  stack {
+    var $url {
+      value = ["${"a".repeat(70)}"]|join:"/"
+    }
+  }
+
+  response = $url
+}`;
+    assert.equal(
+      lintFile({ path: "pipe.xs", text: piped }, config()).some(
+        (v) => v.ruleId === "collapse_assignment_values",
+      ),
+      false,
+    );
+
+    const force = { collapse_assignment_values: { wrap_at: 1000 } };
+    const commented = wrapAssign(
+      "input",
+      `{
+        // keep this block
+        k: "x"
+      }`,
+    );
+    assert.equal(
+      lintFile({ path: "cmt.xs", text: commented }, config(force)).some(
+        (v) => v.ruleId === "collapse_assignment_values",
+      ),
+      false,
+    );
+
+    const fenced = wrapAssign(
+      "input",
+      `{
+        payload: \`\`\`
+          {k: 1}
+          \`\`\`
+      }`,
+    );
+    assert.equal(
+      lintFile({ path: "fence.xs", text: fenced }, config(force)).some(
+        (v) => v.ruleId === "collapse_assignment_values",
+      ),
+      false,
+    );
+
+    const thrown = `function "example" {
+  input {
+  }
+
+  stack {
+    throw {
+      name = "not_found"
+    }
+  }
+
+  response = $err
+}`;
+    assert.equal(
+      lintFile({ path: "throw.xs", text: thrown }, config(force)).some(
+        (v) => v.ruleId === "collapse_assignment_values",
+      ),
+      false,
+    );
+
+    const tabs = wrapAssign(
+      "input",
+      `{
+\t  k: "x"
+      }`,
+    );
+    assert.equal(
+      lintFile({ path: "tabs.xs", text: tabs }, config(force)).some(
+        (v) => v.ruleId === "collapse_assignment_values",
+      ),
+      false,
+    );
+
+    const enumText = wrapInputDecls(inlineEnumDecl("enum lane", ENUM_V64));
+    const enumHits = lintFile({ path: "enum.xs", text: enumText }, config());
+    assert.equal(
+      enumHits.filter((v) => v.ruleId === "collapse_assignment_values").length,
+      0,
+    );
+    assert.equal(enumHits.filter((v) => v.ruleId === "wrap_enum_values").length, 1);
+  });
+
+  it("collapse_assignment_values honors disabled_rules, severity, and wrap_at", () => {
+    const wrapped = wrapAssign("input", wrappedAssignObj(ASSIGN_LINE_62));
+    const disabled = lintFile(
+      { path: "off.xs", text: wrapped },
+      config({ disabled_rules: ["collapse_assignment_values"] }),
+    );
+    assert.equal(
+      disabled.some((v) => v.ruleId === "collapse_assignment_values"),
+      false,
+    );
+
+    const warned = lintFile(
+      { path: "warn.xs", text: wrapped },
+      config({ collapse_assignment_values: "warning" }),
+    );
+    assert.equal(
+      warned.find((v) => v.ruleId === "collapse_assignment_values")?.severity,
+      "warning",
+    );
+
+    const raised = lintFile(
+      { path: "raised.xs", text: wrapAssign("input", wrappedAssignObj(ASSIGN_LINE_64)) },
+      config({ collapse_assignment_values: { wrap_at: 80 } }),
+    ).filter((v) => v.ruleId === "collapse_assignment_values");
+    assert.equal(raised.length, 1);
+
+    const lowered = lintFile(
+      { path: "lowered.xs", text: wrapAssign("input", wrappedAssignObj(ASSIGN_LINE_62)) },
+      config({ collapse_assignment_values: { wrap_at: 10 } }),
+    );
+    assert.equal(
+      lowered.some((v) => v.ruleId === "collapse_assignment_values"),
       false,
     );
   });

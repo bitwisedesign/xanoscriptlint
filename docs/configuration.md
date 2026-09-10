@@ -52,11 +52,14 @@ empty_function_run: error
 no_trailing_newline:
   severity: warning
 
+collapse_assignment_values:
+  wrap_at: 64
+
 wrap_enum_values:
   wrap_at: 64
 ```
 
-Severity is `error` or `warning`. `wrap_enum_values` also accepts `wrap_at`, a positive integer (default 64) for the compact JSON length at which an enum `values` array must wrap.
+Severity is `error` or `warning`. `wrap_enum_values` also accepts `wrap_at`, a positive integer (default 64) for the compact JSON length at which an enum `values` array must wrap. `collapse_assignment_values` accepts `wrap_at` as the line length below which a wrapped assignment is collapsed.
 
 ## Custom rules
 

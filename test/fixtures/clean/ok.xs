@@ -27,6 +27,14 @@ function "example" {
         "checkout longest_scenario_name": {id: 2}
       }
     }
+    function.run "Orders/dispatch" {
+      input = {event_type: "manual", unit: "sets", delta: 3}
+    } as $dispatch
+    db.add job {
+      data = {
+        k: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+      }
+    }
   }
 
   response = $ok

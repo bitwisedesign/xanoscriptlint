@@ -3,6 +3,7 @@
 | Id | Default | Severity | Auto-fix | Description |
 | --- | --- | --- | --- | --- |
 | [`align_object_colons`](#align_object_colons) | on | error | yes | Object entry colons must align to the longest name |
+| [`collapse_assignment_values`](#collapse_assignment_values) | on | error | yes | Wrapped assignment whose one-line form is under 64 characters |
 | [`empty_function_run`](#empty_function_run) | on | error | no | `function.run` must not be called with an empty name |
 | [`fence_multiline_values`](#fence_multiline_values) | on | error | yes | Multiline mock and input values must be wrapped in a triple-backtick fence |
 | [`no_null_response`](#no_null_response) | opt-in | warning | yes | Do not assign `response = null` |
@@ -37,6 +38,33 @@ Own-line entries pad so every colon sits immediately after the longest name. Inl
 Content inside triple-backtick fences and `"""` strings is ignored, so prompt bodies and fenced JSON are not rewritten. Blocks that are not colon-object assignments (`throw { name = ... }`, `var $x { value = ... }`, `input { uuid id }` declarations, and `{ ... }` array elements) are skipped.
 
 Auto-fixable with `--fix`: spaces before the colon are inserted or removed until the colons line up, and extra spaces after the colon collapse to one.
+
+## collapse_assignment_values
+
+Xano collapses an assignment's object or array onto one line when that line — indent, the `name =` or `return` prefix, and the inline value — would be shorter than 64 characters. A wrapped value that already fills 64 or more columns stays wrapped. Long one-liners are left as-is; Xano does not wrap those.
+
+The threshold is the reconstructed line length, not the number of entries and not the compact JSON length of the value alone. Nested containers are left as-is: only the outermost `name = { ... }` / `name = [ ... ]` / `return { ... }` is checked. Enum `values` arrays are owned by [`wrap_enum_values`](#wrap_enum_values). A container followed by a filter pipe (`value = [...]|join:"/"`) is skipped, because Xano does not reformat those.
+
+```xs
+input = {event_type: "manual", unit: "sets", delta: 3}
+
+input = {
+  event_type: "manual"
+  unit      : "repetitions"
+  delta     : 5
+}
+```
+
+Auto-fixable with `--fix`: the wrapped block is rewritten as `name = {k: v, k2: v2}` (or `[a, b]`), preserving any trailing text after the closer.
+
+Blocks that do not parse as colon-objects or arrays (comments inside, fences, `throw { name = ... }`, tabs) are skipped.
+
+Override the cutoff with `wrap_at` (a positive integer, default 64):
+
+```yaml
+collapse_assignment_values:
+  wrap_at: 64
+```
 
 ## empty_function_run
 

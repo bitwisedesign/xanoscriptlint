@@ -111,6 +111,58 @@ export const ENUM_V62 = ["alpha", "bravo", "x".repeat(42)];
 export const ENUM_V63 = ["alpha", "bravo", "x".repeat(43)];
 export const ENUM_V64 = ["alpha", "bravo", "x".repeat(44)];
 
+export const ASSIGN_LINE_62 = "x".repeat(41);
+export const ASSIGN_LINE_63 = "x".repeat(42);
+export const ASSIGN_LINE_64 = "x".repeat(43);
+
+export function inlineAssignObj(pad: string): string {
+  return `{k: "${pad}"}`;
+}
+
+export function wrappedAssignObj(pad: string): string {
+  return `{
+        k: "${pad}"
+      }`;
+}
+
+export function inlineAssignArr(pad: string): string {
+  return `["${pad}"]`;
+}
+
+export function wrappedAssignArr(pad: string): string {
+  return `[
+        "${pad}"
+      ]`;
+}
+
+export function wrapAssign(owner: string, value: string): string {
+  return `function "example" {
+  input {
+  }
+
+  stack {
+    function.run "Orders/dispatch" {
+      ${owner} = ${value}
+    } as $dispatch
+  }
+
+  response = $dispatch
+}`;
+}
+
+export function wrapReturn(value: string): string {
+  return `function "example" {
+  input {
+  }
+
+  stack {
+    return ${value}
+  }
+
+  response = $ok
+}`;
+}
+
 export function inlineEnumDecl(opener: string, values: string[]): string {
   return `    ${opener} {
       values = [${values.map((value) => JSON.stringify(value)).join(", ")}]
@@ -233,11 +285,11 @@ export const FENCED_MULTILINE_OBJECT_ENTRIES = `        "checkout applies gift w
 export const UNFENCED_MULTILINE_OBJECT_XS = wrapMockBlock(UNFENCED_MULTILINE_OBJECT_ENTRIES);
 export const FENCED_MULTILINE_OBJECT_XS = wrapMockBlock(FENCED_MULTILINE_OBJECT_ENTRIES);
 
-export const UNFENCED_MULTILINE_ARRAY_ENTRIES = `        "checkout lists open carts": [
+export const UNFENCED_MULTILINE_ARRAY_ENTRIES = `        "checkout lists open carts for the current user id": [
           {id: 8}
         ]`;
 
-export const FENCED_MULTILINE_ARRAY_ENTRIES = `        "checkout lists open carts": \`\`\`
+export const FENCED_MULTILINE_ARRAY_ENTRIES = `        "checkout lists open carts for the current user id": \`\`\`
           [
             {id: 8}
           ]
@@ -246,23 +298,23 @@ export const FENCED_MULTILINE_ARRAY_ENTRIES = `        "checkout lists open cart
 export const UNFENCED_MULTILINE_ARRAY_XS = wrapMockBlock(UNFENCED_MULTILINE_ARRAY_ENTRIES);
 export const FENCED_MULTILINE_ARRAY_XS = wrapMockBlock(FENCED_MULTILINE_ARRAY_ENTRIES);
 
-export const UNFENCED_INPUT_OBJECT_ENTRIES = `        payload: {
+export const UNFENCED_INPUT_OBJECT_ENTRIES = `        checkout_payload_for_the_current_user: {
           user_id: 7
           reason : "manual"
         }`;
 
-export const FENCED_INPUT_OBJECT_ENTRIES = `        payload: \`\`\`
+export const FENCED_INPUT_OBJECT_ENTRIES = `        checkout_payload_for_the_current_user: \`\`\`
           {
             user_id: 7
             reason : "manual"
           }
           \`\`\``;
 
-export const UNFENCED_INPUT_ARRAY_ENTRIES = `        items: [
+export const UNFENCED_INPUT_ARRAY_ENTRIES = `        checkout_line_items_for_the_current_user_order_id: [
           {id: 1}
         ]`;
 
-export const FENCED_INPUT_ARRAY_ENTRIES = `        items: \`\`\`
+export const FENCED_INPUT_ARRAY_ENTRIES = `        checkout_line_items_for_the_current_user_order_id: \`\`\`
           [
             {id: 1}
           ]
@@ -274,7 +326,7 @@ export const UNFENCED_INPUT_ARRAY_XS = wrapInputBlock(UNFENCED_INPUT_ARRAY_ENTRI
 export const FENCED_INPUT_ARRAY_XS = wrapInputBlock(FENCED_INPUT_ARRAY_ENTRIES);
 
 export const NONCANONICAL_MULTILINE_MOCK_XS = wrapMockBlock(
-  `        "checkout applies gift wrap": {issued: []
+  `        "checkout applies gift wrap today!": {issued: []
           skipped: []
         }`,
 );
@@ -283,7 +335,7 @@ export const MISALIGNED_UNFENCED_MULTILINE_XS = wrapMockBlock(
   `        ${MOCK_SHORT_NAME}: {
           id: 1
         }
-        ${MOCK_LONG_NAME}: []`,
+        ${MOCK_LONG_NAME}: [0]`,
 );
 
 export const ALIGNED_FENCED_MULTILINE_XS = wrapMockBlock(
@@ -292,14 +344,15 @@ export const ALIGNED_FENCED_MULTILINE_XS = wrapMockBlock(
             id: 1
           }
           \`\`\`
-        ${MOCK_LONG_NAME}: []`,
+        ${MOCK_LONG_NAME}: [0]`,
 );
 
 export const MISALIGNED_UNFENCED_INPUT_XS = wrapInputBlock(
   `        id: 7
         payload: {
           inner: 1
-        }`,
+        }
+        comment: "keep_parent_assignment_wrapped"`,
 );
 
 export const ALIGNED_FENCED_INPUT_XS = wrapInputBlock(
@@ -308,7 +361,8 @@ export const ALIGNED_FENCED_INPUT_XS = wrapInputBlock(
           {
             inner: 1
           }
-          \`\`\``,
+          \`\`\`
+        comment: "keep_parent_assignment_wrapped"`,
 );
 
 export const VALID_SIBLING_FENCES_XS = `function "example" {

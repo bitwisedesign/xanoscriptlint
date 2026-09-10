@@ -98,6 +98,15 @@ describe("fixture linting", () => {
       lintFiles([wrapEnum], config).some((v) => v.ruleId === "wrap_enum_values"),
       true,
     );
+
+    const collapseAssign = {
+      path: path.join(fixtures, "violations/collapse_assignment_values.xs"),
+      text: readFileSync(path.join(fixtures, "violations/collapse_assignment_values.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([collapseAssign], config).some((v) => v.ruleId === "collapse_assignment_values"),
+      true,
+    );
   });
 
   it("CLI lints a violations directory and exits 2", async () => {
