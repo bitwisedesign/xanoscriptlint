@@ -845,4 +845,159 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
     assert.equal(result.changed, false);
     assert.equal(result.text, text);
   });
+
+  it("inserts a blank line before guid after a block closer", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+
+  test "ok" {
+    expect.to_equal ($ok) {
+      value = 1
+    }
+  }
+  guid = "g1"
+}`;
+    const expected = `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+
+  test "ok" {
+    expect.to_equal ($ok) {
+      value = 1
+    }
+  }
+
+  guid = "g1"
+}`;
+    const result = fixFile({ path: "guid.xs", text }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.equal(result.corrections.length, 1);
+    assert.equal(result.corrections[0]?.ruleId, "guid_placement");
+    assert.equal(result.corrections[0]?.line, 15);
+
+    const again = fixFile({ path: "guid.xs", text: result.text }, config());
+    assert.equal(again.changed, false);
+    assert.equal(again.text, expected);
+  });
+
+  it("removes a blank line before guid after a single-line value", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+
+  guid = "g1"
+}`;
+    const expected = `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+  guid = "g1"
+}`;
+    const result = fixFile({ path: "guid.xs", text }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.equal(result.corrections[0]?.ruleId, "guid_placement");
+  });
+
+  it("collapses extra blank lines above guid to one", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+
+  test "ok" {
+    expect.to_equal ($ok) {
+      value = 1
+    }
+  }
+
+
+  guid = "g1"
+}`;
+    const expected = `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+
+  test "ok" {
+    expect.to_equal ($ok) {
+      value = 1
+    }
+  }
+
+  guid = "g1"
+}`;
+    const result = fixFile({ path: "guid.xs", text }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+  });
+
+  it("preserves CRLF when fixing guid placement", () => {
+    const text = `function "example" {
+  response = $ok
+
+  guid = "g1"
+}`;
+    const expected = `function "example" {
+  response = $ok
+  guid = "g1"
+}`;
+    const result = fixFile({ path: "guid-crlf.xs", text: text.replace(/\n/g, "\r\n") }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected.replace(/\n/g, "\r\n"));
+  });
+
+  it("does not fix a suppressed guid_placement violation", () => {
+    const text = `function "example" {
+  response = $ok
+  // xanoscriptlint:disable:next guid_placement
+
+  guid = "g1"
+}`;
+    const result = fixFile({ path: "guid-suppressed.xs", text }, config());
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
+
+    const off = fixFile(
+      {
+        path: "guid-off.xs",
+        text: `function "example" {
+  response = $ok
+
+  guid = "g1"
+}`,
+      },
+      config({ disabled_rules: ["guid_placement"] }),
+    );
+    assert.equal(off.changed, false);
+  });
 });

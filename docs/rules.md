@@ -6,6 +6,7 @@
 | [`collapse_assignment_values`](#collapse_assignment_values) | on | error | yes | Wrapped assignment whose one-line form is under 64 characters |
 | [`empty_function_run`](#empty_function_run) | on | error | no | `function.run` must not be called with an empty name |
 | [`fence_multiline_values`](#fence_multiline_values) | on | error | yes | Multiline mock and input values must be wrapped in a triple-backtick fence |
+| [`guid_placement`](#guid_placement) | on | warning | yes | `guid` needs a blank line above it only when it follows a block closer |
 | [`no_null_response`](#no_null_response) | opt-in | warning | yes | Do not assign `response = null` |
 | [`no_trailing_newline`](#no_trailing_newline) | on | error | yes | File must end with `}` and no trailing newline |
 | [`no_var_response`](#no_var_response) | opt-in | warning | no | Do not declare `var $response` |
@@ -110,6 +111,33 @@ Only top-level entries of `mock = { ... }` and `input = { ... }` are checked. Ne
 `function.run` mock values stay compact. Xano CLI push accepts `{queued: []}` on those mocks and can reject a fenced rewrite, especially if `mock` loses indent relative to `input`. The rule does not fence those values. It does flag two consecutive fence openers (keys must not share one fence body) and a `mock` that is not indented with its `input` sibling inside `function.run`.
 
 Auto-fixable with `--fix`: an eligible value is wrapped in a fence, the opening `{` or `[` moves onto the next line, and the body is indented two spaces relative to the key. Values that are not a bare `{` or `[` on the key line are reported but not rewritten. An outdented `function.run` `mock` is re-indented to match `input`. Consecutive fence openers are reported and left untouched.
+
+## guid_placement
+
+When `guid` is present, Xano places it as the last property of the top-level construct. Presence itself is not required: a file that has not yet been pushed and pulled from Xano has no `guid`, and that is valid for this rule.
+
+The blank line is decided by the predecessor, not the key name. Exactly one blank line above `guid` when the nearest preceding non-blank line is a bare `}` or `]`. No blank line otherwise.
+
+```xs
+response = $result
+guid = "..."
+```
+
+```xs
+  }
+
+  guid = "..."
+```
+
+Observed flush predecessors (no blank) include single-line `response = $var`, single-line `tags = [...]`, `swagger = {token: ...}` in an `api_group`, single-line `tools = [...]` in an agent, `schedule = [...]`, `actions = {...}`, single-line `index = [...]`, a `|set:` pipeline tail, and a closing triple-backtick fence.
+
+Observed blank-line predecessors include a `}` that closes `test`, a multiline `response` / `stack` / `cache`, and a `]` that closes a multiline `index` or `tools` array.
+
+A multiline `tags` array has not been seen in a Xano-pulled file. The closer rule would require a blank line above `guid` if `tags` ended on its own `]`, matching every other multiline array. That shape is inferred, not observed.
+
+A comment directly above `guid` is left alone. Default severity is warning.
+
+Auto-fixable with `--fix`: a missing blank line is inserted, a forbidden blank line is removed, and extra blank lines collapse to one.
 
 ## no_null_response
 

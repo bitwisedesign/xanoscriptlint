@@ -53,6 +53,12 @@ function config(overrides: Parameters<typeof resolveConfig>[0] = {}) {
   return resolveConfig(overrides, "/tmp", null);
 }
 
+function guidHits(text: string, overrides: Parameters<typeof resolveConfig>[0] = {}) {
+  return lintFile({ path: "a.xs", text }, config(overrides)).filter(
+    (v) => v.ruleId === "guid_placement",
+  );
+}
+
 describe("built-in rules", () => {
   it("empty_function_run flags empty names and skips comments", () => {
     const file = { path: "a.xs", text: EMPTY_RUN_XS };
@@ -1403,6 +1409,352 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
       lowered.some((v) => v.ruleId === "collapse_assignment_values"),
       false,
     );
+  });
+
+  it("guid_placement accepts a flush guid after a single-line value", () => {
+    const samples = [
+      `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+  guid = "g1"
+}`,
+      `function "example" {
+  tags = ["alpha", "beta"]
+  guid = "g1"
+}`,
+      `api_group Sample {
+  canonical = "abc"
+  swagger = {token: "tok"}
+  guid = "g1"
+}`,
+      `agent "helper" {
+  tools = [{name: "lookup"}]
+  guid = "g1"
+}`,
+      `table item {
+  schema {
+    int id
+  }
+
+  index = [{type: "primary", field: [{name: "id"}]}]
+  guid = "g1"
+}`,
+      `task cleanup {
+  stack {
+  }
+
+  schedule = [{starts_on: 2025-01-01 00:00:00+0000, freq: 3600}]
+  guid = "g1"
+}`,
+      `table_trigger on_insert {
+  stack {
+  }
+
+  actions = {insert: true}
+  guid = "g1"
+}`,
+      `query "list_items" {
+  db.query item {
+  } as $rows
+    |set:"items":$rows
+  guid = "g1"
+}`,
+      `query "status" {
+  response = \`\`\`
+    {
+      ok: true
+    }
+    \`\`\`
+  guid = "g1"
+}`,
+    ];
+    for (const text of samples) {
+      assert.deepEqual(guidHits(text), [], text);
+    }
+  });
+
+  it("guid_placement accepts a blank line after a block closer", () => {
+    const samples = [
+      `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+
+  test "ok" {
+    expect.to_equal ($ok) {
+      value = 1
+    }
+  }
+
+  guid = "g1"
+}`,
+      `query "status" {
+  response = {
+    ok                                 : true
+    detail_that_keeps_this_object_long : "abcdefghijklmnopqrstuvwxyz"
+  }
+
+  guid = "g1"
+}`,
+      `agent "helper" {
+  tools = [
+    {name: "lookup"}
+    {name: "write"}
+  ]
+
+  guid = "g1"
+}`,
+      `table item {
+  schema {
+    int id
+  }
+
+  index = [
+    {type: "primary", field: [{name: "id"}]}
+    {type: "btree", field: [{name: "name"}]}
+  ]
+
+  guid = "g1"
+}`,
+      `function "example" {
+  tags = [
+    "alpha"
+    "beta"
+  ]
+
+  guid = "g1"
+}`,
+    ];
+    for (const text of samples) {
+      assert.deepEqual(guidHits(text), [], text);
+    }
+  });
+
+  it("guid_placement flags a missing blank after a closer and a blank after a single-line value", () => {
+    const missingBlank = `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+
+  test "ok" {
+    expect.to_equal ($ok) {
+      value = 1
+    }
+  }
+  guid = "g1"
+}`;
+    const extraBlank = `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+
+  guid = "g1"
+}`;
+    const missing = guidHits(missingBlank);
+    assert.equal(missing.length, 1);
+    assert.equal(missing[0]?.line, 15);
+    assert.equal(missing[0]?.column, 3);
+    assert.equal(missing[0]?.severity, "warning");
+    assert.equal(
+      missing[0]?.message,
+      "guid must have a blank line above it when it follows a block closer",
+    );
+
+    const extra = guidHits(extraBlank);
+    assert.equal(extra.length, 1);
+    assert.equal(extra[0]?.line, 10);
+    assert.equal(extra[0]?.column, 3);
+    assert.equal(
+      extra[0]?.message,
+      "guid must not have a blank line above it when it follows a single-line value",
+    );
+
+    const twoBlanks = `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+
+  test "ok" {
+    expect.to_equal ($ok) {
+      value = 1
+    }
+  }
+
+
+  guid = "g1"
+}`;
+    const surplus = guidHits(twoBlanks);
+    assert.equal(surplus.length, 1);
+    assert.equal(surplus[0]?.line, 17);
+    assert.equal(
+      surplus[0]?.message,
+      "guid must have exactly one blank line above it",
+    );
+
+    const flushViolations = [
+      `function "example" {
+  tags = ["alpha"]
+
+  guid = "g1"
+}`,
+      `api_group Sample {
+  swagger = {token: "tok"}
+
+  guid = "g1"
+}`,
+      `agent "helper" {
+  tools = [{name: "lookup"}]
+
+  guid = "g1"
+}`,
+      `table item {
+  index = [{type: "primary", field: [{name: "id"}]}]
+
+  guid = "g1"
+}`,
+      `task cleanup {
+  schedule = [{starts_on: 2025-01-01 00:00:00+0000, freq: 3600}]
+
+  guid = "g1"
+}`,
+      `table_trigger on_insert {
+  actions = {insert: true}
+
+  guid = "g1"
+}`,
+      `query "list_items" {
+    |set:"items":$rows
+
+  guid = "g1"
+}`,
+      `query "status" {
+  response = \`\`\`
+    {
+      ok: true
+    }
+    \`\`\`
+
+  guid = "g1"
+}`,
+    ];
+    for (const text of flushViolations) {
+      const hits = guidHits(text);
+      assert.equal(hits.length, 1, text);
+      assert.equal(
+        hits[0]?.message,
+        "guid must not have a blank line above it when it follows a single-line value",
+      );
+    }
+
+    const closerViolations = [
+      `agent "helper" {
+  tools = [
+    {name: "lookup"}
+  ]
+  guid = "g1"
+}`,
+      `table item {
+  index = [
+    {type: "primary", field: [{name: "id"}]}
+  ]
+  guid = "g1"
+}`,
+      `function "example" {
+  tags = [
+    "alpha"
+    "beta"
+  ]
+  guid = "g1"
+}`,
+    ];
+    for (const text of closerViolations) {
+      const hits = guidHits(text);
+      assert.equal(hits.length, 1, text);
+      assert.equal(
+        hits[0]?.message,
+        "guid must have a blank line above it when it follows a block closer",
+      );
+    }
+  });
+
+  it("guid_placement ignores a missing guid, fenced text, and a comment predecessor", () => {
+    assert.deepEqual(
+      guidHits(`function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+}`),
+      [],
+    );
+
+    const fenced = `function "example" {
+  stack {
+    db.query item {
+      mock = {
+        sample: \`\`\`
+          guid = "inside"
+          \`\`\`
+      }
+    }
+  }
+
+  response = $ok
+}`;
+    assert.deepEqual(guidHits(fenced), []);
+
+    const commented = `function "example" {
+  response = $ok
+  // keep this identifier
+  guid = "g1"
+}`;
+    assert.deepEqual(guidHits(commented), []);
+  });
+
+  it("guid_placement is on by default and honors disable:next", () => {
+    const extraBlank = `function "example" {
+  response = $ok
+
+  guid = "g1"
+}`;
+    const hits = guidHits(extraBlank);
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.severity, "warning");
+
+    const disabled = guidHits(extraBlank, { disabled_rules: ["guid_placement"] });
+    assert.equal(disabled.length, 0);
+
+    const suppressed = `function "example" {
+  response = $ok
+  // xanoscriptlint:disable:next guid_placement
+
+  guid = "g1"
+}`;
+    assert.equal(guidHits(suppressed).length, 0);
   });
 
   it("per-rule severity override applies", () => {
