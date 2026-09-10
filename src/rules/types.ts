@@ -16,6 +16,7 @@ export interface Violation {
 
 export interface RuleOptions {
   severity?: Severity;
+  wrapAt?: number;
 }
 
 export interface Correction {
@@ -29,6 +30,7 @@ export interface Rule {
   description: string;
   defaultEnabled: boolean;
   defaultSeverity: Severity;
+  numericOptions?: readonly string[];
   lint(file: SourceFile, options: RuleOptions): Violation[];
   fix?(file: SourceFile, options: RuleOptions): string | null;
 }

@@ -199,7 +199,7 @@ export function resolveConfig(
   const ruleOptions = new Map<string, RuleOptions>();
   for (const rule of builtinRules) {
     if (rule.id in raw) {
-      ruleOptions.set(rule.id, parseRuleOptions(raw[rule.id], rule.id));
+      ruleOptions.set(rule.id, parseRuleOptions(raw[rule.id], rule));
     }
   }
   const activeCustomRules = customRules.filter((rule) =>
@@ -256,7 +256,8 @@ function parseCustomRules(value: unknown): CustomRuleConfig[] {
   return result;
 }
 
-function parseRuleOptions(value: unknown, id: string): RuleOptions {
+function parseRuleOptions(value: unknown, rule: { id: string; numericOptions?: readonly string[] }): RuleOptions {
+  const id = rule.id;
   if (typeof value === "string") {
     return { severity: asSeverity(value, id) };
   }
@@ -268,12 +269,25 @@ function parseRuleOptions(value: unknown, id: string): RuleOptions {
   if (record.severity !== undefined) {
     options.severity = asSeverity(record.severity, `${id}.severity`);
   }
+  const allowedNumeric = new Set(rule.numericOptions ?? []);
   for (const key of Object.keys(record)) {
-    if (key !== "severity") {
-      throw new ConfigError(`unknown option for ${id}: ${key}`);
+    if (key === "severity") {
+      continue;
     }
+    if (key === "wrap_at" && allowedNumeric.has("wrap_at")) {
+      options.wrapAt = asPositiveInt(record[key], `${id}.wrap_at`);
+      continue;
+    }
+    throw new ConfigError(`unknown option for ${id}: ${key}`);
   }
   return options;
+}
+
+function asPositiveInt(value: unknown, label: string): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 1) {
+    throw new ConfigError(`${label} must be an integer >= 1`);
+  }
+  return value;
 }
 
 function optionalStringList(value: unknown, label: string): string[] | undefined {

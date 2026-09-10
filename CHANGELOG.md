@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Default-on `wrap_enum_values` flags enum `values` arrays that are inline at compact JSON length 64 or longer, or wrapped below that cutoff, and auto-fixes them to Xano's push form. The cutoff is configurable with `wrap_at`.
+
 ## [0.2.1] - 2026-09-09
 
 ### Fixed

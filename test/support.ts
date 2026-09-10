@@ -107,6 +107,30 @@ ${decls}
 }`;
 }
 
+export const ENUM_V62 = ["alpha", "bravo", "x".repeat(42)];
+export const ENUM_V63 = ["alpha", "bravo", "x".repeat(43)];
+export const ENUM_V64 = ["alpha", "bravo", "x".repeat(44)];
+
+export function inlineEnumDecl(opener: string, values: string[]): string {
+  return `    ${opener} {
+      values = [${values.map((value) => JSON.stringify(value)).join(", ")}]
+    }`;
+}
+
+export function wrappedEnumDecl(
+  opener: string,
+  values: string[],
+  blank = true,
+): string {
+  const items = values.map((value) => `        ${JSON.stringify(value)}`).join("\n");
+  const blankLine = blank ? "    \n" : "";
+  return `    ${opener} {
+      values = [
+${items}
+      ]
+${blankLine}    }`;
+}
+
 export const ZERO_DEFAULT_DECLS = `    int retry_count?=0
     decimal offset?=0.0
     int? page?=0

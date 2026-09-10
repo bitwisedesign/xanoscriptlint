@@ -89,6 +89,15 @@ describe("fixture linting", () => {
       ),
       true,
     );
+
+    const wrapEnum = {
+      path: path.join(fixtures, "violations/wrap_enum_values.xs"),
+      text: readFileSync(path.join(fixtures, "violations/wrap_enum_values.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([wrapEnum], config).some((v) => v.ruleId === "wrap_enum_values"),
+      true,
+    );
   });
 
   it("CLI lints a violations directory and exits 2", async () => {

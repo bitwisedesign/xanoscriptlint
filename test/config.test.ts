@@ -13,6 +13,7 @@ describe("config enablement", () => {
     assert.equal(config.enabledRuleIds.has("no_trailing_newline"), true);
     assert.equal(config.enabledRuleIds.has("align_object_colons"), true);
     assert.equal(config.enabledRuleIds.has("fence_multiline_values"), true);
+    assert.equal(config.enabledRuleIds.has("wrap_enum_values"), true);
     assert.equal(config.enabledRuleIds.has("no_var_response"), false);
     assert.deepEqual(config.included, ["**/*.xs"]);
   });
@@ -177,6 +178,45 @@ custom_rules:
           null,
         ),
       /custom_rules is only valid in only_rules/,
+    );
+  });
+
+  it("parses wrap_enum_values wrap_at", () => {
+    const config = resolveConfig(
+      { wrap_enum_values: { wrap_at: 64 } },
+      "/tmp",
+      null,
+    );
+    assert.equal(config.ruleOptions.get("wrap_enum_values")?.wrapAt, 64);
+  });
+
+  it("rejects a non-integer or non-positive wrap_at", () => {
+    assert.throws(
+      () => resolveConfig({ wrap_enum_values: { wrap_at: 0 } }, "/tmp", null),
+      /wrap_enum_values.wrap_at must be an integer >= 1/,
+    );
+    assert.throws(
+      () => resolveConfig({ wrap_enum_values: { wrap_at: 1.5 } }, "/tmp", null),
+      /wrap_enum_values.wrap_at must be an integer >= 1/,
+    );
+    assert.throws(
+      () => resolveConfig({ wrap_enum_values: { wrap_at: "64" } }, "/tmp", null),
+      /wrap_enum_values.wrap_at must be an integer >= 1/,
+    );
+  });
+
+  it("rejects wrap_at on a rule that does not declare it", () => {
+    assert.throws(
+      () => resolveConfig({ align_object_colons: { wrap_at: 64 } }, "/tmp", null),
+      /unknown option for align_object_colons: wrap_at/,
+    );
+  });
+
+  it("still rejects unknown options on wrap_enum_values", () => {
+    assert.throws(
+      () =>
+        resolveConfig({ wrap_enum_values: { wrap_at: 64, extra: 1 } }, "/tmp", null),
+      /unknown option for wrap_enum_values: extra/,
     );
   });
 
