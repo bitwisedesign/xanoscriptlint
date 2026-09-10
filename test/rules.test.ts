@@ -6,6 +6,11 @@ import {
   ALIGNED_MOCK_ENTRIES,
   ALIGNED_MOCK_XS,
   CLEAN_XS,
+  ENUM_V62,
+  ENUM_V63,
+  ENUM_V64,
+  inlineEnumDecl,
+  wrappedEnumDecl,
   EMPTY_RUN_XS,
   FENCED_INPUT_ARRAY_XS,
   FENCED_INPUT_OBJECT_XS,
@@ -1030,6 +1035,166 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     assert.equal(
       warned.find((v) => v.ruleId === "quote_negative_numeric_default")?.severity,
       "warning",
+    );
+  });
+
+  it("wrap_enum_values uses compact JSON length, not value count", () => {
+    assert.equal(JSON.stringify(ENUM_V62).length, 62);
+    assert.equal(JSON.stringify(ENUM_V63).length, 63);
+    assert.equal(JSON.stringify(ENUM_V64).length, 64);
+
+    const inline63 = lintFile(
+      { path: "i63.xs", text: wrapInputDecls(inlineEnumDecl("enum lane", ENUM_V63)) },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_enum_values");
+    assert.equal(inline63.length, 0);
+
+    const inline64 = lintFile(
+      { path: "i64.xs", text: wrapInputDecls(inlineEnumDecl("enum lane", ENUM_V64)) },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_enum_values");
+    assert.equal(inline64.length, 1);
+    assert.equal(inline64[0]?.line, 4);
+    assert.equal(inline64[0]?.column, 7);
+    assert.equal(inline64[0]?.severity, "error");
+    assert.equal(
+      inline64[0]?.message,
+      "enum values of compact length 64 must be wrapped (threshold 64)",
+    );
+
+    const wrapped63 = lintFile(
+      { path: "w63.xs", text: wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V63)) },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_enum_values");
+    assert.equal(wrapped63.length, 1);
+    assert.equal(
+      wrapped63[0]?.message,
+      "enum values of compact length 63 must be inline (threshold 64)",
+    );
+
+    const wrapped64 = lintFile(
+      { path: "w64.xs", text: wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V64)) },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_enum_values");
+    assert.equal(wrapped64.length, 0);
+  });
+
+  it("wrap_enum_values matches optional and defaulted enum openers", () => {
+    const optional = lintFile(
+      {
+        path: "opt.xs",
+        text: wrapInputDecls(inlineEnumDecl("enum? kind?", ENUM_V64)),
+      },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_enum_values");
+    assert.equal(optional.length, 1);
+
+    const defaulted = lintFile(
+      {
+        path: "def.xs",
+        text: wrapInputDecls(inlineEnumDecl("enum lane?=whenever", ENUM_V64)),
+      },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_enum_values");
+    assert.equal(defaulted.length, 1);
+  });
+
+  it("wrap_enum_values skips non-string arrays, comments inside values, fenced bodies, and non-round-trippable escapes", () => {
+    const nonString = wrapInputDecls(`    enum lane {
+      values = ["alpha", 1, "bravo"]
+    }`);
+    assert.equal(
+      lintFile({ path: "ns.xs", text: nonString }, config()).some(
+        (v) => v.ruleId === "wrap_enum_values",
+      ),
+      false,
+    );
+
+    const commented = wrapInputDecls(`    enum lane {
+      values = [
+        "alpha"
+        // not a value
+        "bravo"
+      ]
+    }`);
+    assert.equal(
+      lintFile({ path: "cmt.xs", text: commented }, config()).some(
+        (v) => v.ruleId === "wrap_enum_values",
+      ),
+      false,
+    );
+
+    const fenced = `function "example" {
+  input {
+  }
+
+  stack {
+    var $ok {
+      value = {
+        system_prompt: """
+          enum lane {
+            values = [${ENUM_V64.map((value) => JSON.stringify(value)).join(", ")}]
+          }
+          """
+      }
+    }
+  }
+
+  response = $ok
+}`;
+    assert.equal(
+      lintFile({ path: "fence.xs", text: fenced }, config()).some(
+        (v) => v.ruleId === "wrap_enum_values",
+      ),
+      false,
+    );
+
+    const escaped = wrapInputDecls(`    enum lane {
+      values = ["alpha\\n", "bravo\\t", "x\\u0041", "cr\\r"]
+    }`);
+    assert.equal(
+      lintFile(
+        { path: "esc.xs", text: escaped },
+        config({ wrap_enum_values: { wrap_at: 1 } }),
+      ).some((v) => v.ruleId === "wrap_enum_values"),
+      false,
+    );
+  });
+
+  it("wrap_enum_values honors disabled_rules, severity, and wrap_at", () => {
+    const text = wrapInputDecls(inlineEnumDecl("enum lane", ENUM_V64));
+    const disabled = lintFile(
+      { path: "off.xs", text },
+      config({ disabled_rules: ["wrap_enum_values"] }),
+    );
+    assert.equal(
+      disabled.some((v) => v.ruleId === "wrap_enum_values"),
+      false,
+    );
+
+    const warned = lintFile(
+      { path: "warn.xs", text },
+      config({ wrap_enum_values: "warning" }),
+    );
+    assert.equal(
+      warned.find((v) => v.ruleId === "wrap_enum_values")?.severity,
+      "warning",
+    );
+
+    const raised = lintFile(
+      { path: "raise.xs", text: wrapInputDecls(inlineEnumDecl("enum lane", ENUM_V62)) },
+      config({ wrap_enum_values: { wrap_at: 10 } }),
+    ).filter((v) => v.ruleId === "wrap_enum_values");
+    assert.equal(raised.length, 1);
+    assert.match(raised[0]?.message ?? "", /threshold 10/);
+
+    const lowered = lintFile(
+      { path: "low.xs", text },
+      config({ wrap_enum_values: { wrap_at: 80 } }),
+    );
+    assert.equal(
+      lowered.some((v) => v.ruleId === "wrap_enum_values"),
+      false,
     );
   });
 

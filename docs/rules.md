@@ -10,6 +10,7 @@
 | [`no_var_response`](#no_var_response) | opt-in | warning | no | Do not declare `var $response` |
 | [`no_zero_numeric_default`](#no_zero_numeric_default) | on | error | yes | Numeric defaults of `0` must be omitted |
 | [`quote_negative_numeric_default`](#quote_negative_numeric_default) | on | error | yes | Negative numeric defaults must be quoted |
+| [`wrap_enum_values`](#wrap_enum_values) | on | error | yes | Enum `values` arrays wrap when compact JSON length reaches 64 |
 
 List the same catalog from the CLI with `xanoscriptlint rules`.
 
@@ -137,6 +138,36 @@ decimal drift?=-2.5
 Already-quoted negatives are canonical. A negative zero (`-0`) is owned by `no_zero_numeric_default`, which omits the default instead of quoting it.
 
 Auto-fixable with `--fix`: the unquoted negative is wrapped in double quotes. Spacing around `=` and any trailing `filters=` clause or metadata block are preserved.
+
+## wrap_enum_values
+
+Xano wraps an enum `values` array when the compact JSON form — `["a","b"]`, quotes and commas, no spaces — is 64 characters or longer. Shorter arrays stay on one line. The pulled file is canonical; a locally inline long array (or a wrapped short array) is push/pull churn.
+
+The threshold is the compact length, not the number of values. A six-value array can stay inline while a four-value array with longer strings wraps. Arrays that are not exclusively quoted strings, and arrays that contain comments, are left alone.
+
+```xs
+enum status {
+  values = ["draft", "active"]
+}
+
+enum lane {
+  values = [
+    "northbound_express_lane"
+    "southbound_express_lane"
+    "local_collector_road"
+  ]
+
+}
+```
+
+The wrapped form has no commas between items. Auto-fix writes items two spaces deeper than `values`, puts `]` at the `values` indent, and inserts a whitespace-only line (spaces, matching the enum `}`) before the closing brace. Existing wrapped arrays are not restyled if they are already on the correct side of the threshold.
+
+Override the cutoff with `wrap_at` (a positive integer, default 64):
+
+```yaml
+wrap_enum_values:
+  wrap_at: 64
+```
 
 ## Team-specific rules
 

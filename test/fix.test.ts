@@ -8,6 +8,10 @@ import {
   ALIGNED_FENCED_MULTILINE_XS,
   ALIGNED_MOCK_XS,
   CLEAN_XS,
+  ENUM_V63,
+  ENUM_V64,
+  inlineEnumDecl,
+  wrappedEnumDecl,
   FENCED_INPUT_ARRAY_XS,
   FENCED_INPUT_OBJECT_XS,
   FENCED_MULTILINE_ARRAY_XS,
@@ -671,5 +675,78 @@ describe("fixFile", () => {
       result.corrections.some((c) => c.ruleId === "quote_negative_numeric_default"),
       false,
     );
+  });
+
+  it("wraps an over-threshold enum values array and inserts the whitespace line", () => {
+    const text = wrapInputDecls(inlineEnumDecl("enum lane", ENUM_V64));
+    const expected = wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V64));
+    const result = fixFile({ path: "wrap.xs", text }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.equal(result.corrections.length, 1);
+    assert.equal(result.corrections[0]?.ruleId, "wrap_enum_values");
+    assert.equal(result.corrections[0]?.line, 4);
+
+    const again = fixFile({ path: "wrap.xs", text: result.text }, config());
+    assert.equal(again.changed, false);
+    assert.equal(again.text, expected);
+  });
+
+  it("collapses an under-threshold wrapped enum values array", () => {
+    const text = wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V63));
+    const expected = wrapInputDecls(inlineEnumDecl("enum lane", ENUM_V63));
+    const result = fixFile({ path: "inline.xs", text }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.equal(result.corrections[0]?.ruleId, "wrap_enum_values");
+
+    const again = fixFile({ path: "inline.xs", text: result.text }, config());
+    assert.equal(again.changed, false);
+    assert.equal(again.text, expected);
+  });
+
+  it("preserves CRLF when wrapping enum values", () => {
+    const source = wrapInputDecls(inlineEnumDecl("enum lane", ENUM_V64));
+    const expected = wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V64));
+    const crlf = source.replace(/\n/g, "\r\n");
+    const result = fixFile({ path: "crlf.xs", text: crlf }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected.replace(/\n/g, "\r\n"));
+  });
+
+  it("does not fence or realign an enum when wrapping alongside mock objects", () => {
+    const text = `function "example" {
+  input {
+${inlineEnumDecl("enum lane", ENUM_V64)}
+  }
+
+  stack {
+    db.query item {
+      mock = {
+        ${MOCK_SHORT_NAME}: {id: 1}
+        ${MOCK_LONG_NAME}: {id: 2}
+      }
+    }
+  }
+
+  response = $ok
+}`;
+    const result = fixFile({ path: "both.xs", text }, config());
+    assert.equal(result.changed, true);
+    assert.equal(
+      result.corrections.some((c) => c.ruleId === "wrap_enum_values"),
+      true,
+    );
+    assert.equal(
+      result.corrections.some((c) => c.ruleId === "align_object_colons"),
+      true,
+    );
+    assert.equal(
+      result.corrections.some((c) => c.ruleId === "fence_multiline_values"),
+      false,
+    );
+    assert.equal(result.text.includes("```"), false);
+    assert.equal(result.text.includes(wrappedEnumDecl("enum lane", ENUM_V64)), true);
+    assert.match(result.text, /"checkout short"\s+: \{id: 1\}/);
   });
 });
