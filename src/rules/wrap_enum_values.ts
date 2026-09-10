@@ -47,6 +47,10 @@ function readQuoted(
       continue;
     }
     if (ch === "\\") {
+      const next = text[i + 1];
+      if (next === "n" || next === "t" || next === "r" || next === "u") {
+        return null;
+      }
       escape = true;
       i += 1;
       continue;

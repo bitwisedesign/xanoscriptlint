@@ -1099,7 +1099,7 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     assert.equal(defaulted.length, 1);
   });
 
-  it("wrap_enum_values skips non-string arrays, comments inside values, and fenced bodies", () => {
+  it("wrap_enum_values skips non-string arrays, comments inside values, fenced bodies, and non-round-trippable escapes", () => {
     const nonString = wrapInputDecls(`    enum lane {
       values = ["alpha", 1, "bravo"]
     }`);
@@ -1146,6 +1146,17 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
       lintFile({ path: "fence.xs", text: fenced }, config()).some(
         (v) => v.ruleId === "wrap_enum_values",
       ),
+      false,
+    );
+
+    const escaped = wrapInputDecls(`    enum lane {
+      values = ["alpha\\n", "bravo\\t", "x\\u0041", "cr\\r"]
+    }`);
+    assert.equal(
+      lintFile(
+        { path: "esc.xs", text: escaped },
+        config({ wrap_enum_values: { wrap_at: 1 } }),
+      ).some((v) => v.ruleId === "wrap_enum_values"),
       false,
     );
   });
