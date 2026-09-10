@@ -781,7 +781,7 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
     const result = fixFile({ path: "quoted-spaces.xs", text }, config());
     assert.equal(result.changed, true);
     assert.equal(result.text, expected);
-    assert.match(result.text, /"a  b"/);
+    assert.match(result.text, /"a {2}b"/);
   });
 
   it("collapses an under-threshold assignment array", () => {
