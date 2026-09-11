@@ -775,6 +775,25 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
     assert.equal(again.text, expected);
   });
 
+  it("collapses a short non-ASCII assignment and leaves a 69-byte mask wrapped", () => {
+    const cafe = wrapAssign("input", wrappedAssignObj("café"));
+    const cafeFixed = fixFile({ path: "cafe.xs", text: cafe }, config());
+    assert.equal(cafeFixed.changed, true);
+    assert.equal(cafeFixed.text, wrapAssign("input", inlineAssignObj("café")));
+    assert.equal(cafeFixed.corrections[0]?.ruleId, "collapse_assignment_values");
+
+    const mask = "••••••••••••";
+    const wrapped = wrapAssign(
+      "value",
+      `{
+        Authorization: "${mask}"
+      }`,
+    );
+    const maskFixed = fixFile({ path: "mask.xs", text: wrapped }, config());
+    assert.equal(maskFixed.changed, false);
+    assert.equal(maskFixed.text, wrapped);
+  });
+
   it("preserves repeated spaces inside quoted scalars when collapsing", () => {
     const text = wrapAssign("input", wrappedAssignObj("a  b"));
     const expected = wrapAssign("input", inlineAssignObj("a  b"));

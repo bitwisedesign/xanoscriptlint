@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-09-11
+
+### Fixed
+
+- `collapse_assignment_values` measures the reconstructed line in UTF-8 bytes, matching Xano's 64-byte threshold. A wrapped value that is short in characters but at or above 64 bytes is left wrapped.
+
 ## [0.3.0] - 2026-09-10
 
 ### Added

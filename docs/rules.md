@@ -3,7 +3,7 @@
 | Id | Default | Severity | Auto-fix | Description |
 | --- | --- | --- | --- | --- |
 | [`align_object_colons`](#align_object_colons) | on | error | yes | Object entry colons must align to the longest name |
-| [`collapse_assignment_values`](#collapse_assignment_values) | on | error | yes | Wrapped assignment whose one-line form is under 64 characters |
+| [`collapse_assignment_values`](#collapse_assignment_values) | on | error | yes | Wrapped assignment whose one-line form is under 64 UTF-8 bytes |
 | [`empty_function_run`](#empty_function_run) | on | error | no | `function.run` must not be called with an empty name |
 | [`fence_multiline_values`](#fence_multiline_values) | on | error | yes | Multiline mock and input values must be wrapped in a triple-backtick fence |
 | [`guid_placement`](#guid_placement) | on | warning | yes | `guid` needs a blank line above it only when it follows a block closer |
@@ -43,9 +43,9 @@ Auto-fixable with `--fix`: spaces before the colon are inserted or removed until
 
 ## collapse_assignment_values
 
-Xano collapses an assignment's object or array onto one line when that line — indent, the `name =` or `return` prefix, and the inline value — would be shorter than 64 characters. A wrapped value that already fills 64 or more columns stays wrapped. Long one-liners are left as-is; Xano does not wrap those.
+Xano collapses an assignment's object or array onto one line when that line — indent, the `name =` or `return` prefix, and the inline value — would be shorter than 64 UTF-8 bytes. A wrapped value that already fills 64 or more bytes stays wrapped. Long one-liners are left as-is; Xano does not wrap those.
 
-The threshold is the reconstructed line length, not the number of entries and not the compact JSON length of the value alone. Nested containers are left as-is: only the outermost `name = { ... }` / `name = [ ... ]` / `return { ... }` is checked. Enum `values` arrays are owned by [`wrap_enum_values`](#wrap_enum_values). A container followed by a filter pipe (`value = [...]|join:"/"`) is skipped, because Xano does not reformat those.
+The threshold is the reconstructed line's UTF-8 byte length, not visible columns and not the number of entries. Multi-byte characters count as more than one: `{Authorization: "••••••••••••"}` is 31 characters and 55 bytes, while the reconstructed line — six spaces of indent plus `value = {Authorization: "••••••••••••"}` — is 45 characters and 69 bytes, so a wrapped form of that value stays wrapped. In the same pull Xano left a 69-byte sibling inline (`value = {"X-Signature": "••••••••••••"}`), so this rule only flags wrapped → inline; it does not expand long one-liners. Nested containers are left as-is: only the outermost `name = { ... }` / `name = [ ... ]` / `return { ... }` is checked. Enum `values` arrays are owned by [`wrap_enum_values`](#wrap_enum_values). A container followed by a filter pipe (`value = [...]|join:"/"`) is skipped, because Xano does not reformat those.
 
 ```xs
 input = {event_type: "manual", unit: "sets", delta: 3}

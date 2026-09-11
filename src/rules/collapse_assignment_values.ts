@@ -35,6 +35,10 @@ function wrapThreshold(options: RuleOptions): number {
   return options.wrapAt ?? DEFAULT_WRAP_AT;
 }
 
+function byteLength(text: string): number {
+  return Buffer.byteLength(text, "utf8");
+}
+
 function peek(cursor: Cursor): string {
   return cursor.text[cursor.i] ?? "";
 }
@@ -384,7 +388,8 @@ function findAssignmentSites(lines: string[]): AssignmentSite[] {
             closeLine: close.line,
             openCol: open.col,
             trailing,
-            lineLength: prefix.length + renderInline(node).length + trailing.length,
+            lineLength:
+              byteLength(prefix) + byteLength(renderInline(node)) + byteLength(trailing),
             hasTab: lineHasTab(lines, open.line, close.line),
             piped: isPiped(text, node.end),
             node,
