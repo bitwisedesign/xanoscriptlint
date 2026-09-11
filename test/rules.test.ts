@@ -1275,6 +1275,52 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     assert.equal(wrappedSpaced.length, 0);
   });
 
+  it("collapse_assignment_values uses UTF-8 byte length, not character count", () => {
+    const lineOf = (pad: string) => wrapAssign("input", inlineAssignObj(pad)).split("\n")[6] ?? "";
+    const mask = "••••••••••••";
+    const maskInline = wrapAssign("value", `{Authorization: "${mask}"}`);
+    const maskLine = maskInline.split("\n")[6] ?? "";
+    assert.equal(maskLine.length, 45);
+    assert.equal(Buffer.byteLength(maskLine, "utf8"), 69);
+
+    const wrappedMask = lintFile(
+      {
+        path: "mask.xs",
+        text: wrapAssign(
+          "value",
+          `{
+        Authorization: "${mask}"
+      }`,
+        ),
+      },
+      config(),
+    ).filter((v) => v.ruleId === "collapse_assignment_values");
+    assert.equal(wrappedMask.length, 0);
+
+    const bytes63 = "•".repeat(14);
+    const bytes64 = `${bytes63}x`;
+    assert.equal(Buffer.byteLength(lineOf(bytes63), "utf8"), 63);
+    assert.equal(Buffer.byteLength(lineOf(bytes64), "utf8"), 64);
+    assert.equal(lineOf(bytes63).length < 63, true);
+    assert.equal(lineOf(bytes64).length < 64, true);
+
+    const wrapped63 = lintFile(
+      { path: "b63.xs", text: wrapAssign("input", wrappedAssignObj(bytes63)) },
+      config(),
+    ).filter((v) => v.ruleId === "collapse_assignment_values");
+    assert.equal(wrapped63.length, 1);
+    assert.equal(
+      wrapped63[0]?.message,
+      "input value of line length 63 must be inline (threshold 64)",
+    );
+
+    const wrapped64 = lintFile(
+      { path: "b64.xs", text: wrapAssign("input", wrappedAssignObj(bytes64)) },
+      config(),
+    ).filter((v) => v.ruleId === "collapse_assignment_values");
+    assert.equal(wrapped64.length, 0);
+  });
+
   it("collapse_assignment_values flags assignment owners including return", () => {
     for (const owner of ["input", "data", "mock", "response", "output", "sort"]) {
       const hits = lintFile(
