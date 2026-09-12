@@ -17,6 +17,7 @@ export interface Violation {
 export interface RuleOptions {
   severity?: Severity;
   wrapAt?: number;
+  filterLimit?: number;
 }
 
 export interface Correction {

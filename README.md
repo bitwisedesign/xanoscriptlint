@@ -79,19 +79,22 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 ## Built-in rules
 
 | Id | Default | Severity | Auto-fix | What it catches |
-| --- | --- | --- | --- | --- |
-| `align_object_colons` | on | error | yes | Object entry colons must align to the longest name (Xano rewrites this on push) |
-| `collapse_assignment_values` | on | error | yes | Wrapped assignment object or array whose one-line form is under 64 UTF-8 bytes (Xano collapses it on push) |
-| `empty_function_run` | on | error | no | `function.run ""` / `function.run ''` |
-| `fence_multiline_values` | on | error | yes | Multiline mock or input value not wrapped in a triple-backtick fence (Xano fences it on push); `function.run` mocks stay compact |
-| `guid_placement` | on | warning | yes | `guid` with a blank line after a single-line value, or without one after a `}` / `]` closer |
-| `no_null_response` | opt-in | warning | yes | `response = null` (use `response = {}`) |
-| `no_trailing_comments` | on | warning | no | `//` above `guid` or after the file's closing `}` (Xano moves it to the header on push) |
-| `no_trailing_newline` | on | error | yes | File does not end with `}` (Xano pull strips trailing newlines) |
-| `no_var_response` | opt-in | warning | no | `var $response` (Xano rewrites it) |
-| `no_zero_numeric_default` | on | error | yes | Explicit numeric default of `0` (Xano strips it on push) |
-| `quote_negative_numeric_default` | on | error | yes | Unquoted negative numeric default (Xano quotes it on push) |
-| `wrap_enum_values` | on | error | yes | Enum `values` array is inline at compact JSON length 64+ or wrapped below 64 (Xano rewrites this on push) |
+| --- | :---: | :---: | :---: | --- |
+| `align_object_colons` | ● | ⛔ | ✓ | Object entry colons must align to the longest name (Xano rewrites this on push) |
+| `collapse_assignment_values` | ● | ⛔ | ✓ | Wrapped assignment object or array whose one-line form is under 64 UTF-8 bytes (Xano collapses it on push) |
+| `empty_function_run` | ● | ⛔ | — | `function.run ""` / `function.run ''` |
+| `fence_multiline_values` | ● | ⛔ | ✓ | Multiline mock or input value not wrapped in a triple-backtick fence (Xano fences it on push); `function.run` mocks stay compact |
+| `guid_placement` | ● | ⚠ | ✓ | `guid` with a blank line after a single-line value, or without one after a `}` / `]` closer |
+| `no_null_response` | ○ | ⚠ | ✓ | `response = null` (use `response = {}`) |
+| `no_trailing_comments` | ● | ⚠ | — | `//` above `guid` or after the file's closing `}` (Xano moves it to the header on push) |
+| `no_trailing_newline` | ● | ⛔ | ✓ | File does not end with `}` (Xano pull strips trailing newlines) |
+| `no_var_response` | ○ | ⚠ | — | `var $response` (Xano rewrites it) |
+| `no_zero_numeric_default` | ● | ⛔ | ✓ | Explicit numeric default of `0` (Xano strips it on push) |
+| `quote_negative_numeric_default` | ● | ⛔ | ✓ | Unquoted negative numeric default (Xano quotes it on push) |
+| `wrap_enum_values` | ● | ⛔ | ✓ | Enum `values` array is inline at compact JSON length 64+ or wrapped below 64 (Xano rewrites this on push) |
+| `wrap_piped_values` | ● | ⚠ | ✓ | Assignment filter pipeline is inline at pipe length 34+ or 3+ filters, or wrapped below that (Xano rewrites this on push) |
+
+`●` on · `○` off · `⛔` error · `⚠` warning · `✓` auto-fix. Off-by-default rules are enabled with `opt_in_rules`.
 
 House style such as a `// Modified:` timestamp belongs in `custom_rules`, not in the default catalog:
 

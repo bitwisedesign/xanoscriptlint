@@ -40,12 +40,17 @@ import {
   wrapInputDecls,
   wrapMockBlock,
   wrapAssign,
+  wrapVarValue,
+  inlinePiped,
+  wrappedPiped,
   inlineAssignObj,
   wrappedAssignObj,
   inlineAssignArr,
   wrappedAssignArr,
   ASSIGN_LINE_63,
   ASSIGN_LINE_64,
+  PIPE_33,
+  PIPE_34,
 } from "./support.js";
 
 function config(overrides: Parameters<typeof resolveConfig>[0] = {}) {
@@ -716,6 +721,92 @@ describe("fixFile", () => {
     const again = fixFile({ path: "inline.xs", text: result.text }, config());
     assert.equal(again.changed, false);
     assert.equal(again.text, expected);
+  });
+
+  it("wraps an over-threshold piped assignment and is idempotent", () => {
+    const text = wrapVarValue(inlinePiped("{}", PIPE_34));
+    const expected = wrapVarValue(wrappedPiped("{}", PIPE_34));
+    const result = fixFile({ path: "wrap-pipe.xs", text }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.equal(result.corrections[0]?.ruleId, "wrap_piped_values");
+    assert.equal(result.corrections[0]?.line, 7);
+
+    const again = fixFile({ path: "wrap-pipe.xs", text: result.text }, config());
+    assert.equal(again.changed, false);
+    assert.equal(again.text, expected);
+  });
+
+  it("collapses an under-threshold wrapped piped assignment", () => {
+    const text = wrapVarValue(wrappedPiped("{}", PIPE_33));
+    const expected = wrapVarValue(inlinePiped("{}", PIPE_33));
+    const result = fixFile({ path: "inline-pipe.xs", text }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.equal(result.corrections[0]?.ruleId, "wrap_piped_values");
+
+    const again = fixFile({ path: "inline-pipe.xs", text: result.text }, config());
+    assert.equal(again.changed, false);
+    assert.equal(again.text, expected);
+  });
+
+  it("strips separator spaces when wrapping a piped assignment", () => {
+    const text = wrapVarValue(`$cart |to_text |to_lower |trim`);
+    const expected = wrapVarValue(wrappedPiped("$cart", "|to_text", "|to_lower", "|trim"));
+    const result = fixFile({ path: "spaces-pipe.xs", text }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+  });
+
+  it("wraps a |name:(chain) argument when the inner pipe portion reaches 34", () => {
+    const inner33 = `$order.ts${PIPE_33}`;
+    const inner34 = `$order.ts${PIPE_34}`;
+    const text = wrapVarValue(
+      inlinePiped("[]", `|push:(${inner33})`, `|push:(${inner34})`),
+    );
+    const expected = wrapVarValue(
+      `[]
+        |push:($order.ts${PIPE_33})
+        |push:($order.ts
+          ${PIPE_34}
+        )`,
+    );
+    const result = fixFile({ path: "inner.xs", text }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.equal(result.corrections[0]?.ruleId, "wrap_piped_values");
+
+    const again = fixFile({ path: "inner.xs", text: result.text }, config());
+    assert.equal(again.changed, false);
+    assert.equal(again.text, expected);
+  });
+
+  it("preserves CRLF when wrapping piped values", () => {
+    const source = wrapVarValue(inlinePiped("{}", PIPE_34));
+    const expected = wrapVarValue(wrappedPiped("{}", PIPE_34));
+    const crlf = source.replace(/\n/g, "\r\n");
+    const result = fixFile({ path: "crlf-pipe.xs", text: crlf }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected.replace(/\n/g, "\r\n"));
+  });
+
+  it("does not rewrite a suppressed wrap_piped_values violation", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    var $order {
+      // xanoscriptlint:disable:next wrap_piped_values
+      value = {}${PIPE_34}
+    }
+  }
+
+  response = $order
+}`;
+    const result = fixFile({ path: "suppressed-pipe.xs", text }, config());
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
   });
 
   it("preserves CRLF when wrapping enum values", () => {
