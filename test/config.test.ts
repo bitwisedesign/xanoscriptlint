@@ -14,6 +14,7 @@ describe("config enablement", () => {
     assert.equal(config.enabledRuleIds.has("align_object_colons"), true);
     assert.equal(config.enabledRuleIds.has("fence_multiline_values"), true);
     assert.equal(config.enabledRuleIds.has("wrap_enum_values"), true);
+    assert.equal(config.enabledRuleIds.has("wrap_piped_values"), true);
     assert.equal(config.enabledRuleIds.has("collapse_assignment_values"), true);
     assert.equal(config.enabledRuleIds.has("guid_placement"), true);
     assert.equal(config.enabledRuleIds.has("no_trailing_comments"), true);
@@ -184,6 +185,16 @@ custom_rules:
     );
   });
 
+  it("parses wrap_piped_values wrap_at and filter_limit", () => {
+    const config = resolveConfig(
+      { wrap_piped_values: { wrap_at: 20, filter_limit: 4 } },
+      "/tmp",
+      null,
+    );
+    assert.equal(config.ruleOptions.get("wrap_piped_values")?.wrapAt, 20);
+    assert.equal(config.ruleOptions.get("wrap_piped_values")?.filterLimit, 4);
+  });
+
   it("parses wrap_enum_values wrap_at", () => {
     const config = resolveConfig(
       { wrap_enum_values: { wrap_at: 64 } },
@@ -229,6 +240,14 @@ custom_rules:
       () =>
         resolveConfig({ wrap_enum_values: { wrap_at: 64, extra: 1 } }, "/tmp", null),
       /unknown option for wrap_enum_values: extra/,
+    );
+  });
+
+  it("still rejects unknown options on wrap_piped_values", () => {
+    assert.throws(
+      () =>
+        resolveConfig({ wrap_piped_values: { wrap_at: 34, extra: 1 } }, "/tmp", null),
+      /unknown option for wrap_piped_values: extra/,
     );
   });
 

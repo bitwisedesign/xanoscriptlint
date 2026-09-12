@@ -278,6 +278,10 @@ function parseRuleOptions(value: unknown, rule: { id: string; numericOptions?: r
       options.wrapAt = asPositiveInt(record[key], `${id}.wrap_at`);
       continue;
     }
+    if (key === "filter_limit" && allowedNumeric.has("filter_limit")) {
+      options.filterLimit = asPositiveInt(record[key], `${id}.filter_limit`);
+      continue;
+    }
     throw new ConfigError(`unknown option for ${id}: ${key}`);
   }
   return options;

@@ -42,11 +42,18 @@ import {
   wrapMockBlock,
   wrapAssign,
   wrapReturn,
+  wrapVarValue,
+  inlinePiped,
+  wrappedPiped,
   inlineAssignObj,
   wrappedAssignObj,
   ASSIGN_LINE_62,
   ASSIGN_LINE_63,
   ASSIGN_LINE_64,
+  PIPE_33,
+  PIPE_34,
+  PIPE_BYTES_33,
+  PIPE_BYTES_34,
 } from "./support.js";
 
 function config(overrides: Parameters<typeof resolveConfig>[0] = {}) {
@@ -1181,6 +1188,275 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
       ).some((v) => v.ruleId === "wrap_enum_values"),
       false,
     );
+  });
+
+  it("wrap_piped_values uses pipe-portion byte length, not line length", () => {
+    assert.equal(Buffer.byteLength(PIPE_33, "utf8"), 33);
+    assert.equal(Buffer.byteLength(PIPE_34, "utf8"), 34);
+
+    const inline33 = lintFile(
+      { path: "i33.xs", text: wrapVarValue(inlinePiped("{}", PIPE_33)) },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_piped_values");
+    assert.equal(inline33.length, 0);
+
+    const inline34 = lintFile(
+      { path: "i34.xs", text: wrapVarValue(inlinePiped("{}", PIPE_34)) },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_piped_values");
+    assert.equal(inline34.length, 1);
+    assert.equal(inline34[0]?.line, 7);
+    assert.equal(inline34[0]?.column, 7);
+    assert.equal(inline34[0]?.severity, "warning");
+    assert.equal(
+      inline34[0]?.message,
+      "value piped value of pipe length 34 must be wrapped (threshold 34)",
+    );
+
+    const wrapped33 = lintFile(
+      { path: "w33.xs", text: wrapVarValue(wrappedPiped("{}", PIPE_33)) },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_piped_values");
+    assert.equal(wrapped33.length, 1);
+    assert.equal(
+      wrapped33[0]?.message,
+      "value piped value of pipe length 33 must be inline (threshold 34)",
+    );
+
+    const wrapped34 = lintFile(
+      { path: "w34.xs", text: wrapVarValue(wrappedPiped("{}", PIPE_34)) },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_piped_values");
+    assert.equal(wrapped34.length, 0);
+
+    const spaced33 = lintFile(
+      { path: "s33.xs", text: wrapVarValue(`{} ${PIPE_33}`) },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_piped_values");
+    assert.equal(spaced33.length, 0);
+  });
+
+  it("wrap_piped_values wraps three or more filters below the byte threshold", () => {
+    const shortThree = lintFile(
+      { path: "three.xs", text: wrapVarValue(inlinePiped("$cart", "|to_text", "|to_lower", "|trim")) },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_piped_values");
+    assert.equal(shortThree.length, 1);
+    assert.equal(shortThree[0]?.severity, "warning");
+    assert.equal(
+      shortThree[0]?.message,
+      "value piped value of 3 filters must be wrapped (limit 3)",
+    );
+
+    const twoShort = lintFile(
+      { path: "two.xs", text: wrapVarValue(inlinePiped("$cart", "|to_text", "|to_lower")) },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_piped_values");
+    assert.equal(twoShort.length, 0);
+
+    const wrappedThree = lintFile(
+      {
+        path: "w3.xs",
+        text: wrapVarValue(wrappedPiped("$cart", "|to_text", "|to_lower", "|trim")),
+      },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_piped_values");
+    assert.equal(wrappedThree.length, 0);
+  });
+
+  it("wrap_piped_values uses UTF-8 byte length, not character count", () => {
+    assert.equal(Buffer.byteLength(PIPE_BYTES_33, "utf8"), 33);
+    assert.equal(PIPE_BYTES_33.length < 33, true);
+    assert.equal(Buffer.byteLength(PIPE_BYTES_34, "utf8"), 34);
+    assert.equal(PIPE_BYTES_34.length < 34, true);
+
+    const inline33 = lintFile(
+      { path: "b33.xs", text: wrapVarValue(inlinePiped("{}", PIPE_BYTES_33)) },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_piped_values");
+    assert.equal(inline33.length, 0);
+
+    const inline34 = lintFile(
+      { path: "b34.xs", text: wrapVarValue(inlinePiped("{}", PIPE_BYTES_34)) },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_piped_values");
+    assert.equal(inline34.length, 1);
+
+    const wrapped33 = lintFile(
+      { path: "bw33.xs", text: wrapVarValue(wrappedPiped("{}", PIPE_BYTES_33)) },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_piped_values");
+    assert.equal(wrapped33.length, 1);
+  });
+
+  it("wrap_piped_values skips lambdas, grouped bases, fences, tabs, and multiline bases", () => {
+    const lambda = wrapVarValue(
+      `$rows|filter:$$.status == "open"|map:$$.id|set:"cart_uuid":$cart_uuid`,
+    );
+    assert.equal(
+      lintFile({ path: "lambda.xs", text: lambda }, config()).some(
+        (v) => v.ruleId === "wrap_piped_values",
+      ),
+      false,
+    );
+
+    const grouped = wrapVarValue(
+      `($year ~ "-01-01")|parse_timestamp:"Y-m-d H:i:s":$timezone`,
+    );
+    assert.equal(
+      lintFile({ path: "paren.xs", text: grouped }, config()).some(
+        (v) => v.ruleId === "wrap_piped_values",
+      ),
+      false,
+    );
+
+    const nonemptyArray = wrapVarValue(`[$cart.id, $order.id]|join:"${"x".repeat(30)}"`);
+    assert.equal(
+      lintFile({ path: "arr.xs", text: nonemptyArray }, config()).some(
+        (v) => v.ruleId === "wrap_piped_values",
+      ),
+      false,
+    );
+
+    const fenced = wrapVarValue(`\`\`\`
+        {}|set:"cart_uuid":$cart_uuid|set:"reason":$reject_reason
+        \`\`\``);
+    assert.equal(
+      lintFile({ path: "fence.xs", text: fenced }, config()).some(
+        (v) => v.ruleId === "wrap_piped_values",
+      ),
+      false,
+    );
+
+    const backtick = wrapVarValue(
+      `[]|push:\`"Authorization: Bearer "|concat:$env.API_KEY\``,
+    );
+    assert.equal(
+      lintFile({ path: "tick.xs", text: backtick }, config()).some(
+        (v) => v.ruleId === "wrap_piped_values",
+      ),
+      false,
+    );
+
+    const dollarInString = lintFile(
+      {
+        path: "dollars.xs",
+        text: wrapVarValue(`{}|set:"note":"costs $$ extra padding"`),
+      },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_piped_values");
+    assert.equal(dollarInString.length, 1);
+
+    const tabs = `function "example" {
+  input {
+  }
+
+  stack {
+    var $order {
+\tvalue = {}${PIPE_34}
+    }
+  }
+
+  response = $order
+}`;
+    assert.equal(
+      lintFile({ path: "tabs.xs", text: tabs }, config()).some(
+        (v) => v.ruleId === "wrap_piped_values",
+      ),
+      false,
+    );
+
+    const multilineBase = wrapVarValue(`{
+        k: 1
+      }${PIPE_34}`);
+    assert.equal(
+      lintFile({ path: "mlb.xs", text: multilineBase }, config()).some(
+        (v) => v.ruleId === "wrap_piped_values",
+      ),
+      false,
+    );
+  });
+
+  it("wrap_piped_values wraps empty {} and [] bases and other assignment owners", () => {
+    const emptyArray = lintFile(
+      { path: "empty-arr.xs", text: wrapVarValue(inlinePiped("[]", PIPE_34)) },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_piped_values");
+    assert.equal(emptyArray.length, 1);
+
+    const emptyObject = lintFile(
+      { path: "empty-obj.xs", text: wrapVarValue(inlinePiped("{}", PIPE_34)) },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_piped_values");
+    assert.equal(emptyObject.length, 1);
+
+    const responseHits = lintFile(
+      {
+        path: "resp.xs",
+        text: `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = {}${PIPE_34}
+}`,
+      },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_piped_values");
+    assert.equal(responseHits.length, 1);
+    assert.match(responseHits[0]?.message ?? "", /^response piped value/);
+  });
+
+  it("wrap_piped_values honors disabled_rules, severity, wrap_at, and filter_limit", () => {
+    const text = wrapVarValue(inlinePiped("{}", PIPE_34));
+    const disabled = lintFile(
+      { path: "off.xs", text },
+      config({ disabled_rules: ["wrap_piped_values"] }),
+    );
+    assert.equal(
+      disabled.some((v) => v.ruleId === "wrap_piped_values"),
+      false,
+    );
+
+    const err = lintFile(
+      { path: "err.xs", text },
+      config({ wrap_piped_values: "error" }),
+    );
+    assert.equal(err.find((v) => v.ruleId === "wrap_piped_values")?.severity, "error");
+
+    const raised = lintFile(
+      { path: "raise.xs", text: wrapVarValue(inlinePiped("{}", PIPE_33)) },
+      config({ wrap_piped_values: { wrap_at: 10 } }),
+    ).filter((v) => v.ruleId === "wrap_piped_values");
+    assert.equal(raised.length, 1);
+    assert.match(raised[0]?.message ?? "", /threshold 10/);
+
+    const lowered = lintFile(
+      { path: "low.xs", text },
+      config({ wrap_piped_values: { wrap_at: 80 } }),
+    );
+    assert.equal(
+      lowered.some((v) => v.ruleId === "wrap_piped_values"),
+      false,
+    );
+
+    const threeKept = lintFile(
+      { path: "lim.xs", text: wrapVarValue(inlinePiped("$cart", "|to_text", "|to_lower", "|trim")) },
+      config({ wrap_piped_values: { filter_limit: 5 } }),
+    );
+    assert.equal(
+      threeKept.some((v) => v.ruleId === "wrap_piped_values"),
+      false,
+    );
+
+    const twoRaised = lintFile(
+      { path: "lim2.xs", text: wrapVarValue(inlinePiped("$cart", "|to_text", "|to_lower")) },
+      config({ wrap_piped_values: { filter_limit: 2 } }),
+    ).filter((v) => v.ruleId === "wrap_piped_values");
+    assert.equal(twoRaised.length, 1);
+    assert.match(twoRaised[0]?.message ?? "", /limit 2/);
   });
 
   it("wrap_enum_values honors disabled_rules, severity, and wrap_at", () => {

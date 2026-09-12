@@ -150,6 +150,34 @@ export function wrapAssign(owner: string, value: string): string {
 }`;
 }
 
+export function wrapVarValue(value: string): string {
+  return `function "example" {
+  input {
+  }
+
+  stack {
+    var $order {
+      value = ${value}
+    }
+  }
+
+  response = $order
+}`;
+}
+
+export const PIPE_33 = `|concat:"${"x".repeat(23)}"`;
+export const PIPE_34 = `|concat:"${"x".repeat(24)}"`;
+export const PIPE_BYTES_33 = `|concat:"${"•".repeat(7)}xx"`;
+export const PIPE_BYTES_34 = `|concat:"${"•".repeat(8)}"`;
+
+export function inlinePiped(base: string, ...filters: string[]): string {
+  return `${base}${filters.join("")}`;
+}
+
+export function wrappedPiped(base: string, ...filters: string[]): string {
+  return `${base}\n        ${filters.join("\n        ")}`;
+}
+
 export function wrapReturn(value: string): string {
   return `function "example" {
   input {

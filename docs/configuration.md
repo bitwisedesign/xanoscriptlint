@@ -57,9 +57,13 @@ collapse_assignment_values:
 
 wrap_enum_values:
   wrap_at: 64
+
+wrap_piped_values:
+  wrap_at: 34
+  filter_limit: 3
 ```
 
-Severity is `error` or `warning`. `wrap_enum_values` also accepts `wrap_at`, a positive integer (default 64) for the compact JSON length at which an enum `values` array must wrap. `collapse_assignment_values` accepts `wrap_at` as the line length below which a wrapped assignment is collapsed.
+Severity is `error` or `warning`. `wrap_enum_values` also accepts `wrap_at`, a positive integer (default 64) for the compact JSON length at which an enum `values` array must wrap. `collapse_assignment_values` accepts `wrap_at` as the line length below which a wrapped assignment is collapsed. `wrap_piped_values` accepts `wrap_at` (default 34) for the pipe-portion byte length at which a filter chain wraps, and `filter_limit` (default 3) for the filter count that wraps even when the pipe portion is shorter.
 
 ## Custom rules
 

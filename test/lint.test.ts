@@ -108,6 +108,15 @@ describe("fixture linting", () => {
       true,
     );
 
+    const wrapPiped = {
+      path: path.join(fixtures, "violations/wrap_piped_values.xs"),
+      text: readFileSync(path.join(fixtures, "violations/wrap_piped_values.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([wrapPiped], config).some((v) => v.ruleId === "wrap_piped_values"),
+      true,
+    );
+
     const guidPlacement = {
       path: path.join(fixtures, "violations/guid_placement.xs"),
       text: readFileSync(path.join(fixtures, "violations/guid_placement.xs"), "utf8"),
