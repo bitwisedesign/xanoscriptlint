@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-13
+
 ### Added
 
 - `--opt-in`, `--disable`, and `--only` override which rules run without editing the config file. `--opt-in` and `--disable` are repeatable and comma-separated; `--opt-in all` enables every built-in. `--only` is exclusive and cannot be combined with the other two. CLI beats the config file; at the same level, disable beats opt-in.
