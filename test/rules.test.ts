@@ -112,14 +112,14 @@ describe("built-in rules", () => {
     );
   });
 
-  it("no_reserved_var is opt-in and flags declarations, not reads", () => {
+  it("no_reserved_var is on by default and flags declarations, not reads", () => {
     const file = { path: "r.xs", text: RESERVED_VAR_XS };
-    const off = lintFile(file, config());
+    const off = lintFile(file, config({ disabled_rules: ["no_reserved_var"] }));
     assert.equal(
       off.some((v) => v.ruleId === "no_reserved_var"),
       false,
     );
-    const on = lintFile(file, config({ opt_in_rules: ["no_reserved_var"] }));
+    const on = lintFile(file, config());
     const hits = on.filter((v) => v.ruleId === "no_reserved_var");
     assert.deepEqual(
       hits.map((v) => ({ line: v.line, column: v.column, message: v.message })),
@@ -146,6 +146,7 @@ describe("built-in rules", () => {
         },
       ],
     );
+    assert.equal(hits[0]?.severity, "error");
   });
 
   it("no_reserved_var skips comments and non-reserved names", () => {
@@ -167,7 +168,6 @@ describe("built-in rules", () => {
     const none = lintFile(
       commented,
       config({
-        opt_in_rules: ["no_reserved_var"],
         disabled_rules: ["no_trailing_newline"],
       }),
     );

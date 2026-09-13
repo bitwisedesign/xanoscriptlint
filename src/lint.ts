@@ -30,7 +30,8 @@ export function lintFile(file: SourceFile, config: ResolvedConfig): Violation[] 
     found.push(...rule.lint(file, options));
   }
   found.push(...runCustomRules(file, config.customRules));
-  const suppressions = parseSuppressions(file.text);
+  const customIds = new Set(config.customRules.map((custom) => custom.id));
+  const suppressions = parseSuppressions(file.text, customIds);
   return found.filter((violation) => !isSuppressed(suppressions, violation.line, violation.ruleId));
 }
 
@@ -40,12 +41,13 @@ export function fixFile(
 ): { text: string; changed: boolean; corrections: Correction[] } {
   let current: SourceFile = file;
   const corrections: Correction[] = [];
+  const customIds = new Set(config.customRules.map((custom) => custom.id));
   for (const rule of builtinRules) {
     if (!config.enabledRuleIds.has(rule.id) || !rule.fix) {
       continue;
     }
     const options = config.ruleOptions.get(rule.id) ?? {};
-    const suppressions = parseSuppressions(current.text);
+    const suppressions = parseSuppressions(current.text, customIds);
     const violations = rule
       .lint(current, options)
       .filter((violation) => !isSuppressed(suppressions, violation.line, violation.ruleId));

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { resolveConfig } from "../src/config.js";
+import { loadConfigText, resolveConfig } from "../src/config.js";
 import { lintFile } from "../src/lint.js";
 import { EMPTY_RUN_XS } from "./support.js";
 
@@ -84,7 +84,6 @@ ${EMPTY_RUN_XS}`;
       { path: "a.xs", text },
       resolveConfig(
         {
-          opt_in_rules: ["no_reserved_var"],
           disabled_rules: ["no_trailing_newline"],
         },
         "/tmp",
@@ -95,6 +94,42 @@ ${EMPTY_RUN_XS}`;
     assert.deepEqual(
       reserved.map((v) => v.line),
       [7],
+    );
+  });
+
+  it("keeps a custom rule id distinct from its builtin alias", () => {
+    const text = `function "a" {
+  stack {
+    // xanoscriptlint:disable:next no_var_response
+    TODO
+    var $auth {
+      value = 1
+    }
+  }
+}`;
+    const violations = lintFile(
+      { path: "a.xs", text },
+      loadConfigText(
+        `
+disabled_rules:
+  - no_trailing_newline
+custom_rules:
+  no_var_response:
+    regex: TODO
+    message: Remove TODO
+`,
+        "/tmp",
+        null,
+      ),
+    );
+    assert.equal(
+      violations.some((v) => v.ruleId === "no_var_response"),
+      false,
+    );
+    const reserved = violations.filter((v) => v.ruleId === "no_reserved_var");
+    assert.deepEqual(
+      reserved.map((v) => v.line),
+      [5],
     );
   });
 });

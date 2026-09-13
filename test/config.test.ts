@@ -18,7 +18,7 @@ describe("config enablement", () => {
     assert.equal(config.enabledRuleIds.has("collapse_assignment_values"), true);
     assert.equal(config.enabledRuleIds.has("guid_placement"), true);
     assert.equal(config.enabledRuleIds.has("no_trailing_comments"), true);
-    assert.equal(config.enabledRuleIds.has("no_reserved_var"), false);
+    assert.equal(config.enabledRuleIds.has("no_reserved_var"), true);
     assert.deepEqual(config.included, ["**/*.xs"]);
   });
 
@@ -34,11 +34,11 @@ describe("config enablement", () => {
 
   it("opts in with opt_in_rules", () => {
     const config = resolveConfig(
-      { opt_in_rules: ["no_reserved_var"] },
+      { opt_in_rules: ["no_null_response"] },
       "/tmp",
       null,
     );
-    assert.equal(config.enabledRuleIds.has("no_reserved_var"), true);
+    assert.equal(config.enabledRuleIds.has("no_null_response"), true);
   });
 
   it("maps deprecated no_var_response to no_reserved_var", () => {
@@ -49,6 +49,13 @@ describe("config enablement", () => {
     );
     assert.equal(enabled.enabledRuleIds.has("no_reserved_var"), true);
     assert.equal(enabled.enabledRuleIds.has("no_var_response"), false);
+
+    const disabled = resolveConfig(
+      { disabled_rules: ["no_var_response"] },
+      "/tmp",
+      null,
+    );
+    assert.equal(disabled.enabledRuleIds.has("no_reserved_var"), false);
 
     const options = resolveConfig({ no_var_response: "error" }, "/tmp", null);
     assert.equal(options.ruleOptions.get("no_reserved_var")?.severity, "error");
@@ -176,8 +183,6 @@ custom_rules:
   it("does not treat a custom rule id as a builtin alias", () => {
     const config = loadConfigText(
       `
-opt_in_rules:
-  - no_reserved_var
 disabled_rules:
   - no_var_response
 custom_rules:

@@ -8,7 +8,7 @@
 | [`fence_multiline_values`](#fence_multiline_values) | on | error | yes | Multiline mock and input values must be wrapped in a triple-backtick fence |
 | [`guid_placement`](#guid_placement) | on | warning | yes | `guid` needs a blank line above it only when it follows a block closer |
 | [`no_null_response`](#no_null_response) | opt-in | warning | yes | Do not assign `response = null` |
-| [`no_reserved_var`](#no_reserved_var) | opt-in | warning | no | Do not declare a reserved variable name |
+| [`no_reserved_var`](#no_reserved_var) | on | error | no | Do not declare a reserved variable name |
 | [`no_trailing_comments`](#no_trailing_comments) | on | warning | no | `//` above `guid` or after the file's closing `}` |
 | [`no_trailing_newline`](#no_trailing_newline) | on | error | yes | File must end with `}` and no trailing newline |
 | [`no_zero_numeric_default`](#no_zero_numeric_default) | on | error | yes | Numeric defaults of `0` must be omitted |
@@ -160,12 +160,7 @@ Auto-fixable with `--fix`: `response = null` becomes `response = {}`. Comment li
 
 Xano's language server blacklists these names for user-defined variables: `$auth`, `$db`, `$env`, `$error`, `$input`, `$output`, `$response`, `$this`, `$toolset`, `$var`. Declaring any of them via `var`, `var.update`, `as`, or `each as` is flagged. Reads such as `$auth.id` are left alone.
 
-Off by default; enable with `opt_in_rules`. There is no auto-fix.
-
-```yaml
-opt_in_rules:
-  - no_reserved_var
-```
+On by default. Default severity is error. There is no auto-fix.
 
 ```xs
 var $auth {

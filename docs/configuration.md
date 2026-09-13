@@ -16,7 +16,7 @@ Every built-in with `defaultEnabled: true` is on.
 disabled_rules:
   - no_trailing_newline
 opt_in_rules:
-  - no_reserved_var
+  - no_null_response
 ```
 
 - `disabled_rules` turns default-on rules off.

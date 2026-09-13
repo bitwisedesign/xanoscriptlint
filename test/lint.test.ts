@@ -141,11 +141,6 @@ describe("fixture linting", () => {
     };
     assert.equal(
       lintFiles([reservedVar], config).some((v) => v.ruleId === "no_reserved_var"),
-      false,
-    );
-    const reservedOn = resolveConfig({ opt_in_rules: ["no_reserved_var"] }, fixtures, null);
-    assert.equal(
-      lintFiles([reservedVar], reservedOn).some((v) => v.ruleId === "no_reserved_var"),
       true,
     );
   });

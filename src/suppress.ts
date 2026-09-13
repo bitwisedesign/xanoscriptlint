@@ -10,7 +10,10 @@ export interface SuppressionIndex {
 const DIRECTIVE =
   /^\/\/\s*xanoscriptlint:(disable|enable)(?::(next|previous))?(?:\s+(.*))?$/;
 
-export function parseSuppressions(text: string): SuppressionIndex {
+export function parseSuppressions(
+  text: string,
+  customIds: ReadonlySet<string> = new Set(),
+): SuppressionIndex {
   const lines = splitLines(text);
   const regionDisabled = new Map<number, Set<string>>();
   const nextDisabled = new Map<number, Set<string>>();
@@ -20,7 +23,7 @@ export function parseSuppressions(text: string): SuppressionIndex {
   for (let i = 0; i < lines.length; i += 1) {
     const lineNo = i + 1;
     const trimmed = lines[i].trim();
-    const directive = parseDirective(trimmed);
+    const directive = parseDirective(trimmed, customIds);
     if (directive && !directive.scope) {
       if (directive.action === "disable") {
         for (const id of directive.ids) {
@@ -37,7 +40,7 @@ export function parseSuppressions(text: string): SuppressionIndex {
 
   for (let i = 0; i < lines.length; i += 1) {
     const trimmed = lines[i].trim();
-    const directive = parseDirective(trimmed);
+    const directive = parseDirective(trimmed, customIds);
     if (!directive || !directive.scope) {
       continue;
     }
@@ -74,7 +77,10 @@ export function isSuppressed(
   return false;
 }
 
-function parseDirective(trimmed: string): {
+function parseDirective(
+  trimmed: string,
+  customIds: ReadonlySet<string>,
+): {
   action: "disable" | "enable";
   scope?: "next" | "previous";
   ids: string[];
@@ -90,7 +96,13 @@ function parseDirective(trimmed: string): {
   const scope = match[2] as "next" | "previous" | undefined;
   const ids = (match[3] ?? "")
     .split(/[,\s]+/)
-    .map((id) => canonicalRuleId(id.trim()))
+    .map((id) => {
+      const trimmedId = id.trim();
+      if (customIds.has(trimmedId)) {
+        return trimmedId;
+      }
+      return canonicalRuleId(trimmedId);
+    })
     .filter((id) => id.length > 0);
   if (ids.length === 0) {
     return null;

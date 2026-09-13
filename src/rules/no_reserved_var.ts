@@ -20,8 +20,8 @@ const BINDING = new RegExp(`\\bas\\s+(\\$(?:${NAMES}))\\b\\s*\\{?\\s*$`);
 export const noReservedVar: Rule = {
   id: "no_reserved_var",
   description: "Do not declare reserved variable names",
-  defaultEnabled: false,
-  defaultSeverity: "warning",
+  defaultEnabled: true,
+  defaultSeverity: "error",
   lint(file: SourceFile, options: RuleOptions): Violation[] {
     const severity = options.severity ?? noReservedVar.defaultSeverity;
     const violations: Violation[] = [];
