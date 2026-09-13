@@ -158,7 +158,7 @@ Auto-fixable with `--fix`: `response = null` becomes `response = {}`. Comment li
 
 ## no_reserved_var
 
-Xano's language server blacklists these names for user-defined variables: `$auth`, `$db`, `$env`, `$error`, `$input`, `$output`, `$response`, `$this`, `$toolset`, `$var`. Declaring any of them via `var`, `var.update`, `as`, or `each as` is flagged. Reads such as `$auth.id` are left alone.
+Xano's language server blacklists these names for user-defined variables: `$auth`, `$db`, `$env`, `$error`, `$input`, `$output`, `$response`, `$this`, `$toolset`, `$var`. Declaring any of them via `var`, `var.update`, `as`, or `each as` is flagged. Reads such as `$auth.id` are left alone. Comment lines and the bodies of `"""` strings and triple-backtick fences are ignored.
 
 On by default. Default severity is error. There is no auto-fix.
 

@@ -75,6 +75,13 @@ export const RESERVED_VAR_XS = `function "example" {
       error_type = "accessdenied"
       error = "nope"
     }
+    var $prompt {
+      value = """
+        Then write: var $auth {
+          value = 1
+        }
+        """
+    }
   }
 
   response = $ok

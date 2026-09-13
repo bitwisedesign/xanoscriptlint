@@ -19,6 +19,13 @@ function "example" {
         }
       }
     }
+    var $prompt {
+      value = """
+        Then write: var $auth {
+          value = 1
+        }
+        """
+    }
   }
 
   response = $ok

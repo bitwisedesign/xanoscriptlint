@@ -149,6 +149,16 @@ describe("built-in rules", () => {
     assert.equal(hits[0]?.severity, "error");
   });
 
+  it("no_reserved_var skips declaration-shaped text inside triple-quoted values", () => {
+    const hits = lintFile({ path: "r.xs", text: RESERVED_VAR_XS }, config()).filter(
+      (v) => v.ruleId === "no_reserved_var",
+    );
+    assert.equal(
+      hits.some((v) => v.line === 28),
+      false,
+    );
+  });
+
   it("no_reserved_var skips comments and non-reserved names", () => {
     const commented = {
       path: "c.xs",

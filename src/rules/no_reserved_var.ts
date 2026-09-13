@@ -1,5 +1,6 @@
-import type { Rule, RuleOptions, SourceFile, Violation } from "./types.js";
 import { isCommentLine, splitLines } from "../util.js";
+import { literalLines } from "./numeric_declarations.js";
+import type { Rule, RuleOptions, SourceFile, Violation } from "./types.js";
 
 const RESERVED = [
   "auth",
@@ -26,9 +27,10 @@ export const noReservedVar: Rule = {
     const severity = options.severity ?? noReservedVar.defaultSeverity;
     const violations: Violation[] = [];
     const lines = splitLines(file.text);
+    const literals = literalLines(lines);
     for (let i = 0; i < lines.length; i += 1) {
       const line = lines[i];
-      if (isCommentLine(line)) {
+      if (isCommentLine(line) || literals.has(i)) {
         continue;
       }
       const declared = DECLARATION.exec(line);
