@@ -46,7 +46,7 @@ Place `.xanoscriptlint.yml` at the project root (or pass `--config`). With no fi
 disabled_rules:
   - no_trailing_newline
 opt_in_rules:
-  - no_var_response
+  - no_null_response
 # only_rules: [empty_function_run]  # exclusive; cannot mix with the two above
 
 included:
@@ -86,9 +86,9 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 | `fence_multiline_values` | ● | ⛔ | ✓ | Multiline mock or input value not wrapped in a triple-backtick fence (Xano fences it on push); `function.run` mocks stay compact |
 | `guid_placement` | ● | ⚠ | ✓ | `guid` with a blank line after a single-line value, or without one after a `}` / `]` closer |
 | `no_null_response` | ○ | ⚠ | ✓ | `response = null` (use `response = {}`) |
+| `no_reserved_var` | ● | ⛔ | — | reserved variable name declared via `var`, `var.update`, `as`, or `each as` |
 | `no_trailing_comments` | ● | ⚠ | — | `//` above `guid` or after the file's closing `}` (Xano moves it to the header on push) |
 | `no_trailing_newline` | ● | ⛔ | ✓ | File does not end with `}` (Xano pull strips trailing newlines) |
-| `no_var_response` | ○ | ⚠ | — | `var $response` (Xano rewrites it) |
 | `no_zero_numeric_default` | ● | ⛔ | ✓ | Explicit numeric default of `0` (Xano strips it on push) |
 | `quote_negative_numeric_default` | ● | ⛔ | ✓ | Unquoted negative numeric default (Xano quotes it on push) |
 | `wrap_enum_values` | ● | ⛔ | ✓ | Enum `values` array is inline at compact JSON length 64+ or wrapped below 64 (Xano rewrites this on push) |

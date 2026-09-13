@@ -18,7 +18,7 @@ describe("config enablement", () => {
     assert.equal(config.enabledRuleIds.has("collapse_assignment_values"), true);
     assert.equal(config.enabledRuleIds.has("guid_placement"), true);
     assert.equal(config.enabledRuleIds.has("no_trailing_comments"), true);
-    assert.equal(config.enabledRuleIds.has("no_var_response"), false);
+    assert.equal(config.enabledRuleIds.has("no_reserved_var"), true);
     assert.deepEqual(config.included, ["**/*.xs"]);
   });
 
@@ -34,11 +34,39 @@ describe("config enablement", () => {
 
   it("opts in with opt_in_rules", () => {
     const config = resolveConfig(
+      { opt_in_rules: ["no_null_response"] },
+      "/tmp",
+      null,
+    );
+    assert.equal(config.enabledRuleIds.has("no_null_response"), true);
+  });
+
+  it("maps deprecated no_var_response to no_reserved_var", () => {
+    const enabled = resolveConfig(
       { opt_in_rules: ["no_var_response"] },
       "/tmp",
       null,
     );
-    assert.equal(config.enabledRuleIds.has("no_var_response"), true);
+    assert.equal(enabled.enabledRuleIds.has("no_reserved_var"), true);
+    assert.equal(enabled.enabledRuleIds.has("no_var_response"), false);
+
+    const disabled = resolveConfig(
+      { disabled_rules: ["no_var_response"] },
+      "/tmp",
+      null,
+    );
+    assert.equal(disabled.enabledRuleIds.has("no_reserved_var"), false);
+
+    const options = resolveConfig({ no_var_response: "error" }, "/tmp", null);
+    assert.equal(options.ruleOptions.get("no_reserved_var")?.severity, "error");
+    assert.equal(options.ruleOptions.has("no_var_response"), false);
+
+    const canonicalWins = resolveConfig(
+      { no_var_response: "error", no_reserved_var: "warning" },
+      "/tmp",
+      null,
+    );
+    assert.equal(canonicalWins.ruleOptions.get("no_reserved_var")?.severity, "warning");
   });
 
   it("only_rules is exclusive", () => {
@@ -49,7 +77,7 @@ describe("config enablement", () => {
     );
     assert.equal(config.enabledRuleIds.has("empty_function_run"), true);
     assert.equal(config.enabledRuleIds.has("no_trailing_newline"), false);
-    assert.equal(config.enabledRuleIds.has("no_var_response"), false);
+    assert.equal(config.enabledRuleIds.has("no_reserved_var"), false);
   });
 
   it("rejects only_rules combined with disabled_rules", () => {
@@ -150,6 +178,23 @@ custom_rules:
     );
     assert.equal(config.enabledRuleIds.has("no_todo"), false);
     assert.equal(config.customRules.length, 0);
+  });
+
+  it("does not treat a custom rule id as a builtin alias", () => {
+    const config = loadConfigText(
+      `
+disabled_rules:
+  - no_var_response
+custom_rules:
+  no_var_response:
+    regex: TODO
+`,
+      "/tmp",
+      null,
+    );
+    assert.equal(config.enabledRuleIds.has("no_var_response"), false);
+    assert.equal(config.customRules.length, 0);
+    assert.equal(config.enabledRuleIds.has("no_reserved_var"), true);
   });
 
   it("rejects the custom_rules token in disabled_rules and opt_in_rules", () => {

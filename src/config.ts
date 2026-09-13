@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
+import { aliasRuleIds, canonicalRuleId } from "./ruleAliases.js";
 import { builtinRules } from "./rules/index.js";
 import type { RuleOptions, Severity } from "./rules/types.js";
 
@@ -133,7 +134,12 @@ export function resolveConfig(
   const customIds = new Set(customRules.map((rule) => rule.id));
 
   for (const key of Object.keys(raw)) {
-    if (KNOWN_KEYS.has(key) || builtinIds.has(key) || customIds.has(key)) {
+    if (
+      KNOWN_KEYS.has(key) ||
+      builtinIds.has(key) ||
+      builtinIds.has(canonicalRuleId(key)) ||
+      customIds.has(key)
+    ) {
       continue;
     }
     throw new ConfigError(`unknown config key: ${key}`);
@@ -163,7 +169,7 @@ export function resolveConfig(
         }
         continue;
       }
-      if (!knownIds.has(id)) {
+      if (!knownIds.has(canonicalRuleId(id))) {
         throw new ConfigError(`unknown rule id in ${listName}: ${id}`);
       }
     }
@@ -176,21 +182,26 @@ export function resolveConfig(
         for (const customId of customIds) {
           enabledRuleIds.add(customId);
         }
-      } else {
+      } else if (customIds.has(id)) {
         enabledRuleIds.add(id);
+      } else {
+        enabledRuleIds.add(canonicalRuleId(id));
       }
     }
   } else {
+    const disabledCustom = new Set(disabledRules ?? []);
+    const disabledBuiltin = canonicalBuiltinIds(disabledRules, customIds);
+    const optedIn = canonicalBuiltinIds(optInRules, customIds);
     for (const rule of builtinRules) {
-      if (rule.defaultEnabled && !disabledRules?.includes(rule.id)) {
+      if (rule.defaultEnabled && !disabledBuiltin.has(rule.id)) {
         enabledRuleIds.add(rule.id);
       }
-      if (!rule.defaultEnabled && optInRules?.includes(rule.id)) {
+      if (!rule.defaultEnabled && optedIn.has(rule.id)) {
         enabledRuleIds.add(rule.id);
       }
     }
     for (const custom of customRules) {
-      if (!disabledRules?.includes(custom.id)) {
+      if (!disabledCustom.has(custom.id)) {
         enabledRuleIds.add(custom.id);
       }
     }
@@ -200,6 +211,13 @@ export function resolveConfig(
   for (const rule of builtinRules) {
     if (rule.id in raw) {
       ruleOptions.set(rule.id, parseRuleOptions(raw[rule.id], rule));
+      continue;
+    }
+    for (const alias of aliasRuleIds(rule.id)) {
+      if (alias in raw) {
+        ruleOptions.set(rule.id, parseRuleOptions(raw[alias], rule));
+        break;
+      }
     }
   }
   const activeCustomRules = customRules.filter((rule) =>
@@ -215,6 +233,15 @@ export function resolveConfig(
     excluded,
     customRules: activeCustomRules,
   };
+}
+
+function canonicalBuiltinIds(
+  ids: string[] | undefined,
+  customIds: Set<string>,
+): Set<string> {
+  return new Set(
+    (ids ?? []).filter((id) => !customIds.has(id)).map(canonicalRuleId),
+  );
 }
 
 function parseCustomRules(value: unknown): CustomRuleConfig[] {

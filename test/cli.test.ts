@@ -9,7 +9,7 @@ import { isMainModule } from "../src/util.js";
 import { CLEAN_XS, collectStream, withTempDir, writeXs } from "./support.js";
 
 const warning: Violation = {
-  ruleId: "no_var_response",
+  ruleId: "no_reserved_var",
   message: "warn",
   severity: "warning",
   file: "/tmp/a.xs",
@@ -73,7 +73,9 @@ describe("cli", () => {
     });
     assert.equal(code, 0);
     assert.match(stdout.text(), /empty_function_run/);
+    assert.match(stdout.text(), /no_reserved_var/);
     assert.match(stdout.text(), /opt-in/);
+    assert.doesNotMatch(stdout.text(), /no_var_response/);
     assert.equal(stderr.text(), "");
   });
 

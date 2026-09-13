@@ -34,7 +34,7 @@ import {
   UNFENCED_MULTILINE_OBJECT_XS,
   VALID_FUNCTION_RUN_COMPACT_MOCK_XS,
   VALID_SIBLING_FENCES_XS,
-  VAR_RESPONSE_XS,
+  RESERVED_VAR_XS,
   ZERO_DEFAULT_FIXED_XS,
   ZERO_DEFAULT_XS,
   wrapInputDecls,
@@ -112,17 +112,78 @@ describe("built-in rules", () => {
     );
   });
 
-  it("no_var_response is opt-in", () => {
-    const file = { path: "r.xs", text: VAR_RESPONSE_XS };
-    const off = lintFile(file, config());
+  it("no_reserved_var is on by default and flags declarations, not reads", () => {
+    const file = { path: "r.xs", text: RESERVED_VAR_XS };
+    const off = lintFile(file, config({ disabled_rules: ["no_reserved_var"] }));
     assert.equal(
-      off.some((v) => v.ruleId === "no_var_response"),
+      off.some((v) => v.ruleId === "no_reserved_var"),
       false,
     );
-    const on = lintFile(file, config({ opt_in_rules: ["no_var_response"] }));
+    const on = lintFile(file, config());
+    const hits = on.filter((v) => v.ruleId === "no_reserved_var");
+    assert.deepEqual(
+      hits.map((v) => ({ line: v.line, column: v.column, message: v.message })),
+      [
+        {
+          line: 6,
+          column: 9,
+          message: "$auth is a reserved variable name; use a different name",
+        },
+        {
+          line: 9,
+          column: 16,
+          message: "$env is a reserved variable name; use a different name",
+        },
+        {
+          line: 14,
+          column: 10,
+          message: "$output is a reserved variable name; use a different name",
+        },
+        {
+          line: 16,
+          column: 15,
+          message: "$this is a reserved variable name; use a different name",
+        },
+      ],
+    );
+    assert.equal(hits[0]?.severity, "error");
+  });
+
+  it("no_reserved_var skips declaration-shaped text inside triple-quoted values", () => {
+    const hits = lintFile({ path: "r.xs", text: RESERVED_VAR_XS }, config()).filter(
+      (v) => v.ruleId === "no_reserved_var",
+    );
     assert.equal(
-      on.some((v) => v.ruleId === "no_var_response"),
-      true,
+      hits.some((v) => v.line === 28),
+      false,
+    );
+  });
+
+  it("no_reserved_var skips comments and non-reserved names", () => {
+    const commented = {
+      path: "c.xs",
+      text: `function "x" {
+  stack {
+    // var $auth {
+    // } as $output
+    var $result {
+      value = $auth.id
+    }
+    var $index {
+      value = $env.KEY
+    }
+  }
+}`,
+    };
+    const none = lintFile(
+      commented,
+      config({
+        disabled_rules: ["no_trailing_newline"],
+      }),
+    );
+    assert.equal(
+      none.some((v) => v.ruleId === "no_reserved_var"),
+      false,
     );
   });
 
