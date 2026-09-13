@@ -33,7 +33,8 @@ export async function runCli(
     .version(version)
     .option("-c, --config <path>", "path to .xanoscriptlint.yml")
     .option("--reporter <name>", "stylish or json", "stylish")
-    .option("--strict", "treat warnings as errors", false)
+    .option("--strict", "treat warnings as errors")
+    .option("--no-strict", "do not treat warnings as errors (overrides config)")
     .option("--fix", "automatically fix violations where possible", false)
     .exitOverride()
     .configureOutput({
@@ -49,10 +50,20 @@ export async function runCli(
       const opts = program.opts<{
         config?: string;
         reporter: string;
-        strict: boolean;
+        strict?: boolean;
         fix: boolean;
       }>();
-      exitCode = await runLint(paths, opts, io);
+      exitCode = await runLint(
+        paths,
+        {
+          ...opts,
+          strict:
+            program.getOptionValueSource("strict") === "cli"
+              ? opts.strict
+              : undefined,
+        },
+        io,
+      );
     });
 
   program
@@ -77,7 +88,7 @@ export async function runCli(
 
 async function runLint(
   paths: string[],
-  opts: { config?: string; reporter: string; strict: boolean; fix: boolean },
+  opts: { config?: string; reporter: string; strict?: boolean; fix: boolean },
   io: { stdout: NodeJS.WritableStream; stderr: NodeJS.WritableStream },
 ): Promise<number> {
   const reporter = parseReporter(opts.reporter);
@@ -89,6 +100,7 @@ async function runLint(
   try {
     const cwd = process.cwd();
     const config = loadConfig({ cwd, configPath: opts.config });
+    const strict = opts.strict ?? config.strict;
     const files = await discoverXsFiles({ config, cwd, cliPaths: paths });
     let sources = files.map((filePath) => readSourceFile(filePath));
     if (opts.fix) {
@@ -110,7 +122,7 @@ async function runLint(
         stream.write(text);
       }
     }
-    const violations = applyStrict(lintFiles(sources, config), opts.strict);
+    const violations = applyStrict(lintFiles(sources, config), strict);
     const report = formatReport(violations, reporter, cwd);
     if (report.length > 0) {
       io.stdout.write(report.endsWith("\n") ? report : `${report}\n`);

@@ -21,6 +21,7 @@ const KNOWN_KEYS = new Set([
   "included",
   "excluded",
   "custom_rules",
+  "strict",
 ]);
 
 export interface CustomRuleConfig {
@@ -42,6 +43,7 @@ export interface ResolvedConfig {
   included: string[];
   excluded: string[];
   customRules: CustomRuleConfig[];
+  strict: boolean;
 }
 
 interface RawCustomRule {
@@ -60,6 +62,7 @@ interface RawConfig {
   included?: unknown;
   excluded?: unknown;
   custom_rules?: unknown;
+  strict?: unknown;
   [key: string]: unknown;
 }
 
@@ -132,6 +135,7 @@ export function resolveConfig(
   const excluded = optionalStringList(raw.excluded, "excluded") ?? [];
   const customRules = parseCustomRules(raw.custom_rules);
   const customIds = new Set(customRules.map((rule) => rule.id));
+  const strict = optionalBoolean(raw.strict, "strict") ?? false;
 
   for (const key of Object.keys(raw)) {
     if (
@@ -232,6 +236,7 @@ export function resolveConfig(
     included,
     excluded,
     customRules: activeCustomRules,
+    strict,
   };
 }
 
@@ -337,6 +342,16 @@ function optionalString(value: unknown, label: string): string | undefined {
   }
   if (typeof value !== "string") {
     throw new ConfigError(`${label} must be a string`);
+  }
+  return value;
+}
+
+function optionalBoolean(value: unknown, label: string): boolean | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value !== "boolean") {
+    throw new ConfigError(`${label} must be a boolean`);
   }
   return value;
 }

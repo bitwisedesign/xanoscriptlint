@@ -2,7 +2,15 @@
 
 xanoscriptlint reads `.xanoscriptlint.yml` by walking up from the current working directory. Pass `--config` to load a specific file (this skips discovery).
 
-No config file means built-in defaults: default-on rules enabled, `included: ["**/*.xs"]`, no excludes, no custom rules.
+No config file means built-in defaults: default-on rules enabled, `included: ["**/*.xs"]`, no excludes, no custom rules, `strict: false`.
+
+## Strict mode
+
+```yaml
+strict: true
+```
+
+Treat warnings as errors (same as `--strict`). `--strict` and `--no-strict` override this; if neither flag is passed, the config value is used (default `false`).
 
 ## Rule enablement
 
@@ -110,7 +118,8 @@ Multiple ids may be separated by spaces or commas. `disable` without `next` or `
 | --- | --- |
 | `--config <path>` | Load this YAML file |
 | `--reporter stylish\|json` | Output format (default `stylish`) |
-| `--strict` | Treat warnings as errors |
+| `--strict` | Treat warnings as errors (overrides config) |
+| `--no-strict` | Do not treat warnings as errors (overrides `strict: true` in config) |
 | `--fix` | Automatically fix violations where a rule implements a fixer |
 | `--version` | Print the package version |
 

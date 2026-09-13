@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Top-level `strict: true` in `.xanoscriptlint.yml` treats warnings as errors. `--strict` and `--no-strict` override the config; if neither flag is passed, the config value is used (default `false`).
 - Default-on `wrap_piped_values` flags an assignment filter pipeline that is inline when the pipe portion is 34 UTF-8 bytes or longer (or has 3+ filters), or wrapped below that cutoff, and auto-fixes it to Xano's push form. The cutoffs are configurable with `wrap_at` and `filter_limit`.
 - Default-on `no_reserved_var` flags a `var`, `var.update`, `as`, or `each as` that uses a name Xano's language server blacklists (`$auth`, `$db`, `$env`, `$error`, `$input`, `$output`, `$response`, `$this`, `$toolset`, `$var`). Comment lines and the bodies of `"""` strings and triple-backtick fences are ignored. Default severity is error. There is no auto-fix.
 
