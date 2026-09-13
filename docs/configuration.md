@@ -16,7 +16,7 @@ Every built-in with `defaultEnabled: true` is on.
 disabled_rules:
   - no_trailing_newline
 opt_in_rules:
-  - no_var_response
+  - no_reserved_var
 ```
 
 - `disabled_rules` turns default-on rules off.
@@ -99,6 +99,10 @@ Own-line comments only (XanoScript does not allow trailing `//` on a code line):
 ```
 
 Multiple ids may be separated by spaces or commas. `disable` without `next` or `previous` applies from that line through EOF or until `enable`.
+
+## Deprecated rule ids
+
+`no_var_response` is a silent alias for `no_reserved_var`. It is accepted in `disabled_rules`, `opt_in_rules`, `only_rules`, as a per-rule options key, and in suppression comments. Prefer the canonical id in new configs.
 
 ## CLI flags
 

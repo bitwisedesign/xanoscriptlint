@@ -1,3 +1,4 @@
+import { canonicalRuleId } from "./ruleAliases.js";
 import { isBlankLine, isCommentLine, splitLines } from "./util.js";
 
 export interface SuppressionIndex {
@@ -89,7 +90,7 @@ function parseDirective(trimmed: string): {
   const scope = match[2] as "next" | "previous" | undefined;
   const ids = (match[3] ?? "")
     .split(/[,\s]+/)
-    .map((id) => id.trim())
+    .map((id) => canonicalRuleId(id.trim()))
     .filter((id) => id.length > 0);
   if (ids.length === 0) {
     return null;

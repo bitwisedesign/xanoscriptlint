@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Default-on `wrap_piped_values` flags an assignment filter pipeline that is inline when the pipe portion is 34 UTF-8 bytes or longer (or has 3+ filters), or wrapped below that cutoff, and auto-fixes it to Xano's push form. The cutoffs are configurable with `wrap_at` and `filter_limit`.
+- Opt-in `no_reserved_var` flags a `var`, `var.update`, `as`, or `each as` that uses a name Xano's language server blacklists (`$auth`, `$db`, `$env`, `$error`, `$input`, `$output`, `$response`, `$this`, `$toolset`, `$var`). There is no auto-fix.
+
+### Deprecated
+
+- `no_var_response` is now an alias for `no_reserved_var`. Existing configs and `// xanoscriptlint:disable no_var_response` comments keep working.
 
 ## [0.3.1] - 2026-09-11
 

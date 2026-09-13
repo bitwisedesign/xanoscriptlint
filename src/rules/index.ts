@@ -6,7 +6,7 @@ import { guidPlacement } from "./guid_placement.js";
 import { noNullResponse } from "./no_null_response.js";
 import { noTrailingComments } from "./no_trailing_comments.js";
 import { noTrailingNewline } from "./no_trailing_newline.js";
-import { noVarResponse } from "./no_var_response.js";
+import { noReservedVar } from "./no_reserved_var.js";
 import { noZeroNumericDefault } from "./no_zero_numeric_default.js";
 import { quoteNegativeNumericDefault } from "./quote_negative_numeric_default.js";
 import { wrapEnumValues } from "./wrap_enum_values.js";
@@ -23,7 +23,7 @@ export const builtinRules: Rule[] = [
   guidPlacement,
   noTrailingComments,
   noTrailingNewline,
-  noVarResponse,
+  noReservedVar,
   noNullResponse,
   noZeroNumericDefault,
   quoteNegativeNumericDefault,

@@ -67,4 +67,34 @@ ${EMPTY_RUN_XS}`;
       false,
     );
   });
+
+  it("deprecated no_var_response alias still suppresses no_reserved_var", () => {
+    const text = `function "a" {
+  stack {
+    // xanoscriptlint:disable:next no_var_response
+    var $auth {
+      value = 1
+    }
+    var $db {
+      value = 1
+    }
+  }
+}`;
+    const violations = lintFile(
+      { path: "a.xs", text },
+      resolveConfig(
+        {
+          opt_in_rules: ["no_reserved_var"],
+          disabled_rules: ["no_trailing_newline"],
+        },
+        "/tmp",
+        null,
+      ),
+    );
+    const reserved = violations.filter((v) => v.ruleId === "no_reserved_var");
+    assert.deepEqual(
+      reserved.map((v) => v.line),
+      [7],
+    );
+  });
 });

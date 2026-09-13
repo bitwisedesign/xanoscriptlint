@@ -8,9 +8,9 @@
 | [`fence_multiline_values`](#fence_multiline_values) | on | error | yes | Multiline mock and input values must be wrapped in a triple-backtick fence |
 | [`guid_placement`](#guid_placement) | on | warning | yes | `guid` needs a blank line above it only when it follows a block closer |
 | [`no_null_response`](#no_null_response) | opt-in | warning | yes | Do not assign `response = null` |
+| [`no_reserved_var`](#no_reserved_var) | opt-in | warning | no | Do not declare a reserved variable name |
 | [`no_trailing_comments`](#no_trailing_comments) | on | warning | no | `//` above `guid` or after the file's closing `}` |
 | [`no_trailing_newline`](#no_trailing_newline) | on | error | yes | File must end with `}` and no trailing newline |
-| [`no_var_response`](#no_var_response) | opt-in | warning | no | Do not declare `var $response` |
 | [`no_zero_numeric_default`](#no_zero_numeric_default) | on | error | yes | Numeric defaults of `0` must be omitted |
 | [`quote_negative_numeric_default`](#quote_negative_numeric_default) | on | error | yes | Negative numeric defaults must be quoted |
 | [`wrap_enum_values`](#wrap_enum_values) | on | error | yes | Enum `values` arrays wrap when compact JSON length reaches 64 |
@@ -156,6 +156,33 @@ response = null
 
 Auto-fixable with `--fix`: `response = null` becomes `response = {}`. Comment lines, `$response = null`, and the text inside string literals are ignored.
 
+## no_reserved_var
+
+Xano's language server blacklists these names for user-defined variables: `$auth`, `$db`, `$env`, `$error`, `$input`, `$output`, `$response`, `$this`, `$toolset`, `$var`. Declaring any of them via `var`, `var.update`, `as`, or `each as` is flagged. Reads such as `$auth.id` are left alone.
+
+Off by default; enable with `opt_in_rules`. There is no auto-fix.
+
+```yaml
+opt_in_rules:
+  - no_reserved_var
+```
+
+```xs
+var $auth {
+  value = 1
+}
+db.query "user" {
+} as $output
+foreach ($items) {
+  each as $this {
+  }
+}
+```
+
+Xano's published essentials list is not the source of truth here (`$result` and `$index` are not reserved; `$var`, `$error`, and `$toolset` are). This rule follows the language server.
+
+`no_var_response` is a deprecated alias for this rule. It still works in `opt_in_rules`, per-rule option keys, and suppression comments.
+
 ## no_trailing_comments
 
 On push, Xano moves a `//` that sits immediately before the file's closing `}` to the file header, appending it to any existing header comments. The comment's original context is lost.
@@ -198,15 +225,6 @@ Default severity is warning.
 Xano pull strips trailing newlines and treats their absence as canonical. A lintable file must end with `}` as the last character — no `\n` after it.
 
 Auto-fixable with `--fix`: trailing whitespace after the closing `}` is stripped. Files that do not end with `}` after that trim remain a reported violation.
-
-## no_var_response
-
-`var $response` collides with the `response` keyword. Xano rewrites it to `$response[""]`, which produces `null`. Off by default; enable with `opt_in_rules`.
-
-```yaml
-opt_in_rules:
-  - no_var_response
-```
 
 ## no_zero_numeric_default
 

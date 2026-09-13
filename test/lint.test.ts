@@ -134,6 +134,20 @@ describe("fixture linting", () => {
       lintFiles([trailingComments], config).some((v) => v.ruleId === "no_trailing_comments"),
       true,
     );
+
+    const reservedVar = {
+      path: path.join(fixtures, "violations/reserved_var.xs"),
+      text: readFileSync(path.join(fixtures, "violations/reserved_var.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([reservedVar], config).some((v) => v.ruleId === "no_reserved_var"),
+      false,
+    );
+    const reservedOn = resolveConfig({ opt_in_rules: ["no_reserved_var"] }, fixtures, null);
+    assert.equal(
+      lintFiles([reservedVar], reservedOn).some((v) => v.ruleId === "no_reserved_var"),
+      true,
+    );
   });
 
   it("CLI lints a violations directory and exits 2", async () => {

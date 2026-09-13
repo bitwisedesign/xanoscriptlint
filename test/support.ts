@@ -50,17 +50,34 @@ export const EMPTY_RUN_XS = `function "example" {
   response = null
 }`;
 
-export const VAR_RESPONSE_XS = `function "example" {
+export const RESERVED_VAR_XS = `function "example" {
   input {
   }
 
   stack {
-    var $response {
+    var $auth {
       value = 1
+    }
+    var.update $env {
+      value = 2
+    }
+    db.query "user" {
+      output = ["id"]
+    } as $output
+    foreach ($items) {
+      each as $this {
+        debug.log {
+          value = $auth.id
+        }
+      }
+    }
+    precondition ($auth.id != null) {
+      error_type = "accessdenied"
+      error = "nope"
     }
   }
 
-  response = $response
+  response = $ok
 }`;
 
 export const NULL_RESPONSE_XS = `function "example" {
