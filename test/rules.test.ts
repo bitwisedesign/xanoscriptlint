@@ -54,10 +54,21 @@ import {
   PIPE_34,
   PIPE_BYTES_33,
   PIPE_BYTES_34,
+  formattingOptInRules,
 } from "./support.js";
 
 function config(overrides: Parameters<typeof resolveConfig>[0] = {}) {
-  return resolveConfig(overrides, "/tmp", null);
+  if (overrides.only_rules !== undefined) {
+    return resolveConfig(overrides, "/tmp", null);
+  }
+  const extra = Array.isArray(overrides.opt_in_rules)
+    ? overrides.opt_in_rules.filter((id): id is string => typeof id === "string")
+    : [];
+  return resolveConfig(
+    { ...overrides, opt_in_rules: [...formattingOptInRules(), ...extra] },
+    "/tmp",
+    null,
+  );
 }
 
 function guidHits(text: string, overrides: Parameters<typeof resolveConfig>[0] = {}) {
@@ -548,7 +559,7 @@ ${ALIGNED_MOCK_ENTRIES}`,
     ).filter((v) => v.ruleId === "fence_multiline_values");
     assert.equal(objectHits.length, 1);
     assert.equal(objectHits[0]?.line, 8);
-    assert.equal(objectHits[0]?.severity, "error");
+    assert.equal(objectHits[0]?.severity, "warning");
     assert.equal(objectHits[0]?.message, "multiline mock value must be wrapped in a ``` fence");
 
     const arrayHits = lintFile(
@@ -891,7 +902,7 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     assert.equal(hits.length, 6);
     assert.equal(hits[0]?.line, 3);
     assert.equal(hits[0]?.column, 21);
-    assert.equal(hits[0]?.severity, "error");
+    assert.equal(hits[0]?.severity, "warning");
     assert.equal(hits[0]?.message, "numeric default of 0 must be omitted; Xano strips it on push");
 
     const clean = lintFile({ path: "ok.xs", text: ZERO_DEFAULT_FIXED_XS }, config());
@@ -1012,7 +1023,7 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     assert.equal(hits.length, 6);
     assert.equal(hits[0]?.line, 3);
     assert.equal(hits[0]?.column, 19);
-    assert.equal(hits[0]?.severity, "error");
+    assert.equal(hits[0]?.severity, "warning");
     assert.equal(
       hits[0]?.message,
       "negative numeric default must be quoted; Xano quotes it on push",
@@ -1146,7 +1157,7 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     assert.equal(inline64.length, 1);
     assert.equal(inline64[0]?.line, 4);
     assert.equal(inline64[0]?.column, 7);
-    assert.equal(inline64[0]?.severity, "error");
+    assert.equal(inline64[0]?.severity, "warning");
     assert.equal(
       inline64[0]?.message,
       "enum values of compact length 64 must be wrapped (threshold 64)",
@@ -1581,7 +1592,7 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     ).filter((v) => v.ruleId === "collapse_assignment_values");
     assert.equal(wrapped63.length, 1);
     assert.equal(wrapped63[0]?.line, 7);
-    assert.equal(wrapped63[0]?.severity, "error");
+    assert.equal(wrapped63[0]?.severity, "warning");
     assert.equal(
       wrapped63[0]?.message,
       "input value of line length 63 must be inline (threshold 64)",
@@ -2199,7 +2210,7 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     assert.deepEqual(guidHits(closerBlankComment), []);
   });
 
-  it("guid_placement is on by default and honors disable:next", () => {
+  it("guid_placement honors disabled_rules and disable:next", () => {
     const extraBlank = `function "example" {
   response = $ok
 

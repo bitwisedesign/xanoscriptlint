@@ -30,8 +30,8 @@ function quoteNegativeDefault(line: string): string {
 export const quoteNegativeNumericDefault: Rule = {
   id: "quote_negative_numeric_default",
   description: "Negative numeric defaults must be quoted",
-  defaultEnabled: true,
-  defaultSeverity: "error",
+  defaultEnabled: false,
+  defaultSeverity: "warning",
   lint(file: SourceFile, options: RuleOptions): Violation[] {
     const severity = options.severity ?? quoteNegativeNumericDefault.defaultSeverity;
     const lines = splitLineRecords(file.text).map((record) => record.content);

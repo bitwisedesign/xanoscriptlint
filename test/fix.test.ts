@@ -51,10 +51,21 @@ import {
   ASSIGN_LINE_64,
   PIPE_33,
   PIPE_34,
+  formattingOptInRules,
 } from "./support.js";
 
 function config(overrides: Parameters<typeof resolveConfig>[0] = {}) {
-  return resolveConfig(overrides, "/tmp", null);
+  if (overrides.only_rules !== undefined) {
+    return resolveConfig(overrides, "/tmp", null);
+  }
+  const extra = Array.isArray(overrides.opt_in_rules)
+    ? overrides.opt_in_rules.filter((id): id is string => typeof id === "string")
+    : [];
+  return resolveConfig(
+    { ...overrides, opt_in_rules: [...formattingOptInRules(), ...extra] },
+    "/tmp",
+    null,
+  );
 }
 
 describe("fixFile", () => {

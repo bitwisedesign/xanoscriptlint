@@ -129,7 +129,7 @@ function applyFix(records: ReturnType<typeof splitLineRecords>, site: GuidSite):
 export const guidPlacement: Rule = {
   id: "guid_placement",
   description: "guid must be separated by a blank line only when it follows a block closer",
-  defaultEnabled: true,
+  defaultEnabled: false,
   defaultSeverity: "warning",
   lint(file: SourceFile, options: RuleOptions): Violation[] {
     const severity = options.severity ?? guidPlacement.defaultSeverity;

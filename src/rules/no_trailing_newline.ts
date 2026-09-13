@@ -4,7 +4,7 @@ export const noTrailingNewline: Rule = {
   id: "no_trailing_newline",
   description: "XanoScript files must end with } and no trailing newline",
   defaultEnabled: true,
-  defaultSeverity: "error",
+  defaultSeverity: "warning",
   lint(file: SourceFile, options: RuleOptions): Violation[] {
     const severity = options.severity ?? noTrailingNewline.defaultSeverity;
     if (file.text.endsWith("}")) {

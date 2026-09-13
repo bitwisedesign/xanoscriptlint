@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  applyRuleOverrides,
   ConfigError,
   loadConfigText,
   resolveConfig,
@@ -11,14 +12,17 @@ describe("config enablement", () => {
     const config = resolveConfig({}, "/tmp", null);
     assert.equal(config.enabledRuleIds.has("empty_function_run"), true);
     assert.equal(config.enabledRuleIds.has("no_trailing_newline"), true);
-    assert.equal(config.enabledRuleIds.has("align_object_colons"), true);
-    assert.equal(config.enabledRuleIds.has("fence_multiline_values"), true);
-    assert.equal(config.enabledRuleIds.has("wrap_enum_values"), true);
-    assert.equal(config.enabledRuleIds.has("wrap_piped_values"), true);
-    assert.equal(config.enabledRuleIds.has("collapse_assignment_values"), true);
-    assert.equal(config.enabledRuleIds.has("guid_placement"), true);
     assert.equal(config.enabledRuleIds.has("no_trailing_comments"), true);
     assert.equal(config.enabledRuleIds.has("no_reserved_var"), true);
+    assert.equal(config.enabledRuleIds.has("align_object_colons"), false);
+    assert.equal(config.enabledRuleIds.has("collapse_assignment_values"), false);
+    assert.equal(config.enabledRuleIds.has("fence_multiline_values"), false);
+    assert.equal(config.enabledRuleIds.has("guid_placement"), false);
+    assert.equal(config.enabledRuleIds.has("no_null_response"), false);
+    assert.equal(config.enabledRuleIds.has("no_zero_numeric_default"), false);
+    assert.equal(config.enabledRuleIds.has("quote_negative_numeric_default"), false);
+    assert.equal(config.enabledRuleIds.has("wrap_enum_values"), false);
+    assert.equal(config.enabledRuleIds.has("wrap_piped_values"), false);
     assert.deepEqual(config.included, ["**/*.xs"]);
     assert.equal(config.strict, false);
   });
@@ -53,6 +57,18 @@ describe("config enablement", () => {
       null,
     );
     assert.equal(config.enabledRuleIds.has("no_null_response"), true);
+  });
+
+  it("disabled_rules wins over opt_in_rules", () => {
+    const config = resolveConfig(
+      {
+        opt_in_rules: ["align_object_colons"],
+        disabled_rules: ["align_object_colons"],
+      },
+      "/tmp",
+      null,
+    );
+    assert.equal(config.enabledRuleIds.has("align_object_colons"), false);
   });
 
   it("maps deprecated no_var_response to no_reserved_var", () => {
@@ -324,5 +340,141 @@ custom_rules:
         ),
       /regex is invalid/,
     );
+  });
+});
+
+describe("CLI rule overrides", () => {
+  it("opts in a default-off rule", () => {
+    const config = applyRuleOverrides(resolveConfig({}, "/tmp", null), {
+      optIn: ["align_object_colons"],
+      disable: [],
+      only: [],
+    });
+    assert.equal(config.enabledRuleIds.has("align_object_colons"), true);
+    assert.equal(config.enabledRuleIds.has("empty_function_run"), true);
+  });
+
+  it("opt-in all enables every built-in", () => {
+    const config = applyRuleOverrides(resolveConfig({}, "/tmp", null), {
+      optIn: ["all"],
+      disable: [],
+      only: [],
+    });
+    assert.equal(config.enabledRuleIds.has("align_object_colons"), true);
+    assert.equal(config.enabledRuleIds.has("no_null_response"), true);
+    assert.equal(config.enabledRuleIds.has("wrap_piped_values"), true);
+    assert.equal(config.enabledRuleIds.has("empty_function_run"), true);
+  });
+
+  it("disable turns a rule off after opt-in", () => {
+    const config = applyRuleOverrides(resolveConfig({}, "/tmp", null), {
+      optIn: ["all"],
+      disable: ["no_null_response"],
+      only: [],
+    });
+    assert.equal(config.enabledRuleIds.has("no_null_response"), false);
+    assert.equal(config.enabledRuleIds.has("align_object_colons"), true);
+  });
+
+  it("only replaces the enabled set", () => {
+    const config = applyRuleOverrides(resolveConfig({}, "/tmp", null), {
+      optIn: [],
+      disable: [],
+      only: ["empty_function_run"],
+    });
+    assert.equal(config.enabledRuleIds.has("empty_function_run"), true);
+    assert.equal(config.enabledRuleIds.has("no_trailing_newline"), false);
+    assert.equal(config.enabledRuleIds.has("no_reserved_var"), false);
+  });
+
+  it("rejects --only combined with --opt-in", () => {
+    assert.throws(
+      () =>
+        applyRuleOverrides(resolveConfig({}, "/tmp", null), {
+          optIn: ["align_object_colons"],
+          disable: [],
+          only: ["empty_function_run"],
+        }),
+      ConfigError,
+    );
+  });
+
+  it("rejects an unknown rule id", () => {
+    assert.throws(
+      () =>
+        applyRuleOverrides(resolveConfig({}, "/tmp", null), {
+          optIn: ["not_a_rule"],
+          disable: [],
+          only: [],
+        }),
+      /unknown rule id in --opt-in: not_a_rule/,
+    );
+  });
+
+  it("CLI opt-in beats config disabled_rules", () => {
+    const config = applyRuleOverrides(
+      resolveConfig({ disabled_rules: ["no_trailing_newline"] }, "/tmp", null),
+      { optIn: ["no_trailing_newline"], disable: [], only: [] },
+    );
+    assert.equal(config.enabledRuleIds.has("no_trailing_newline"), true);
+  });
+
+  it("CLI disable beats config opt_in_rules", () => {
+    const config = applyRuleOverrides(
+      resolveConfig({ opt_in_rules: ["no_null_response"] }, "/tmp", null),
+      { optIn: [], disable: ["no_null_response"], only: [] },
+    );
+    assert.equal(config.enabledRuleIds.has("no_null_response"), false);
+  });
+
+  it("maps deprecated no_var_response on the CLI", () => {
+    const config = applyRuleOverrides(resolveConfig({}, "/tmp", null), {
+      optIn: [],
+      disable: ["no_var_response"],
+      only: [],
+    });
+    assert.equal(config.enabledRuleIds.has("no_reserved_var"), false);
+  });
+
+  it("only custom_rules enables defined custom rules", () => {
+    const base = loadConfigText(
+      `
+custom_rules:
+  no_todo:
+    regex: TODO
+`,
+      "/tmp",
+      null,
+    );
+    const config = applyRuleOverrides(base, {
+      optIn: [],
+      disable: [],
+      only: ["custom_rules"],
+    });
+    assert.equal(config.enabledRuleIds.has("no_todo"), true);
+    assert.equal(config.customRules.length, 1);
+    assert.equal(config.enabledRuleIds.has("empty_function_run"), false);
+  });
+
+  it("opt-in re-enables a custom rule disabled in config", () => {
+    const base = loadConfigText(
+      `
+disabled_rules:
+  - no_todo
+custom_rules:
+  no_todo:
+    regex: TODO
+`,
+      "/tmp",
+      null,
+    );
+    assert.equal(base.customRules.length, 0);
+    const config = applyRuleOverrides(base, {
+      optIn: ["no_todo"],
+      disable: [],
+      only: [],
+    });
+    assert.equal(config.enabledRuleIds.has("no_todo"), true);
+    assert.equal(config.customRules.length, 1);
   });
 });

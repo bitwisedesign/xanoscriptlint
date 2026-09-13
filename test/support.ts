@@ -2,6 +2,7 @@ import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { Writable } from "node:stream";
+import { builtinRules } from "../src/rules/index.js";
 
 export async function withTempDir(
   fn: (dir: string) => Promise<void>,
@@ -12,6 +13,12 @@ export async function withTempDir(
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+}
+
+export function formattingOptInRules(): string[] {
+  return builtinRules
+    .filter((rule) => !rule.defaultEnabled && rule.id !== "no_null_response")
+    .map((rule) => rule.id);
 }
 
 export async function writeXs(

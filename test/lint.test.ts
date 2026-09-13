@@ -10,6 +10,7 @@ import {
   CLEAN_XS,
   EMPTY_RUN_XS,
   collectStream,
+  formattingOptInRules,
   withTempDir,
   writeXs,
 } from "./support.js";
@@ -23,8 +24,8 @@ describe("fixture linting", () => {
     assert.deepEqual(violations, []);
   });
 
-  it("committed fixtures match expected default-on findings", () => {
-    const config = resolveConfig({}, fixtures, null);
+  it("committed fixtures match expected findings when formatting rules are opted in", () => {
+    const config = resolveConfig({ opt_in_rules: formattingOptInRules() }, fixtures, null);
     const clean = {
       path: path.join(fixtures, "clean/ok.xs"),
       text: readFileSync(path.join(fixtures, "clean/ok.xs"), "utf8"),

@@ -418,8 +418,8 @@ export const wrapEnumValues: Rule = {
   id: "wrap_enum_values",
   description:
     "Enum values arrays wrap when compact JSON length reaches 64 (Xano rewrites this on push)",
-  defaultEnabled: true,
-  defaultSeverity: "error",
+  defaultEnabled: false,
+  defaultSeverity: "warning",
   numericOptions: ["wrap_at"],
   lint(file: SourceFile, options: RuleOptions): Violation[] {
     const severity = options.severity ?? wrapEnumValues.defaultSeverity;

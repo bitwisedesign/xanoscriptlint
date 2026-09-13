@@ -491,7 +491,7 @@ export const wrapPipedValues: Rule = {
   id: "wrap_piped_values",
   description:
     "Assignment filter pipelines wrap when the pipe portion reaches 34 UTF-8 bytes or has 3+ filters (Xano rewrites this on push)",
-  defaultEnabled: true,
+  defaultEnabled: false,
   defaultSeverity: "warning",
   numericOptions: ["wrap_at", "filter_limit"],
   lint(file: SourceFile, options: RuleOptions): Violation[] {

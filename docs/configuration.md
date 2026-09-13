@@ -18,17 +18,19 @@ Three modes. The first two may be combined with each other; `only_rules` cannot 
 
 ### Default
 
-Every built-in with `defaultEnabled: true` is on.
+Every built-in with `defaultEnabled: true` is on. That set is `empty_function_run`, `no_reserved_var`, `no_trailing_comments`, and `no_trailing_newline`. Formatting rules that match Xano push/pull are opt-in.
 
 ```yaml
 disabled_rules:
   - no_trailing_newline
 opt_in_rules:
   - no_null_response
+  - wrap_enum_values
 ```
 
-- `disabled_rules` turns default-on rules off.
+- `disabled_rules` turns rules off.
 - `opt_in_rules` turns default-off rules on.
+- When a rule appears in both lists, `disabled_rules` wins.
 
 ### Exclusive
 
@@ -39,6 +41,22 @@ only_rules:
 ```
 
 Only the listed ids run. Use `custom_rules` to enable every defined custom rule, or list individual custom rule ids.
+
+### CLI overrides
+
+`--opt-in`, `--disable`, and `--only` override the config file without editing it. Repeatable and comma-separated.
+
+```text
+xanoscriptlint --opt-in wrap_enum_values,guid_placement
+xanoscriptlint --opt-in all --disable no_null_response
+xanoscriptlint --only empty_function_run
+```
+
+- `--opt-in <ids>` enables default-off rules. `all` enables every built-in.
+- `--disable <ids>` turns rules off.
+- `--only <ids>` is exclusive (like `only_rules`) and cannot be combined with `--opt-in` or `--disable`. `custom_rules` enables every defined custom rule.
+
+CLI beats the config file. At the same level, disable beats opt-in: `--opt-in x` turns on a rule the config disabled, and `--disable x` turns off a rule the config opted in.
 
 ## Paths
 
@@ -110,7 +128,7 @@ Multiple ids may be separated by spaces or commas. `disable` without `next` or `
 
 ## Deprecated rule ids
 
-`no_var_response` is a silent alias for `no_reserved_var`. It is accepted in `disabled_rules`, `opt_in_rules`, `only_rules`, as a per-rule options key, and in suppression comments. Prefer the canonical id in new configs.
+`no_var_response` is a silent alias for `no_reserved_var`. It is accepted in `disabled_rules`, `opt_in_rules`, `only_rules`, as a per-rule options key, in `--opt-in` / `--disable` / `--only`, and in suppression comments. Prefer the canonical id in new configs.
 
 ## CLI flags
 
@@ -120,6 +138,9 @@ Multiple ids may be separated by spaces or commas. `disable` without `next` or `
 | `--reporter stylish\|json` | Output format (default `stylish`) |
 | `--strict` | Treat warnings as errors (overrides config) |
 | `--no-strict` | Do not treat warnings as errors (overrides `strict: true` in config) |
+| `--opt-in <ids>` | Enable opt-in rules (comma-separated, repeatable; `all` enables every built-in) |
+| `--disable <ids>` | Disable rules (comma-separated, repeatable) |
+| `--only <ids>` | Run only these rules (exclusive; cannot combine with `--opt-in` or `--disable`) |
 | `--fix` | Automatically fix violations where a rule implements a fixer |
 | `--version` | Print the package version |
 

@@ -312,8 +312,8 @@ function violationsFor(
 export const fenceMultilineValues: Rule = {
   id: "fence_multiline_values",
   description: "Multiline mock and input values must be wrapped in a ``` fence",
-  defaultEnabled: true,
-  defaultSeverity: "error",
+  defaultEnabled: false,
+  defaultSeverity: "warning",
   lint(file: SourceFile, options: RuleOptions): Violation[] {
     const severity = options.severity ?? fenceMultilineValues.defaultSeverity;
     return violationsFor(file, splitLines(file.text), severity);
