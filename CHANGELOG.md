@@ -9,9 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `--opt-in`, `--disable`, and `--only` override which rules run without editing the config file. `--opt-in` and `--disable` are repeatable and comma-separated; `--opt-in all` enables every built-in. `--only` is exclusive and cannot be combined with the other two. CLI beats the config file; at the same level, disable beats opt-in.
 - Top-level `strict: true` in `.xanoscriptlint.yml` treats warnings as errors. `--strict` and `--no-strict` override the config; if neither flag is passed, the config value is used (default `false`).
-- Default-on `wrap_piped_values` flags an assignment filter pipeline that is inline when the pipe portion is 34 UTF-8 bytes or longer (or has 3+ filters), or wrapped below that cutoff, and auto-fixes it to Xano's push form. The cutoffs are configurable with `wrap_at` and `filter_limit`.
+- `wrap_piped_values` flags an assignment filter pipeline that is inline when the pipe portion is 34 UTF-8 bytes or longer (or has 3+ filters), or wrapped below that cutoff, and auto-fixes it to Xano's push form. The cutoffs are configurable with `wrap_at` and `filter_limit`.
 - Default-on `no_reserved_var` flags a `var`, `var.update`, `as`, or `each as` that uses a name Xano's language server blacklists (`$auth`, `$db`, `$env`, `$error`, `$input`, `$output`, `$response`, `$this`, `$toolset`, `$var`). Comment lines and the bodies of `"""` strings and triple-backtick fences are ignored. Default severity is error. There is no auto-fix.
+
+### Changed
+
+- `align_object_colons`, `collapse_assignment_values`, `fence_multiline_values`, `guid_placement`, `no_zero_numeric_default`, `quote_negative_numeric_default`, `wrap_enum_values`, and `wrap_piped_values` are now opt-in with default severity warning.
+- `no_trailing_newline` stays default-on; default severity is now warning.
+- `disabled_rules` wins when a rule is also listed in `opt_in_rules`.
+- A default run now exits `0` on everything except `empty_function_run` and `no_reserved_var`. Use `--strict` (or `strict: true`) to fail CI on warnings.
 
 ### Deprecated
 

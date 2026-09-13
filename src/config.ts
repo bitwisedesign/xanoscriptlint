@@ -43,7 +43,14 @@ export interface ResolvedConfig {
   included: string[];
   excluded: string[];
   customRules: CustomRuleConfig[];
+  definedCustomRules: CustomRuleConfig[];
   strict: boolean;
+}
+
+export interface RuleOverrides {
+  optIn: string[];
+  disable: string[];
+  only: string[];
 }
 
 interface RawCustomRule {
@@ -200,7 +207,11 @@ export function resolveConfig(
       if (rule.defaultEnabled && !disabledBuiltin.has(rule.id)) {
         enabledRuleIds.add(rule.id);
       }
-      if (!rule.defaultEnabled && optedIn.has(rule.id)) {
+      if (
+        !rule.defaultEnabled &&
+        optedIn.has(rule.id) &&
+        !disabledBuiltin.has(rule.id)
+      ) {
         enabledRuleIds.add(rule.id);
       }
     }
@@ -236,8 +247,115 @@ export function resolveConfig(
     included,
     excluded,
     customRules: activeCustomRules,
+    definedCustomRules: customRules,
     strict,
   };
+}
+
+export function applyRuleOverrides(
+  config: ResolvedConfig,
+  overrides: RuleOverrides,
+): ResolvedConfig {
+  const optIn = overrides.optIn;
+  const disable = overrides.disable;
+  const only = overrides.only;
+  if (optIn.length === 0 && disable.length === 0 && only.length === 0) {
+    return config;
+  }
+
+  if (only.length > 0 && (optIn.length > 0 || disable.length > 0)) {
+    throw new ConfigError("--only cannot be combined with --opt-in or --disable");
+  }
+
+  const builtinIds = new Set(builtinRules.map((rule) => rule.id));
+  const customIds = new Set(config.definedCustomRules.map((rule) => rule.id));
+  const knownIds = new Set([...builtinIds, ...customIds]);
+
+  validateOverrideIds(optIn, "--opt-in", knownIds, customIds, {
+    allowAll: true,
+    allowCustomToken: false,
+  });
+  validateOverrideIds(disable, "--disable", knownIds, customIds, {
+    allowAll: false,
+    allowCustomToken: false,
+  });
+  validateOverrideIds(only, "--only", knownIds, customIds, {
+    allowAll: false,
+    allowCustomToken: true,
+  });
+
+  const enabledRuleIds = new Set<string>();
+  if (only.length > 0) {
+    for (const id of only) {
+      if (id === "custom_rules") {
+        for (const customId of customIds) {
+          enabledRuleIds.add(customId);
+        }
+      } else {
+        enabledRuleIds.add(resolveOverrideId(id, customIds));
+      }
+    }
+  } else {
+    for (const id of config.enabledRuleIds) {
+      enabledRuleIds.add(id);
+    }
+    for (const id of optIn) {
+      if (id === "all") {
+        for (const rule of builtinRules) {
+          enabledRuleIds.add(rule.id);
+        }
+      } else {
+        enabledRuleIds.add(resolveOverrideId(id, customIds));
+      }
+    }
+    for (const id of disable) {
+      enabledRuleIds.delete(resolveOverrideId(id, customIds));
+    }
+  }
+
+  return {
+    ...config,
+    enabledRuleIds,
+    customRules: config.definedCustomRules.filter((rule) =>
+      enabledRuleIds.has(rule.id),
+    ),
+  };
+}
+
+function validateOverrideIds(
+  ids: string[],
+  listName: string,
+  knownIds: Set<string>,
+  customIds: Set<string>,
+  allowed: { allowAll: boolean; allowCustomToken: boolean },
+): void {
+  for (const id of ids) {
+    if (id === "all") {
+      if (!allowed.allowAll) {
+        throw new ConfigError("all is only valid in --opt-in");
+      }
+      continue;
+    }
+    if (id === "custom_rules") {
+      if (!allowed.allowCustomToken) {
+        throw new ConfigError("custom_rules is only valid in --only");
+      }
+      continue;
+    }
+    if (customIds.has(id)) {
+      continue;
+    }
+    if (!knownIds.has(canonicalRuleId(id))) {
+      throw new ConfigError(`unknown rule id in ${listName}: ${id}`);
+    }
+  }
+}
+
+function resolveOverrideId(id: string, customIds: Set<string>): string {
+  if (customIds.has(id)) {
+    return id;
+  }
+  return canonicalRuleId(id);
 }
 
 function canonicalBuiltinIds(

@@ -446,8 +446,8 @@ export const collapseAssignmentValues: Rule = {
   id: "collapse_assignment_values",
   description:
     "Assignment objects and arrays collapse to one line when that line would be shorter than 64 (Xano rewrites this on push)",
-  defaultEnabled: true,
-  defaultSeverity: "error",
+  defaultEnabled: false,
+  defaultSeverity: "warning",
   numericOptions: ["wrap_at"],
   lint(file: SourceFile, options: RuleOptions): Violation[] {
     const severity = options.severity ?? collapseAssignmentValues.defaultSeverity;

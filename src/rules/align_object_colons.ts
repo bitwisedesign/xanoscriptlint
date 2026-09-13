@@ -100,8 +100,8 @@ function violationsFor(
 export const alignObjectColons: Rule = {
   id: "align_object_colons",
   description: "Object entry colons must align to the longest name",
-  defaultEnabled: true,
-  defaultSeverity: "error",
+  defaultEnabled: false,
+  defaultSeverity: "warning",
   lint(file: SourceFile, options: RuleOptions): Violation[] {
     const severity = options.severity ?? alignObjectColons.defaultSeverity;
     return violationsFor(file, splitLines(file.text), severity);

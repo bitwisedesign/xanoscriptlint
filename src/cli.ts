@@ -4,7 +4,7 @@ import { writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { Command, CommanderError } from "commander";
-import { ConfigError, loadConfig } from "./config.js";
+import { applyRuleOverrides, ConfigError, loadConfig } from "./config.js";
 import { discoverXsFiles } from "./discover.js";
 import { fixFile, lintFiles, readSourceFile } from "./lint.js";
 import { builtinRules } from "./rules/index.js";
@@ -36,6 +36,24 @@ export async function runCli(
     .option("--strict", "treat warnings as errors")
     .option("--no-strict", "do not treat warnings as errors (overrides config)")
     .option("--fix", "automatically fix violations where possible", false)
+    .option(
+      "--opt-in <ids>",
+      "enable opt-in rules (comma-separated, repeatable; 'all' enables every built-in)",
+      collectIds,
+      [] as string[],
+    )
+    .option(
+      "--disable <ids>",
+      "disable rules (comma-separated, repeatable)",
+      collectIds,
+      [] as string[],
+    )
+    .option(
+      "--only <ids>",
+      "run only these rules (comma-separated, repeatable; exclusive)",
+      collectIds,
+      [] as string[],
+    )
     .exitOverride()
     .configureOutput({
       writeOut: (str) => io.stdout.write(str),
@@ -52,6 +70,9 @@ export async function runCli(
         reporter: string;
         strict?: boolean;
         fix: boolean;
+        optIn: string[];
+        disable: string[];
+        only: string[];
       }>();
       exitCode = await runLint(
         paths,
@@ -88,7 +109,15 @@ export async function runCli(
 
 async function runLint(
   paths: string[],
-  opts: { config?: string; reporter: string; strict?: boolean; fix: boolean },
+  opts: {
+    config?: string;
+    reporter: string;
+    strict?: boolean;
+    fix: boolean;
+    optIn: string[];
+    disable: string[];
+    only: string[];
+  },
   io: { stdout: NodeJS.WritableStream; stderr: NodeJS.WritableStream },
 ): Promise<number> {
   const reporter = parseReporter(opts.reporter);
@@ -99,7 +128,11 @@ async function runLint(
 
   try {
     const cwd = process.cwd();
-    const config = loadConfig({ cwd, configPath: opts.config });
+    const config = applyRuleOverrides(loadConfig({ cwd, configPath: opts.config }), {
+      optIn: opts.optIn ?? [],
+      disable: opts.disable ?? [],
+      only: opts.only ?? [],
+    });
     const strict = opts.strict ?? config.strict;
     const files = await discoverXsFiles({ config, cwd, cliPaths: paths });
     let sources = files.map((filePath) => readSourceFile(filePath));
@@ -140,14 +173,31 @@ async function runLint(
 }
 
 function formatRulesList(): string {
-  const lines = ["id                        default    severity   description", "-".repeat(90)];
-  for (const rule of builtinRules) {
-    const enabled = rule.defaultEnabled ? "on" : "opt-in";
-    lines.push(
-      `${rule.id.padEnd(26)}${enabled.padEnd(11)}${rule.defaultSeverity.padEnd(11)}${rule.description}`,
-    );
-  }
-  return `${lines.join("\n")}\n`;
+  const headers = ["id", "default", "severity", "description"];
+  const rows = builtinRules.map((rule) => [
+    rule.id,
+    rule.defaultEnabled ? "on" : "opt-in",
+    rule.defaultSeverity,
+    rule.description,
+  ]);
+  const widths = headers.map((header, index) =>
+    Math.max(header.length, ...rows.map((row) => row[index].length)),
+  );
+  const format = (cells: string[]) =>
+    cells
+      .map((cell, index) =>
+        index === cells.length - 1 ? cell : cell.padEnd(widths[index] + 2),
+      )
+      .join("");
+  const headerLine = format(headers);
+  const body = rows.map(format);
+  const ruleWidth = Math.max(headerLine.length, ...body.map((line) => line.length));
+  const lines = [headerLine, "-".repeat(ruleWidth), ...body];
+  return `${lines.join("\n")}\n\nEnable opt-in rules with --opt-in <id> or --opt-in all.\n`;
+}
+
+function collectIds(value: string, previous: string[]): string[] {
+  return [...previous, ...value.split(",").map((item) => item.trim()).filter(Boolean)];
 }
 
 function parseReporter(name: string): ReporterName | undefined {

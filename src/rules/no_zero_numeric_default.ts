@@ -28,8 +28,8 @@ function stripZeroDefault(line: string): string {
 export const noZeroNumericDefault: Rule = {
   id: "no_zero_numeric_default",
   description: "Numeric defaults of 0 must be omitted",
-  defaultEnabled: true,
-  defaultSeverity: "error",
+  defaultEnabled: false,
+  defaultSeverity: "warning",
   lint(file: SourceFile, options: RuleOptions): Violation[] {
     const severity = options.severity ?? noZeroNumericDefault.defaultSeverity;
     const lines = splitLineRecords(file.text).map((record) => record.content);

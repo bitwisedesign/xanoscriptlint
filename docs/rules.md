@@ -2,23 +2,25 @@
 
 | Id | Default | Severity | Auto-fix | Description |
 | --- | --- | --- | --- | --- |
-| [`align_object_colons`](#align_object_colons) | on | error | yes | Object entry colons must align to the longest name |
-| [`collapse_assignment_values`](#collapse_assignment_values) | on | error | yes | Wrapped assignment whose one-line form is under 64 UTF-8 bytes |
+| [`align_object_colons`](#align_object_colons) | opt-in | warning | yes | Object entry colons must align to the longest name |
+| [`collapse_assignment_values`](#collapse_assignment_values) | opt-in | warning | yes | Wrapped assignment whose one-line form is under 64 UTF-8 bytes |
 | [`empty_function_run`](#empty_function_run) | on | error | no | `function.run` must not be called with an empty name |
-| [`fence_multiline_values`](#fence_multiline_values) | on | error | yes | Multiline mock and input values must be wrapped in a triple-backtick fence |
-| [`guid_placement`](#guid_placement) | on | warning | yes | `guid` needs a blank line above it only when it follows a block closer |
+| [`fence_multiline_values`](#fence_multiline_values) | opt-in | warning | yes | Multiline mock and input values must be wrapped in a triple-backtick fence |
+| [`guid_placement`](#guid_placement) | opt-in | warning | yes | `guid` needs a blank line above it only when it follows a block closer |
 | [`no_null_response`](#no_null_response) | opt-in | warning | yes | Do not assign `response = null` |
 | [`no_reserved_var`](#no_reserved_var) | on | error | no | Do not declare a reserved variable name |
 | [`no_trailing_comments`](#no_trailing_comments) | on | warning | no | `//` above `guid` or after the file's closing `}` |
-| [`no_trailing_newline`](#no_trailing_newline) | on | error | yes | File must end with `}` and no trailing newline |
-| [`no_zero_numeric_default`](#no_zero_numeric_default) | on | error | yes | Numeric defaults of `0` must be omitted |
-| [`quote_negative_numeric_default`](#quote_negative_numeric_default) | on | error | yes | Negative numeric defaults must be quoted |
-| [`wrap_enum_values`](#wrap_enum_values) | on | error | yes | Enum `values` arrays wrap when compact JSON length reaches 64 |
-| [`wrap_piped_values`](#wrap_piped_values) | on | warning | yes | Assignment filter pipelines wrap at pipe length 34 or 3+ filters |
+| [`no_trailing_newline`](#no_trailing_newline) | on | warning | yes | File must end with `}` and no trailing newline |
+| [`no_zero_numeric_default`](#no_zero_numeric_default) | opt-in | warning | yes | Numeric defaults of `0` must be omitted |
+| [`quote_negative_numeric_default`](#quote_negative_numeric_default) | opt-in | warning | yes | Negative numeric defaults must be quoted |
+| [`wrap_enum_values`](#wrap_enum_values) | opt-in | warning | yes | Enum `values` arrays wrap when compact JSON length reaches 64 |
+| [`wrap_piped_values`](#wrap_piped_values) | opt-in | warning | yes | Assignment filter pipelines wrap at pipe length 34 or 3+ filters |
 
 List the same catalog from the CLI with `xanoscriptlint rules`.
 
 ## align_object_colons
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
 
 Xano realigns `key: value` colons on push so siblings in the same `{ ... }` share one column, immediately after the longest name in that block. The pulled file is canonical; local misalignment is push/pull churn.
 
@@ -43,6 +45,8 @@ Content inside triple-backtick fences and `"""` strings is ignored, so prompt bo
 Auto-fixable with `--fix`: spaces before the colon are inserted or removed until the colons line up, and extra spaces after the colon collapse to one.
 
 ## collapse_assignment_values
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
 
 Xano collapses an assignment's object or array onto one line when that line — indent, the `name =` or `return` prefix, and the inline value — would be shorter than 64 UTF-8 bytes. A wrapped value that already fills 64 or more bytes stays wrapped. Long one-liners are left as-is; Xano does not wrap those.
 
@@ -82,6 +86,8 @@ Comment lines are ignored.
 
 ## fence_multiline_values
 
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
+
 Xano wraps multiline object and array values in `mock` and `input` blocks in a triple-backtick fence on push. Single-line values (`null`, numbers, strings, inline `{...}` / `[...]`) stay unfenced. An unfenced multiline value is push/pull churn.
 
 ````xs
@@ -116,6 +122,8 @@ Auto-fixable with `--fix`: an eligible value is wrapped in a fence, the opening 
 
 ## guid_placement
 
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
+
 When `guid` is present, Xano places it as the last property of the top-level construct. Presence itself is not required: a file that has not yet been pushed and pulled from Xano has no `guid`, and that is valid for this rule.
 
 The blank line is decided by the previous statement, not the key name. Comments immediately above `guid` are skipped so the predecessor is the last real statement: Xano moves those comments to the file header on push. Exactly one blank line above `guid` when that statement is a bare `}` or `]`. No blank line otherwise.
@@ -137,13 +145,11 @@ Observed blank-line predecessors include a `}` that closes `test`, a multiline `
 
 A multiline `tags` array has not been seen in a Xano-pulled file. The closer rule would require a blank line above `guid` if `tags` ended on its own `]`, matching every other multiline array. That shape is inferred, not observed.
 
-Default severity is warning.
-
 Auto-fixable with `--fix`: a missing blank line is inserted, a forbidden blank line is removed, and extra blank lines collapse to one.
 
 ## no_null_response
 
-`response = null` is not allowed; use an empty object instead. Off by default; enable with `opt_in_rules`.
+`response = null` is not allowed; use an empty object instead. Off by default; enable with `opt_in_rules` or `--opt-in`.
 
 ```yaml
 opt_in_rules:
@@ -217,11 +223,15 @@ Default severity is warning.
 
 ## no_trailing_newline
 
+On by default. Default severity is warning.
+
 Xano pull strips trailing newlines and treats their absence as canonical. A lintable file must end with `}` as the last character — no `\n` after it.
 
 Auto-fixable with `--fix`: trailing whitespace after the closing `}` is stripped. Files that do not end with `}` after that trim remain a reported violation.
 
 ## no_zero_numeric_default
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
 
 Xano strips an explicit default of `0` from `int` and `decimal` declarations on push. The pulled file omits the default, so a local `=0` is push/pull churn. Nullable and array forms are included (`int?`, `decimal?`, `int[]`).
 
@@ -236,6 +246,8 @@ Auto-fixable with `--fix`: `int retry_count?=0` becomes `int retry_count?` and `
 
 ## quote_negative_numeric_default
 
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
+
 Xano quotes a negative `int` or `decimal` default on push. An unquoted `-1` becomes `"-1"`.
 
 ```xs
@@ -248,6 +260,8 @@ Already-quoted negatives are canonical. A negative zero (`-0`) is owned by `no_z
 Auto-fixable with `--fix`: the unquoted negative is wrapped in double quotes. Spacing around `=` and any trailing `filters=` clause or metadata block are preserved.
 
 ## wrap_enum_values
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
 
 Xano wraps an enum `values` array when the compact JSON form — `["a","b"]`, quotes and commas, no spaces — is 64 characters or longer. Shorter arrays stay on one line. The pulled file is canonical; a locally inline long array (or a wrapped short array) is push/pull churn.
 
@@ -279,6 +293,8 @@ wrap_enum_values:
 
 ## wrap_piped_values
 
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
+
 Xano wraps an assignment's filter pipeline when the pipe portion — every top-level `|filter` segment, indentation and base excluded — is 34 UTF-8 bytes or longer, or when there are three or more top-level filters. Shorter one- and two-filter chains stay on one line. The pulled file is canonical; a locally inline long chain (or a wrapped short chain) is push/pull churn.
 
 The threshold is not the reconstructed line length used by [`collapse_assignment_values`](#collapse_assignment_values). A chain at deep indent can stay inline while a shorter line at shallow indent wraps, because only the `|…` bytes count. Multi-byte characters count as more than one: `|concat:"••••••••"` is 18 characters and 34 bytes, so it wraps.
@@ -307,8 +323,6 @@ value = []
 ```
 
 The rule skips a chain whose base is grouped (`(…)`, a non-empty `[…]` / `{…}`), whose expression contains `$$` outside strings, whose base already spans multiple lines, or whose span includes a triple-backtick fence, `"""` block, backtick expression, trailing `//`, or a tab. Empty `{}` and `[]` bases do wrap. `||` is not a filter.
-
-Default severity is warning.
 
 Auto-fixable with `--fix`: an inline chain is rewritten with the base on the assignment line and one filter per continuation (statement indent + 2), and a wrapped chain below the threshold collapses to one line.
 
