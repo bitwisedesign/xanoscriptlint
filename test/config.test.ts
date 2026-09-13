@@ -20,6 +20,20 @@ describe("config enablement", () => {
     assert.equal(config.enabledRuleIds.has("no_trailing_comments"), true);
     assert.equal(config.enabledRuleIds.has("no_reserved_var"), true);
     assert.deepEqual(config.included, ["**/*.xs"]);
+    assert.equal(config.strict, false);
+  });
+
+  it("parses strict as a boolean", () => {
+    assert.equal(resolveConfig({ strict: true }, "/tmp", null).strict, true);
+    assert.equal(resolveConfig({ strict: false }, "/tmp", null).strict, false);
+    assert.equal(resolveConfig({}, "/tmp", null).strict, false);
+  });
+
+  it("rejects a non-boolean strict", () => {
+    assert.throws(
+      () => loadConfigText("strict: yes-please\n", "/tmp", null),
+      /strict must be a boolean/,
+    );
   });
 
   it("opts out with disabled_rules", () => {

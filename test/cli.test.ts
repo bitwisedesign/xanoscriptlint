@@ -6,7 +6,7 @@ import { runCli } from "../src/cli.js";
 import { applyStrict, exitCodeFor, formatFixSummary, formatReport } from "../src/report.js";
 import type { Correction, Violation } from "../src/rules/types.js";
 import { isMainModule } from "../src/util.js";
-import { CLEAN_XS, collectStream, withTempDir, writeXs } from "./support.js";
+import { CLEAN_XS, NULL_RESPONSE_XS, collectStream, withTempDir, writeXs } from "./support.js";
 
 const warning: Violation = {
   ruleId: "no_reserved_var",
@@ -91,6 +91,7 @@ describe("cli", () => {
     assert.match(helpText, /xanoscriptlint/);
     assert.match(helpText, /--config/);
     assert.match(helpText, /--strict/);
+    assert.match(helpText, /--no-strict/);
     assert.match(helpText, /--fix/);
 
     const verOut = collectStream();
@@ -101,6 +102,81 @@ describe("cli", () => {
     });
     assert.equal(verCode, 0);
     assert.match(verOut.text() + verErr.text(), /\d+\.\d+\.\d+/);
+  });
+
+  it("config strict: true promotes warnings to errors", async () => {
+    await withTempDir(async (dir) => {
+      await writeXs(
+        dir,
+        ".xanoscriptlint.yml",
+        "strict: true\nopt_in_rules:\n  - no_null_response\nincluded:\n  - \"**/*.xs\"\n",
+      );
+      await writeXs(dir, "ok.xs", NULL_RESPONSE_XS);
+      const cwd = process.cwd();
+      process.chdir(dir);
+      try {
+        const stdout = collectStream();
+        const stderr = collectStream();
+        const code = await runCli(["node", "xanoscriptlint", "ok.xs"], {
+          stdout: stdout.stream,
+          stderr: stderr.stream,
+        });
+        assert.equal(code, 2, stderr.text());
+        assert.match(stdout.text(), /no_null_response/);
+      } finally {
+        process.chdir(cwd);
+      }
+    });
+  });
+
+  it("config strict: false leaves warnings as warnings", async () => {
+    await withTempDir(async (dir) => {
+      await writeXs(
+        dir,
+        ".xanoscriptlint.yml",
+        "strict: false\nopt_in_rules:\n  - no_null_response\nincluded:\n  - \"**/*.xs\"\n",
+      );
+      await writeXs(dir, "ok.xs", NULL_RESPONSE_XS);
+      const cwd = process.cwd();
+      process.chdir(dir);
+      try {
+        const stdout = collectStream();
+        const stderr = collectStream();
+        const code = await runCli(["node", "xanoscriptlint", "ok.xs"], {
+          stdout: stdout.stream,
+          stderr: stderr.stream,
+        });
+        assert.equal(code, 0, stderr.text());
+        assert.match(stdout.text(), /no_null_response/);
+      } finally {
+        process.chdir(cwd);
+      }
+    });
+  });
+
+  it("--no-strict overrides config strict: true", async () => {
+    await withTempDir(async (dir) => {
+      await writeXs(
+        dir,
+        ".xanoscriptlint.yml",
+        "strict: true\nopt_in_rules:\n  - no_null_response\nincluded:\n  - \"**/*.xs\"\n",
+      );
+      await writeXs(dir, "ok.xs", NULL_RESPONSE_XS);
+      const cwd = process.cwd();
+      process.chdir(dir);
+      try {
+        const stdout = collectStream();
+        const stderr = collectStream();
+        const code = await runCli(["node", "xanoscriptlint", "--no-strict", "ok.xs"], {
+          stdout: stdout.stream,
+          stderr: stderr.stream,
+        });
+        assert.equal(code, 0, stderr.text());
+        assert.match(stdout.text(), /no_null_response/);
+      } finally {
+        process.chdir(cwd);
+      }
+    });
   });
 
   it("rewrites a trailing newline with --fix", async () => {

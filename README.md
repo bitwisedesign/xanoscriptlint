@@ -130,10 +130,11 @@ xanoscriptlint rules
 xanoscriptlint --config path/to/.xanoscriptlint.yml
 xanoscriptlint --reporter json
 xanoscriptlint --strict
+xanoscriptlint --no-strict
 xanoscriptlint --fix
 ```
 
-Exit `0` when there are no error-severity violations. Exit `2` when there is at least one error. Warnings alone do not fail CI unless `--strict`.
+Exit `0` when there are no error-severity violations. Exit `2` when there is at least one error. Warnings alone do not fail CI unless `--strict` or `strict: true` in the config (`--no-strict` overrides the config).
 
 ## License
 
