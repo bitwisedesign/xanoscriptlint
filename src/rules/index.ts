@@ -15,8 +15,8 @@ import type { Rule } from "./types.js";
 
 export const builtinRules: Rule[] = [
   collapseAssignmentValues,
-  alignObjectColons,
   fenceMultilineValues,
+  alignObjectColons,
   wrapEnumValues,
   wrapPipedValues,
   emptyFunctionRun,
