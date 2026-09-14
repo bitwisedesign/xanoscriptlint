@@ -90,6 +90,7 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 | `no_trailing_comments` | 🟢 | ⚠️ | — | `//` above `guid` or after the file's closing `}` (Xano moves it to the header on push) |
 | `no_trailing_newline` | 🟢 | ⚠️ | ✅ | File does not end with `}` (Xano pull strips trailing newlines) |
 | `no_zero_numeric_default` | ⚪️ | ⚠️ | ✅ | Explicit numeric default of `0` (Xano strips it on push) |
+| `no_zero_set_filter` | ⚪️ | ❌ | ✅ | `set:` of numeric `0` (does not write the field; seed it on the object literal) |
 | `quote_negative_numeric_default` | ⚪️ | ⚠️ | ✅ | Unquoted negative numeric default (Xano quotes it on push) |
 | `wrap_enum_values` | ⚪️ | ⚠️ | ✅ | Enum `values` array is inline at compact JSON length 64+ or wrapped below 64 (Xano rewrites this on push) |
 | `wrap_piped_values` | ⚪️ | ⚠️ | ✅ | Assignment filter pipeline is inline at pipe length 34+ or 3+ filters, or wrapped below that (Xano rewrites this on push) |

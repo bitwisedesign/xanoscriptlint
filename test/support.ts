@@ -17,7 +17,12 @@ export async function withTempDir(
 
 export function formattingOptInRules(): string[] {
   return builtinRules
-    .filter((rule) => !rule.defaultEnabled && rule.id !== "no_null_response")
+    .filter(
+      (rule) =>
+        !rule.defaultEnabled &&
+        rule.id !== "no_null_response" &&
+        rule.id !== "no_zero_set_filter",
+    )
     .map((rule) => rule.id);
 }
 
@@ -258,6 +263,34 @@ export const ZERO_DEFAULT_FIXED_DECLS = `    int retry_count?
 
 export const ZERO_DEFAULT_XS = wrapInputDecls(ZERO_DEFAULT_DECLS);
 export const ZERO_DEFAULT_FIXED_XS = wrapInputDecls(ZERO_DEFAULT_FIXED_DECLS);
+
+export const ZERO_SET_INLINE_XS = wrapVarValue(`{}|set:"slot":0|set:"page":0`);
+export const ZERO_SET_INLINE_FIXED_XS = wrapVarValue(`{slot: 0, page: 0}`);
+export const ZERO_SET_SEEDED_XS = wrapVarValue(`{id: 7}|set:"retries":0`);
+export const ZERO_SET_SEEDED_FIXED_XS = wrapVarValue(`{id: 7, retries: 0}`);
+export const ZERO_SET_WRAPPED_MIXED_XS = wrapVarValue(
+  wrappedPiped("{}", '|set:"slot":0', '|set:"label":$title'),
+);
+export const ZERO_SET_WRAPPED_MIXED_FIXED_XS = wrapVarValue(`{slot: 0}|set:"label":$title`);
+export const ZERO_SET_LONG_WRAPPED_XS = wrapVarValue(
+  wrappedPiped(
+    "{}",
+    '|set:"slot":0',
+    '|set:"label":$title',
+    '|set:"owner":$user',
+    '|set:"status":$state',
+  ),
+);
+export const ZERO_SET_LONG_WRAPPED_FIXED_XS = wrapVarValue(
+  `{slot: 0}|set:"label":$title|set:"owner":$user|set:"status":$state`,
+);
+export const ZERO_SET_DUPLICATE_XS = wrapVarValue(`{slot: 1}|set:"slot":0`);
+export const ZERO_SET_REDUNDANT_XS = wrapVarValue(`{slot: 0}|set:"slot":0`);
+export const ZERO_SET_REDUNDANT_FIXED_XS = wrapVarValue(`{slot: 0}`);
+export const ZERO_SET_VARIABLE_BASE_XS = wrapVarValue(`$cart|set:"slot":0`);
+export const ZERO_SET_DYNAMIC_KEY_XS = wrapVarValue(`$counts|set:$key:0`);
+export const ZERO_SET_DOTTED_PATH_XS = wrapVarValue(`{}|set:"meta.slot":0`);
+export const ZERO_SET_NESTED_XS = wrapVarValue(`[]|push:($item|set:"slot":0)`);
 
 export const NEGATIVE_DEFAULT_DECLS = `    int quantity?=-1
     decimal drift?=-2.5
