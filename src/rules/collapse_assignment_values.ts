@@ -6,12 +6,12 @@ import { DEFAULT_WRAP_AT, enumValuesOpenLines } from "./wrap_enum_values.js";
 
 const COMPOUND_EQ = "!<>=+*/-";
 
-interface Cursor {
+export interface Cursor {
   readonly text: string;
   i: number;
 }
 
-type Node =
+export type Node =
   | { kind: "object"; entries: { key: string; value: Node }[]; start: number; end: number }
   | { kind: "array"; items: Node[]; start: number; end: number }
   | { kind: "scalar"; text: string; start: number; end: number };
@@ -210,7 +210,7 @@ function parseScalar(cursor: Cursor): Node | null {
   return { kind: "scalar", text, start, end: cursor.i };
 }
 
-function parseValue(cursor: Cursor): Node | null {
+export function parseValue(cursor: Cursor): Node | null {
   skipSpaces(cursor);
   if (cursor.i >= cursor.text.length) {
     return null;
@@ -291,7 +291,7 @@ function parseArray(cursor: Cursor): Node | null {
   }
 }
 
-function renderInline(node: Node): string {
+export function renderInline(node: Node): string {
   if (node.kind === "object") {
     return `{${node.entries.map((entry) => `${entry.key}: ${renderInline(entry.value)}`).join(", ")}}`;
   }

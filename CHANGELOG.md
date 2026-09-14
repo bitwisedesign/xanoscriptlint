@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in `no_zero_set_filter` flags `|set:` of a bare numeric `0` (error). A literal `|set:"name":0` on an object-literal base auto-fixes by seeding the field on the object and collapsing the statement to one line; a variable base, dynamic key, nested path, or a base that already has a non-zero value for that key is reported without a rewrite.
+
 ## [0.4.1] - 2026-09-14
 
 ### Fixed

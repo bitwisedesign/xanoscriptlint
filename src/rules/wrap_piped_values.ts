@@ -1,13 +1,20 @@
 import { isSuppressed, parseSuppressions } from "../suppress.js";
 import { joinLineRecords, splitLineRecords } from "./line_records.js";
 import type { LineRecord } from "./line_records.js";
+import {
+  ASSIGN,
+  collectSpan,
+  isCompoundEq,
+  lineStartModes,
+  matchingClose,
+  skipQuoted,
+  splitChain,
+} from "./pipe_chains.js";
 import type { Rule, RuleOptions, SourceFile, Violation } from "./types.js";
 
 export const DEFAULT_PIPE_WRAP_AT = 34;
 export const DEFAULT_FILTER_LIMIT = 3;
 
-const COMPOUND_EQ = "!<>=+*/-";
-const ASSIGN = /^(\s*)([A-Za-z_][A-Za-z0-9_.]*)(\s*=\s*)(\S.*)$/;
 const FILTER_NAME = /^\|[A-Za-z_][A-Za-z0-9_]*:/;
 
 interface PipeChainSite {
@@ -32,116 +39,6 @@ function filterLimit(options: RuleOptions): number {
 
 function byteLength(text: string): number {
   return Buffer.byteLength(text, "utf8");
-}
-
-function skipQuoted(text: string, start: number, quote: '"' | "'"): number | null {
-  let i = start + 1;
-  let escape = false;
-  while (i < text.length) {
-    const ch = text[i];
-    if (escape) {
-      escape = false;
-      i += 1;
-      continue;
-    }
-    if (ch === "\\") {
-      escape = true;
-      i += 1;
-      continue;
-    }
-    if (ch === quote) {
-      return i + 1;
-    }
-    i += 1;
-  }
-  return null;
-}
-
-function isOpaque(text: string, i: number): boolean {
-  return text.startsWith("```", i) || text.startsWith('"""', i) || text[i] === "`";
-}
-
-interface WalkResult {
-  depth: number;
-  pipes: number[];
-  skip: boolean;
-}
-
-function walk(text: string, startDepth: number): WalkResult {
-  let i = 0;
-  let depth = startDepth;
-  const pipes: number[] = [];
-  while (i < text.length) {
-    if (isOpaque(text, i) || text.startsWith("//", i)) {
-      return { depth, pipes, skip: true };
-    }
-    const ch = text[i];
-    if (ch === '"' || ch === "'") {
-      const end = skipQuoted(text, i, ch);
-      if (end === null) {
-        return { depth, pipes, skip: true };
-      }
-      i = end;
-      continue;
-    }
-    if (ch === "{" || ch === "[" || ch === "(") {
-      depth += 1;
-      i += 1;
-      continue;
-    }
-    if (ch === "}" || ch === "]" || ch === ")") {
-      depth -= 1;
-      i += 1;
-      continue;
-    }
-    if (ch === "|") {
-      if (text[i + 1] === "|") {
-        i += 2;
-        continue;
-      }
-      if (depth === 0) {
-        pipes.push(i);
-      }
-      i += 1;
-      continue;
-    }
-    i += 1;
-  }
-  return { depth, pipes, skip: false };
-}
-
-function matchingClose(text: string, open: number): number | null {
-  let depth = 0;
-  let i = open;
-  while (i < text.length) {
-    if (isOpaque(text, i) || text.startsWith("//", i)) {
-      return null;
-    }
-    const ch = text[i];
-    if (ch === '"' || ch === "'") {
-      const end = skipQuoted(text, i, ch);
-      if (end === null) {
-        return null;
-      }
-      i = end;
-      continue;
-    }
-    if (ch === "{" || ch === "[" || ch === "(") {
-      depth += 1;
-      i += 1;
-      continue;
-    }
-    if (ch === "}" || ch === "]" || ch === ")") {
-      depth -= 1;
-      if (depth === 0) {
-        return i;
-      }
-      i += 1;
-      continue;
-    }
-    i += 1;
-  }
-  return null;
 }
 
 function hasLambdaSigil(text: string): boolean {
@@ -171,21 +68,6 @@ function isGroupedBase(base: string): boolean {
     (trimmed.startsWith("[") && trimmed !== "[]") ||
     (trimmed.startsWith("{") && trimmed !== "{}")
   );
-}
-
-function splitChain(expr: string): { base: string; filters: string[] } | null {
-  const scanned = walk(expr, 0);
-  if (scanned.skip) {
-    return null;
-  }
-  if (scanned.pipes.length === 0) {
-    return { base: expr, filters: [] };
-  }
-  const filters = scanned.pipes.map((pos, index) => {
-    const end = scanned.pipes[index + 1] ?? expr.length;
-    return expr.slice(pos, end).trimEnd();
-  });
-  return { base: expr.slice(0, scanned.pipes[0]).trimEnd(), filters };
 }
 
 function pipeBytesOf(filters: string[]): number {
@@ -262,19 +144,6 @@ function renderCanonical(
   return lines;
 }
 
-function isCompoundEq(line: string, eqIndex: number): boolean {
-  const prev = eqIndex > 0 ? line[eqIndex - 1] : "";
-  if (prev !== "" && COMPOUND_EQ.includes(prev)) {
-    return true;
-  }
-  return line[eqIndex + 1] === "=";
-}
-
-function startsPipeLine(line: string): boolean {
-  const trimmed = line.trimStart();
-  return trimmed.startsWith("|") && !trimmed.startsWith("||");
-}
-
 function rangeHasTab(lines: string[], start: number, end: number): boolean {
   for (let i = start; i <= end; i += 1) {
     if (lines[i]?.includes("\t")) {
@@ -282,95 +151,6 @@ function rangeHasTab(lines: string[], start: number, end: number): boolean {
     }
   }
   return false;
-}
-
-function isMultilineBase(segments: string[]): boolean {
-  return segments.slice(1).some((segment) => !startsPipeLine(segment));
-}
-
-interface Span {
-  closeLine: number;
-  collapsed: string;
-  skip: boolean;
-  multilineBase: boolean;
-}
-
-function collectSpan(lines: string[], openLine: number, rhs: string): Span | null {
-  const segments: string[] = [];
-  let depth = 0;
-  let skip = false;
-  let cur = openLine;
-  let text = rhs;
-  while (true) {
-    const scanned = walk(text, depth);
-    skip = skip || scanned.skip;
-    depth = scanned.depth;
-    segments.push(text);
-    if (depth > 0) {
-      cur += 1;
-      if (cur >= lines.length) {
-        return null;
-      }
-      text = lines[cur];
-      continue;
-    }
-    const next = cur + 1;
-    if (next < lines.length && startsPipeLine(lines[next])) {
-      cur = next;
-      text = lines[cur];
-      continue;
-    }
-    break;
-  }
-  const collapsed = segments[0].trimEnd() + segments.slice(1).map((segment) => segment.trim()).join("");
-  return {
-    closeLine: cur,
-    collapsed,
-    skip,
-    multilineBase: isMultilineBase(segments),
-  };
-}
-
-function lineModeAfter(line: string, mode: "code" | "fence" | "triple"): "code" | "fence" | "triple" {
-  if (mode === "fence") {
-    return line.includes("```") ? "code" : "fence";
-  }
-  if (mode === "triple") {
-    return line.includes('"""') ? "code" : "triple";
-  }
-  let i = 0;
-  while (i < line.length) {
-    if (line.startsWith("//", i)) {
-      break;
-    }
-    if (line.startsWith("```", i)) {
-      return "fence";
-    }
-    if (line.startsWith('"""', i)) {
-      return "triple";
-    }
-    const ch = line[i];
-    if (ch === '"' || ch === "'") {
-      const end = skipQuoted(line, i, ch);
-      if (end === null) {
-        break;
-      }
-      i = end;
-      continue;
-    }
-    i += 1;
-  }
-  return "code";
-}
-
-function lineStartModes(lines: string[]): ("code" | "fence" | "triple")[] {
-  const modes: ("code" | "fence" | "triple")[] = [];
-  let mode: "code" | "fence" | "triple" = "code";
-  for (const line of lines) {
-    modes.push(mode);
-    mode = lineModeAfter(line, mode);
-  }
-  return modes;
 }
 
 function findPipeChains(lines: string[], wrapAt: number, limit: number): PipeChainSite[] {

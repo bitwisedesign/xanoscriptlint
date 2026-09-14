@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { resolveConfig } from "../src/config.js";
 import { fixFile } from "../src/lint.js";
+import { builtinRules } from "../src/rules/index.js";
 import {
   AFTER_COLON_SPACES_MOCK_XS,
   ALIGNED_FENCED_INPUT_XS,
@@ -39,6 +40,20 @@ import {
   VALID_SIBLING_FENCES_XS,
   ZERO_DEFAULT_FIXED_XS,
   ZERO_DEFAULT_XS,
+  ZERO_SET_DOTTED_PATH_XS,
+  ZERO_SET_DUPLICATE_XS,
+  ZERO_SET_REDUNDANT_FIXED_XS,
+  ZERO_SET_REDUNDANT_XS,
+  ZERO_SET_DYNAMIC_KEY_XS,
+  ZERO_SET_INLINE_FIXED_XS,
+  ZERO_SET_INLINE_XS,
+  ZERO_SET_LONG_WRAPPED_FIXED_XS,
+  ZERO_SET_LONG_WRAPPED_XS,
+  ZERO_SET_SEEDED_FIXED_XS,
+  ZERO_SET_SEEDED_XS,
+  ZERO_SET_VARIABLE_BASE_XS,
+  ZERO_SET_WRAPPED_MIXED_FIXED_XS,
+  ZERO_SET_WRAPPED_MIXED_XS,
   wrapInputDecls,
   wrapMockBlock,
   wrapAssign,
@@ -148,6 +163,107 @@ describe("fixFile", () => {
     assert.equal(result.changed, false);
     assert.equal(result.text, text);
     assert.deepEqual(result.corrections, []);
+  });
+
+  it("rewrites literal zero |set: into a seeded object when no_zero_set_filter is opted in", () => {
+    const opted = { opt_in_rules: ["no_zero_set_filter"] } as const;
+    const inline = fixFile({ path: "zero-set.xs", text: ZERO_SET_INLINE_XS }, config(opted));
+    assert.equal(inline.changed, true);
+    assert.equal(inline.text, ZERO_SET_INLINE_FIXED_XS);
+    assert.equal(
+      inline.corrections.filter((correction) => correction.ruleId === "no_zero_set_filter").length,
+      2,
+    );
+
+    const off = fixFile({ path: "zero-set.xs", text: ZERO_SET_INLINE_XS }, config());
+    assert.equal(off.changed, false);
+    assert.equal(off.text, ZERO_SET_INLINE_XS);
+
+    const seeded = fixFile({ path: "seeded.xs", text: ZERO_SET_SEEDED_XS }, config(opted));
+    assert.equal(seeded.changed, true);
+    assert.equal(seeded.text, ZERO_SET_SEEDED_FIXED_XS);
+
+    const duplicate = fixFile({ path: "dup.xs", text: ZERO_SET_DUPLICATE_XS }, config(opted));
+    assert.equal(duplicate.changed, false);
+    assert.equal(duplicate.text, ZERO_SET_DUPLICATE_XS);
+
+    const mixedConflict = wrapVarValue(`{slot: 5}|set:"slot":0|set:"page":0`);
+    const mixedFixed = wrapVarValue(`{slot: 5, page: 0}|set:"slot":0`);
+    const mixed = fixFile({ path: "mix.xs", text: mixedConflict }, config(opted));
+    assert.equal(mixed.changed, true);
+    assert.equal(mixed.text, mixedFixed);
+
+    const redundant = fixFile(
+      { path: "redundant.xs", text: ZERO_SET_REDUNDANT_XS },
+      config(opted),
+    );
+    assert.equal(redundant.changed, true);
+    assert.equal(redundant.text, ZERO_SET_REDUNDANT_FIXED_XS);
+
+    const wrapped = fixFile(
+      { path: "wrap.xs", text: ZERO_SET_WRAPPED_MIXED_XS },
+      config(opted),
+    );
+    assert.equal(wrapped.changed, true);
+    assert.equal(wrapped.text, ZERO_SET_WRAPPED_MIXED_FIXED_XS);
+
+    const long = fixFile({ path: "long.xs", text: ZERO_SET_LONG_WRAPPED_XS }, config(opted));
+    assert.equal(long.changed, true);
+    assert.equal(long.text, ZERO_SET_LONG_WRAPPED_FIXED_XS);
+
+    const allRules = builtinRules.filter((rule) => !rule.defaultEnabled).map((rule) => rule.id);
+    const withAll = fixFile(
+      { path: "long.xs", text: ZERO_SET_LONG_WRAPPED_XS },
+      config({ opt_in_rules: allRules }),
+    );
+    assert.equal(withAll.text, ZERO_SET_LONG_WRAPPED_FIXED_XS);
+    const again = fixFile(
+      { path: "long.xs", text: withAll.text },
+      config({ opt_in_rules: allRules }),
+    );
+    assert.equal(again.changed, false);
+
+    const variable = fixFile(
+      { path: "var.xs", text: ZERO_SET_VARIABLE_BASE_XS },
+      config(opted),
+    );
+    assert.equal(variable.changed, false);
+    assert.equal(variable.text, ZERO_SET_VARIABLE_BASE_XS);
+
+    const dynamic = fixFile(
+      { path: "dyn.xs", text: ZERO_SET_DYNAMIC_KEY_XS },
+      config(opted),
+    );
+    assert.equal(dynamic.changed, false);
+
+    const dotted = fixFile(
+      { path: "dot.xs", text: ZERO_SET_DOTTED_PATH_XS },
+      config(opted),
+    );
+    assert.equal(dotted.changed, false);
+    assert.equal(dotted.text, ZERO_SET_DOTTED_PATH_XS);
+  });
+
+  it("does not rewrite a suppressed no_zero_set_filter violation", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    var $tally {
+      // xanoscriptlint:disable:next no_zero_set_filter
+      value = {}|set:"slot":0
+    }
+  }
+
+  response = $tally
+}`;
+    const result = fixFile(
+      { path: "suppressed.xs", text },
+      config({ opt_in_rules: ["no_zero_set_filter"] }),
+    );
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
   });
 
   it("aligns object colons and normalizes the space after the colon", () => {

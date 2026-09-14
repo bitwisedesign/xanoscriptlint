@@ -37,6 +37,12 @@ import {
   RESERVED_VAR_XS,
   ZERO_DEFAULT_FIXED_XS,
   ZERO_DEFAULT_XS,
+  ZERO_SET_DOTTED_PATH_XS,
+  ZERO_SET_DYNAMIC_KEY_XS,
+  ZERO_SET_INLINE_XS,
+  ZERO_SET_NESTED_XS,
+  ZERO_SET_VARIABLE_BASE_XS,
+  ZERO_SET_WRAPPED_MIXED_XS,
   wrapInputDecls,
   wrapInputBlock,
   wrapMockBlock,
@@ -240,6 +246,100 @@ describe("built-in rules", () => {
       inString.some((v) => v.ruleId === "no_null_response"),
       false,
     );
+  });
+
+  it("no_zero_set_filter is opt-in, defaults to error, and flags literal zero |set:", () => {
+    const off = lintFile({ path: "z.xs", text: ZERO_SET_INLINE_XS }, config());
+    assert.equal(
+      off.some((v) => v.ruleId === "no_zero_set_filter"),
+      false,
+    );
+
+    const hits = lintFile(
+      { path: "z.xs", text: ZERO_SET_INLINE_XS },
+      config({ opt_in_rules: ["no_zero_set_filter"] }),
+    ).filter((v) => v.ruleId === "no_zero_set_filter");
+    assert.equal(hits.length, 2);
+    assert.equal(hits[0]?.severity, "error");
+    assert.equal(hits[0]?.line, 7);
+    assert.equal(hits[0]?.column, 17);
+    assert.equal(
+      hits[0]?.message,
+      '|set: of 0 does not write "slot"; seed it on the object literal instead',
+    );
+    assert.equal(hits[1]?.line, 7);
+    assert.equal(
+      hits[1]?.message,
+      '|set: of 0 does not write "page"; seed it on the object literal instead',
+    );
+
+    const warned = lintFile(
+      { path: "z.xs", text: ZERO_SET_INLINE_XS },
+      config({ opt_in_rules: ["no_zero_set_filter"], no_zero_set_filter: "warning" }),
+    ).filter((v) => v.ruleId === "no_zero_set_filter");
+    assert.equal(warned[0]?.severity, "warning");
+  });
+
+  it("no_zero_set_filter flags every bare numeric zero form and skips non-zeros", () => {
+    const opted = { opt_in_rules: ["no_zero_set_filter"] } as const;
+    const forms = lintFile(
+      { path: "forms.xs", text: wrapVarValue(`{}|set:"a":0.0|set:"b":-0|set:"c":+0|set:"d":.0`) },
+      config(opted),
+    ).filter((v) => v.ruleId === "no_zero_set_filter");
+    assert.equal(forms.length, 4);
+
+    const mixed = wrapVarValue(
+      `{}|set:"quoted":"0"|set:"single":'0'|set:"one":1|set:"var":$x|set:"none":null|set:"flag":false|set:"empty":{}`,
+    );
+    const skipped = lintFile({ path: "ok.xs", text: mixed }, config(opted)).filter(
+      (v) => v.ruleId === "no_zero_set_filter",
+    );
+    assert.equal(skipped.length, 0);
+
+    const wrapped = lintFile(
+      { path: "wrap.xs", text: ZERO_SET_WRAPPED_MIXED_XS },
+      config(opted),
+    ).filter((v) => v.ruleId === "no_zero_set_filter");
+    assert.equal(wrapped.length, 1);
+    assert.equal(wrapped[0]?.line, 8);
+
+    const extra = [
+      ZERO_SET_VARIABLE_BASE_XS,
+      ZERO_SET_DYNAMIC_KEY_XS,
+      ZERO_SET_DOTTED_PATH_XS,
+      ZERO_SET_NESTED_XS,
+    ];
+    for (const text of extra) {
+      const hits = lintFile({ path: "extra.xs", text }, config(opted)).filter(
+        (v) => v.ruleId === "no_zero_set_filter",
+      );
+      assert.equal(hits.length, 1, text);
+    }
+
+    const commented = lintFile(
+      { path: "c.xs", text: `function "x" {\n  // |set:"slot":0\n}` },
+      config(opted),
+    );
+    assert.equal(
+      commented.some((v) => v.ruleId === "no_zero_set_filter"),
+      false,
+    );
+
+    const fenced = wrapMockBlock(`        "checkout scenario": \`\`\`
+          {ok: 1}|set:"slot":0
+          \`\`\``);
+    const inFence = lintFile({ path: "fence.xs", text: fenced }, config(opted)).filter(
+      (v) => v.ruleId === "no_zero_set_filter",
+    );
+    assert.equal(inFence.length, 0);
+
+    const triple = wrapVarValue(`"""
+        {}|set:"slot":0
+        """`);
+    const inTriple = lintFile({ path: "triple.xs", text: triple }, config(opted)).filter(
+      (v) => v.ruleId === "no_zero_set_filter",
+    );
+    assert.equal(inTriple.length, 0);
   });
 
   it("align_object_colons flags misaligned mock names", () => {

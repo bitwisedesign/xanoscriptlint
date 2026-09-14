@@ -39,6 +39,12 @@ export function unquote(value: string): { text: string; quoted: boolean } {
   return { text: value, quoted: false };
 }
 
+const NUMERIC_ZERO_LITERAL = /^[+-]?(?:0+(?:\.0*)?|\.0+)$/;
+
+export function isNumericZeroLiteral(text: string): boolean {
+  return NUMERIC_ZERO_LITERAL.test(text);
+}
+
 function openerOnCodeLine(line: string): "fence" | "triple" | null {
   const fenceAt = line.indexOf("```");
   const tripleAt = line.indexOf('"""');

@@ -146,6 +146,18 @@ describe("fixture linting", () => {
     );
   });
 
+  it("committed no_zero_set_filter fixture matches when that rule is opted in", () => {
+    const config = resolveConfig({ opt_in_rules: ["no_zero_set_filter"] }, fixtures, null);
+    const zeroSet = {
+      path: path.join(fixtures, "violations/zero_set_filter.xs"),
+      text: readFileSync(path.join(fixtures, "violations/zero_set_filter.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([zeroSet], config).some((v) => v.ruleId === "no_zero_set_filter"),
+      true,
+    );
+  });
+
   it("CLI lints a violations directory and exits 2", async () => {
     await withTempDir(async (dir) => {
       await writeXs(dir, ".xanoscriptlint.yml", "included:\n  - \"**/*.xs\"\n");

@@ -1,17 +1,15 @@
 import { isSuppressed, parseSuppressions } from "../suppress.js";
 import { isCommentLine } from "../util.js";
 import { joinLineRecords, splitLineRecords } from "./line_records.js";
-import { literalLines, matchNumericDefault, unquote } from "./numeric_declarations.js";
+import { literalLines, matchNumericDefault, isNumericZeroLiteral, unquote } from "./numeric_declarations.js";
 import type { Rule, RuleOptions, SourceFile, Violation } from "./types.js";
-
-const ZERO = /^[+-]?(?:0+(?:\.0*)?|\.0+)$/;
 
 function isZeroDefault(line: string): { column: number } | null {
   const parsed = matchNumericDefault(line);
   if (parsed === null) {
     return null;
   }
-  if (!ZERO.test(unquote(parsed.value).text)) {
+  if (!isNumericZeroLiteral(unquote(parsed.value).text)) {
     return null;
   }
   return { column: parsed.head.length + parsed.assign.indexOf("=") + 1 };

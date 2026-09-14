@@ -12,6 +12,7 @@
 | [`no_trailing_comments`](#no_trailing_comments) | on | warning | no | `//` above `guid` or after the file's closing `}` |
 | [`no_trailing_newline`](#no_trailing_newline) | on | warning | yes | File must end with `}` and no trailing newline |
 | [`no_zero_numeric_default`](#no_zero_numeric_default) | opt-in | warning | yes | Numeric defaults of `0` must be omitted |
+| [`no_zero_set_filter`](#no_zero_set_filter) | opt-in | error | yes | A `set:` filter of integer `0` does not write the field |
 | [`quote_negative_numeric_default`](#quote_negative_numeric_default) | opt-in | warning | yes | Negative numeric defaults must be quoted |
 | [`wrap_enum_values`](#wrap_enum_values) | opt-in | warning | yes | Enum `values` arrays wrap when compact JSON length reaches 64 |
 | [`wrap_piped_values`](#wrap_piped_values) | opt-in | warning | yes | Assignment filter pipelines wrap at pipe length 34 or 3+ filters |
@@ -243,6 +244,30 @@ decimal offset?=0.0
 Bare zeros (`0`, `0.0`, `.0`, `-0`, `+0`) and quoted zeros (`"0"`, `'0'`) are flagged. Non-zero defaults, and `filters=min:0` on the same line, are left alone.
 
 Auto-fixable with `--fix`: `int retry_count?=0` becomes `int retry_count?` and `decimal offset?=0.0` becomes `decimal offset?`. The optional marker stays; only the zero default is removed. A trailing `filters=` clause or metadata block is preserved.
+
+## no_zero_set_filter
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is error.
+
+In XanoScript a `|set:` whose value is a bare numeric zero does not write the field. A later `|set:` on the same pipe can also be dropped. The form that keeps `0` is to seed the field on the object literal.
+
+Bare zeros (`0`, `0.0`, `.0`, `-0`, `+0`) are flagged. Quoted `"0"` / `'0'` is a string and is left alone, as are `1`, `$x`, `null`, `false`, and `{}`.
+
+```xs
+value = {}|set:"slot":0|set:"page":0
+
+value = {slot: 0, page: 0}
+
+value = {}
+  |set:"slot":0
+  |set:"label":$title
+
+value = {slot: 0}|set:"label":$title
+```
+
+Auto-fixable with `--fix` when the assignment base is `{}` or a single-line object literal and the key is a static name with no `.`. The zero filters are hoisted into the base and the statement is collapsed to one line. Xano does not wrap a chain whose base is a non-empty `{…}` (see [`wrap_piped_values`](#wrap_piped_values)), so a previously wrapped chain comes back inline even when it is long.
+
+Report-only — flagged, not rewritten — when the base is a variable (`$cart|set:"slot":0`), the key is dynamic (`|set:$key:0`), the path is nested (`|set:"meta.slot":0`), the `|set:` sits inside a parenthesized filter argument (`|push:($item|set:"slot":0)`), or the base already has a non-zero value for that key (`{slot: 5}|set:"slot":0`). A `|set:` of `0` does not write, so hoisting would change `5` to `0`.
 
 ## quote_negative_numeric_default
 
