@@ -344,6 +344,27 @@ export const FENCED_MULTILINE_OBJECT_ENTRIES = `        "checkout applies gift w
 export const UNFENCED_MULTILINE_OBJECT_XS = wrapMockBlock(UNFENCED_MULTILINE_OBJECT_ENTRIES);
 export const FENCED_MULTILINE_OBJECT_XS = wrapMockBlock(FENCED_MULTILINE_OBJECT_ENTRIES);
 
+export const UNALIGNED_INNER_UNFENCED_MOCK_XS = wrapMockBlock(
+  `        "checkout scenario": {
+          identifier: "rounds.first_round"
+          localized: {en_US: {title: "First round"}}
+          award_behavior: "once_per_player"
+          progress_behavior: "boolean"
+          visibility: "visible"
+        }`,
+);
+export const UNALIGNED_INNER_FENCED_MOCK_XS = wrapMockBlock(
+  `        "checkout scenario": \`\`\`
+          {
+            identifier: "rounds.first_round"
+            localized: {en_US: {title: "First round"}}
+            award_behavior: "once_per_player"
+            progress_behavior: "boolean"
+            visibility: "visible"
+          }
+          \`\`\``,
+);
+
 export const UNFENCED_MULTILINE_ARRAY_ENTRIES = `        "checkout lists open carts for the current user id": [
           {id: 8}
         ]`;

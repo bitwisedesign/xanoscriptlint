@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-09-14
+
+### Fixed
+
+- `--fix` no longer aligns object colons inside values that `fence_multiline_values` wraps in a ``` fence. `fence_multiline_values` now runs before `align_object_colons`, so a multiline `mock`/`input` value is fenced (as Xano stores it) before colon alignment runs, keeping the fenced literal's inner colons single-spaced to match Xano's push output.
+
 ## [0.4.0] - 2026-09-13
 
 ### Added

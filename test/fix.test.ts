@@ -28,6 +28,8 @@ import {
   NULL_RESPONSE_XS,
   OVERPADDED_LONG_MOCK_XS,
   UNDERPADDED_MOCK_XS,
+  UNALIGNED_INNER_FENCED_MOCK_XS,
+  UNALIGNED_INNER_UNFENCED_MOCK_XS,
   UNFENCED_INPUT_ARRAY_XS,
   UNFENCED_INPUT_OBJECT_XS,
   UNFENCED_FUNCTION_RUN_MULTILINE_MOCK_XS,
@@ -456,6 +458,26 @@ describe("fixFile", () => {
       result.corrections.some((c) => c.ruleId === "fence_multiline_values"),
       true,
     );
+  });
+
+  it("fences an unaligned inner mock object without aligning colons inside the fence", () => {
+    const result = fixFile(
+      { path: "inner.xs", text: UNALIGNED_INNER_UNFENCED_MOCK_XS },
+      config(),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, UNALIGNED_INNER_FENCED_MOCK_XS);
+    assert.equal(
+      result.corrections.some((c) => c.ruleId === "fence_multiline_values"),
+      true,
+    );
+    assert.equal(
+      result.corrections.some((c) => c.ruleId === "align_object_colons"),
+      false,
+    );
+    const again = fixFile({ path: "inner.xs", text: result.text }, config());
+    assert.equal(again.changed, false);
+    assert.equal(again.text, UNALIGNED_INNER_FENCED_MOCK_XS);
   });
 
   it("does not rewrite fenced mocks, disabled fence_multiline_values, or suppressed lines", () => {
