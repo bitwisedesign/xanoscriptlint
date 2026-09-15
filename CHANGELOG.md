@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-15
+
 ### Added
 
 - Opt-in `unquote_bare_test_names` flags a quoted `test` name or top-level `mock` key whose text is a bare identifier (warning). Auto-fix drops the quotes; own-line mock keys keep their colon column so `align_object_colons` can re-align in the same `--fix` pass.
