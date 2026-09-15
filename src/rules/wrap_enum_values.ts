@@ -3,160 +3,23 @@ import { isBlankLine, isCommentLine } from "../util.js";
 import { joinLineRecords, splitLineRecords } from "./line_records.js";
 import type { LineRecord } from "./line_records.js";
 import { literalLines } from "./numeric_declarations.js";
+import {
+  DEFAULT_WRAP_AT,
+  VALUES_OPENER,
+  inlineArrayLine,
+  parseStringArraySite,
+  wrapThreshold,
+  type StringArraySite,
+} from "./string_arrays.js";
 import type { Rule, RuleOptions, SourceFile, Violation } from "./types.js";
 
-export const DEFAULT_WRAP_AT = 64;
+export { DEFAULT_WRAP_AT };
 
 const ENUM_OPENER = /^(\s*)enum\b[^{}]*\{\s*$/;
-const VALUES_OPENER = /^(\s*)values\s*=\s*\[/;
 
-interface EnumValuesSite {
-  kind: "inline" | "wrapped";
+interface EnumValuesSite extends StringArraySite {
   enumIndent: number;
-  valuesIndent: number;
-  valuesLine: number;
-  bracketLine: number;
   enumCloseLine: number;
-  tokens: string[];
-  compactLength: number;
-  hasTab: boolean;
-}
-
-function wrapThreshold(options: RuleOptions): number {
-  return options.wrapAt ?? DEFAULT_WRAP_AT;
-}
-
-function compactLength(tokens: string[]): number {
-  return JSON.stringify(tokens).length;
-}
-
-function readQuoted(
-  text: string,
-  start: number,
-  quote: '"' | "'",
-): { value: string; end: number } | null {
-  let i = start + 1;
-  let escape = false;
-  let value = "";
-  while (i < text.length) {
-    const ch = text[i];
-    if (escape) {
-      value += ch;
-      escape = false;
-      i += 1;
-      continue;
-    }
-    if (ch === "\\") {
-      const next = text[i + 1];
-      if (next === "n" || next === "t" || next === "r" || next === "u") {
-        return null;
-      }
-      escape = true;
-      i += 1;
-      continue;
-    }
-    if (ch === quote) {
-      return { value, end: i + 1 };
-    }
-    value += ch;
-    i += 1;
-  }
-  return null;
-}
-
-function parseStringArrayInner(inner: string): string[] | null {
-  const tokens: string[] = [];
-  let i = 0;
-  while (i < inner.length) {
-    const ch = inner[i];
-    if (ch === " " || ch === "\t" || ch === "\n" || ch === "\r") {
-      i += 1;
-      continue;
-    }
-    if (ch === "/" && inner[i + 1] === "/") {
-      return null;
-    }
-    if (ch === ",") {
-      i += 1;
-      continue;
-    }
-    if (ch === '"' || ch === "'") {
-      const read = readQuoted(inner, i, ch);
-      if (read === null) {
-        return null;
-      }
-      tokens.push(read.value);
-      i = read.end;
-      continue;
-    }
-    return null;
-  }
-  return tokens;
-}
-
-function findMatchingBracket(
-  lines: string[],
-  startLine: number,
-  startCol: number,
-): { line: number; col: number } | null {
-  let mode: "code" | "double" | "single" = "code";
-  let escape = false;
-  let depth = 1;
-  let line = startLine;
-  let col = startCol + 1;
-  while (line < lines.length) {
-    const text = lines[line];
-    while (col < text.length) {
-      const ch = text[col];
-      if (mode === "double" || mode === "single") {
-        if (escape) {
-          escape = false;
-          col += 1;
-          continue;
-        }
-        if (ch === "\\") {
-          escape = true;
-          col += 1;
-          continue;
-        }
-        if ((mode === "double" && ch === '"') || (mode === "single" && ch === "'")) {
-          mode = "code";
-        }
-        col += 1;
-        continue;
-      }
-      if (ch === "/" && text[col + 1] === "/") {
-        break;
-      }
-      if (ch === '"') {
-        mode = "double";
-        col += 1;
-        continue;
-      }
-      if (ch === "'") {
-        mode = "single";
-        col += 1;
-        continue;
-      }
-      if (ch === "[") {
-        depth += 1;
-        col += 1;
-        continue;
-      }
-      if (ch === "]") {
-        depth -= 1;
-        if (depth === 0) {
-          return { line, col };
-        }
-        col += 1;
-        continue;
-      }
-      col += 1;
-    }
-    line += 1;
-    col = 0;
-  }
-  return null;
 }
 
 function findEnumClose(
@@ -224,74 +87,31 @@ function findEnumClose(
   return null;
 }
 
-function sliceRange(
-  lines: string[],
-  startLine: number,
-  startCol: number,
-  endLine: number,
-  endCol: number,
-): string {
-  if (startLine === endLine) {
-    return lines[startLine].slice(startCol, endCol);
-  }
-  const parts = [lines[startLine].slice(startCol)];
-  for (let i = startLine + 1; i < endLine; i += 1) {
-    parts.push(lines[i]);
-  }
-  parts.push(lines[endLine].slice(0, endCol));
-  return parts.join("\n");
-}
-
-function rangeHasTab(lines: string[], startLine: number, endLine: number): boolean {
-  for (let i = startLine; i <= endLine; i += 1) {
-    if (lines[i].includes("\t")) {
-      return true;
-    }
-  }
-  return false;
-}
-
 function parseValuesSite(
   lines: string[],
   valuesLine: number,
   enumCloseLine: number,
   enumIndent: number,
 ): EnumValuesSite | null {
-  const line = lines[valuesLine];
-  const match = VALUES_OPENER.exec(line);
+  const match = VALUES_OPENER.exec(lines[valuesLine]);
   if (match === null || match[1] === undefined) {
     return null;
   }
   const openCol = match[0].length - 1;
-  const close = findMatchingBracket(lines, valuesLine, openCol);
-  if (close === null || close.line >= enumCloseLine) {
-    return null;
-  }
-  const trailing = lines[close.line].slice(close.col + 1);
-  if (trailing.trim() !== "") {
-    return null;
-  }
-  const inner = sliceRange(lines, valuesLine, openCol + 1, close.line, close.col);
-  const tokens = parseStringArrayInner(inner);
-  if (tokens === null) {
+  const site = parseStringArraySite(lines, valuesLine, match[1].length, openCol, enumCloseLine);
+  if (site === null) {
     return null;
   }
   return {
-    kind: close.line === valuesLine ? "inline" : "wrapped",
+    ...site,
     enumIndent,
-    valuesIndent: match[1].length,
-    valuesLine,
-    bracketLine: close.line,
     enumCloseLine,
-    tokens,
-    compactLength: compactLength(tokens),
-    hasTab: rangeHasTab(lines, valuesLine, close.line),
   };
 }
 
 export function enumValuesOpenLines(lines: string[]): Set<number> {
   return new Set(
-    findEnumValues(lines, literalLines(lines)).map((site) => site.valuesLine),
+    findEnumValues(lines, literalLines(lines)).map((site) => site.openLine),
   );
 }
 
@@ -329,10 +149,6 @@ function findEnumValues(
   return sites;
 }
 
-function inlineValuesLine(indent: string, tokens: string[]): string {
-  return `${indent}values = [${tokens.map((token) => JSON.stringify(token)).join(", ")}]`;
-}
-
 function isCloserLine(line: string): boolean {
   return line.trim() === "}";
 }
@@ -341,11 +157,11 @@ function expandInline(records: LineRecord[], site: EnumValuesSite): boolean {
   if (site.hasTab) {
     return false;
   }
-  const valuesRecord = records[site.valuesLine];
-  const indent = " ".repeat(site.valuesIndent);
-  const itemIndent = " ".repeat(site.valuesIndent + 2);
+  const valuesRecord = records[site.openLine];
+  const indent = " ".repeat(site.indent);
+  const itemIndent = " ".repeat(site.indent + 2);
   const ending = valuesRecord.ending === "" ? "\n" : valuesRecord.ending;
-  const next = records[site.valuesLine + 1];
+  const next = records[site.openLine + 1];
   const addBlank = next !== undefined && isCloserLine(next.content);
   const inserted: LineRecord[] = site.tokens.map((token) => ({
     content: `${itemIndent}${JSON.stringify(token)}`,
@@ -355,8 +171,8 @@ function expandInline(records: LineRecord[], site: EnumValuesSite): boolean {
   if (addBlank) {
     inserted.push({ content: " ".repeat(site.enumIndent), ending });
   }
-  records[site.valuesLine].content = `${indent}values = [`;
-  records.splice(site.valuesLine + 1, 0, ...inserted);
+  records[site.openLine].content = `${indent}values = [`;
+  records.splice(site.openLine + 1, 0, ...inserted);
   return true;
 }
 
@@ -364,19 +180,19 @@ function collapseWrapped(records: LineRecord[], site: EnumValuesSite): boolean {
   if (site.hasTab) {
     return false;
   }
-  const indent = " ".repeat(site.valuesIndent);
-  records[site.valuesLine].content = inlineValuesLine(indent, site.tokens);
-  const deleteCount = site.bracketLine - site.valuesLine;
-  records.splice(site.valuesLine + 1, deleteCount);
-  const after = records[site.valuesLine + 1];
-  const closer = records[site.valuesLine + 2];
+  const indent = " ".repeat(site.indent);
+  records[site.openLine].content = inlineArrayLine(indent, "values", site.tokens);
+  const deleteCount = site.bracketLine - site.openLine;
+  records.splice(site.openLine + 1, deleteCount);
+  const after = records[site.openLine + 1];
+  const closer = records[site.openLine + 2];
   if (
     after !== undefined &&
     closer !== undefined &&
     isBlankLine(after.content) &&
     isCloserLine(closer.content)
   ) {
-    records.splice(site.valuesLine + 1, 1);
+    records.splice(site.openLine + 1, 1);
   }
   return true;
 }
@@ -387,7 +203,7 @@ function violationsFor(
   options: RuleOptions,
   severity: Violation["severity"],
 ): Violation[] {
-  const wrapAt = wrapThreshold(options);
+  const wrapAt = wrapThreshold(options.wrapAt);
   const literals = literalLines(lines);
   const violations: Violation[] = [];
   for (const site of findEnumValues(lines, literals)) {
@@ -397,8 +213,8 @@ function violationsFor(
         message: `enum values of compact length ${site.compactLength} must be wrapped (threshold ${wrapAt})`,
         severity,
         file: file.path,
-        line: site.valuesLine + 1,
-        column: site.valuesIndent + 1,
+        line: site.openLine + 1,
+        column: site.indent + 1,
       });
     } else if (site.kind === "wrapped" && site.compactLength < wrapAt) {
       violations.push({
@@ -406,8 +222,8 @@ function violationsFor(
         message: `enum values of compact length ${site.compactLength} must be inline (threshold ${wrapAt})`,
         severity,
         file: file.path,
-        line: site.valuesLine + 1,
-        column: site.valuesIndent + 1,
+        line: site.openLine + 1,
+        column: site.indent + 1,
       });
     }
   }
@@ -440,10 +256,10 @@ export const wrapEnumValues: Rule = {
     const records = splitLineRecords(file.text);
     const lines = records.map((record) => record.content);
     const literals = literalLines(lines);
-    const wrapAt = wrapThreshold(options);
+    const wrapAt = wrapThreshold(options.wrapAt);
     const sites = findEnumValues(lines, literals)
-      .filter((site) => rewriteLines.has(site.valuesLine + 1))
-      .sort((a, b) => b.valuesLine - a.valuesLine);
+      .filter((site) => rewriteLines.has(site.openLine + 1))
+      .sort((a, b) => b.openLine - a.openLine);
     let changed = false;
     for (const site of sites) {
       if (site.kind === "inline" && site.compactLength >= wrapAt) {

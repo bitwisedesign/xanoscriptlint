@@ -25,6 +25,8 @@ describe("config enablement", () => {
     assert.equal(config.enabledRuleIds.has("unquote_bare_test_names"), false);
     assert.equal(config.enabledRuleIds.has("wrap_enum_values"), false);
     assert.equal(config.enabledRuleIds.has("wrap_piped_values"), false);
+    assert.equal(config.enabledRuleIds.has("wrap_tags_values"), false);
+    assert.equal(config.enabledRuleIds.has("tags_placement"), false);
     assert.deepEqual(config.included, ["**/*.xs"]);
     assert.equal(config.strict, false);
   });
@@ -279,6 +281,15 @@ custom_rules:
       null,
     );
     assert.equal(config.ruleOptions.get("wrap_enum_values")?.wrapAt, 64);
+  });
+
+  it("parses wrap_tags_values wrap_at", () => {
+    const config = resolveConfig(
+      { wrap_tags_values: { wrap_at: 64 } },
+      "/tmp",
+      null,
+    );
+    assert.equal(config.ruleOptions.get("wrap_tags_values")?.wrapAt, 64);
   });
 
   it("parses collapse_assignment_values wrap_at", () => {

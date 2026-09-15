@@ -14,9 +14,11 @@
 | [`no_zero_numeric_default`](#no_zero_numeric_default) | opt-in | warning | yes | Numeric defaults of `0` must be omitted |
 | [`no_zero_set_filter`](#no_zero_set_filter) | opt-in | error | yes | A `set:` filter of numeric `0` does not write the field |
 | [`quote_negative_numeric_default`](#quote_negative_numeric_default) | opt-in | warning | yes | Negative numeric defaults must be quoted |
+| [`tags_placement`](#tags_placement) | opt-in | warning | yes | `tags` sits immediately before `guid` / `test` / `llm` / `tools` / `cache`, with Xano blank-line rules |
 | [`unquote_bare_test_names`](#unquote_bare_test_names) | opt-in | warning | yes | Quoted `test` names and top-level `mock` keys with no spaces must be unquoted |
 | [`wrap_enum_values`](#wrap_enum_values) | opt-in | warning | yes | Enum `values` arrays wrap when compact JSON length reaches 64 |
 | [`wrap_piped_values`](#wrap_piped_values) | opt-in | warning | yes | Assignment filter pipelines wrap at pipe length 34 or 3+ filters; a grouped base stays inline |
+| [`wrap_tags_values`](#wrap_tags_values) | opt-in | warning | yes | Declaration `tags` arrays wrap when compact JSON length reaches 64 |
 
 List the same catalog from the CLI with `xanoscriptlint rules`.
 
@@ -52,7 +54,7 @@ Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is wa
 
 Xano collapses an assignment's object or array onto one line when that line — indent, the `name =` or `return` prefix, and the inline value — would be shorter than 64 UTF-8 bytes. A wrapped value that already fills 64 or more bytes stays wrapped. Long one-liners are left as-is; Xano does not wrap those.
 
-The threshold is the reconstructed line's UTF-8 byte length, not visible columns and not the number of entries. Multi-byte characters count as more than one: `{Authorization: "••••••••••••"}` is 31 characters and 55 bytes, while the reconstructed line — six spaces of indent plus `value = {Authorization: "••••••••••••"}` — is 45 characters and 69 bytes, so a wrapped form of that value stays wrapped. In the same pull Xano left a 69-byte sibling inline (`value = {"X-Signature": "••••••••••••"}`), so this rule only flags wrapped → inline; it does not expand long one-liners. Nested containers are left as-is: only the outermost `name = { ... }` / `name = [ ... ]` / `return { ... }` is checked. Enum `values` arrays are owned by [`wrap_enum_values`](#wrap_enum_values). A container followed by a filter pipe (`value = [...]|join:"/"`) is skipped, because Xano does not reformat those.
+The threshold is the reconstructed line's UTF-8 byte length, not visible columns and not the number of entries. Multi-byte characters count as more than one: `{Authorization: "••••••••••••"}` is 31 characters and 55 bytes, while the reconstructed line — six spaces of indent plus `value = {Authorization: "••••••••••••"}` — is 45 characters and 69 bytes, so a wrapped form of that value stays wrapped. In the same pull Xano left a 69-byte sibling inline (`value = {"X-Signature": "••••••••••••"}`), so this rule only flags wrapped → inline; it does not expand long one-liners. Nested containers are left as-is: only the outermost `name = { ... }` / `name = [ ... ]` / `return { ... }` is checked. Enum `values` arrays are owned by [`wrap_enum_values`](#wrap_enum_values). Declaration `tags` arrays are owned by [`wrap_tags_values`](#wrap_tags_values). A container followed by a filter pipe (`value = [...]|join:"/"`) is skipped, because Xano does not reformat those.
 
 ```xs
 input = {event_type: "manual", unit: "sets", delta: 3}
@@ -143,9 +145,9 @@ guid = "..."
 
 Observed flush predecessors (no blank) include single-line `response = $var`, single-line `tags = [...]`, `swagger = {token: ...}` in an `api_group`, single-line `tools = [...]` in an agent, `schedule = [...]`, `actions = {...}`, single-line `index = [...]`, a `|set:` pipeline tail, and a closing triple-backtick fence.
 
-Observed blank-line predecessors include a `}` that closes `test`, a multiline `response` / `stack` / `cache`, and a `]` that closes a multiline `index` or `tools` array.
+Observed blank-line predecessors include a `}` that closes `test`, a multiline `response` / `stack` / `cache`, and a `]` that closes a multiline `index`, `tools`, or `tags` array.
 
-A multiline `tags` array has not been seen in a Xano-pulled file. The closer rule would require a blank line above `guid` if `tags` ended on its own `]`, matching every other multiline array. That shape is inferred, not observed.
+A multiline `tags` array is rewritten by [`wrap_tags_values`](#wrap_tags_values) and placed by [`tags_placement`](#tags_placement). When `tags` ends on its own `]`, this rule still requires a blank line above `guid`.
 
 Auto-fixable with `--fix`: a missing blank line is inserted, a forbidden blank line is removed, and extra blank lines collapse to one.
 
@@ -285,6 +287,48 @@ Already-quoted negatives are canonical. A negative zero (`-0`) is owned by `no_z
 
 Auto-fixable with `--fix`: the unquoted negative is wrapped in double quotes. Spacing around `=` and any trailing `filters=` clause or metadata block are preserved.
 
+## tags_placement
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
+
+Xano places a declaration's `tags = [...]` immediately before the first of `llm`, `tools`, `test`, `cache`, or `guid`. Everything else in the body — `canonical`, `response`, `input`, `stack`, `schema` — stays above `tags`. A missing `tags` is allowed.
+
+Blank lines follow the predecessor and the form of the array. Exactly one blank line above `tags` when the previous statement is a bare `}` or `]`. No blank line above otherwise. Exactly one blank line below `tags` when a following member exists and the array is wrapped, or when that member is a `test` block. No blank line below when a single-line `tags` is followed by `guid`, `llm`, `tools`, or `cache`, or when `tags` is the last member of the declaration.
+
+```xs
+  canonical = "wDft"
+  tags = ["domain:widgets", "surface:ai_agent", "concern:generative"]
+  llm = {
+    type: "openai"
+  }
+```
+
+```xs
+  response = $result
+  tags = ["domain:widgets"]
+
+  test lower_stronger {
+    input = {ok: true}
+  }
+
+  guid = "g1"
+```
+
+```xs
+  response = $ledger
+  tags = [
+    "domain:practice"
+    "surface:ai_tool"
+    "pipeline:widget_session_proposer"
+  ]
+
+  guid = "g1"
+```
+
+The wrapped vs inline form is owned by [`wrap_tags_values`](#wrap_tags_values). This rule only moves the block and normalizes the surrounding blanks. Comments immediately above an anchor stay with that anchor.
+
+Auto-fixable with `--fix`: `tags` is moved to the slot above the first anchor (or to the end of the declaration when there is no anchor), a missing blank is inserted, a forbidden blank is removed, and extra blanks collapse to one.
+
 ## unquote_bare_test_names
 
 Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
@@ -385,6 +429,34 @@ Override the cutoffs with `wrap_at` and `filter_limit` (positive integers, defau
 wrap_piped_values:
   wrap_at: 34
   filter_limit: 3
+```
+
+## wrap_tags_values
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
+
+Xano wraps a declaration `tags` array when the compact JSON form — `["a","b"]`, quotes and commas, no spaces — is 64 characters or longer. Shorter arrays stay on one line. The pulled file is canonical; a locally inline long array (or a wrapped short array) is push/pull churn.
+
+The threshold is the compact length, not the number of tags. A three-tag array can stay inline while another three-tag array with longer strings wraps. Arrays that are not exclusively quoted strings, and arrays that contain comments, are left alone.
+
+```xs
+  tags = ["domain:widgets"]
+
+  tags = [
+    "domain:identity"
+    "surface:ai_agent"
+    "pipeline:widget_advisor"
+    "concern:generative"
+  ]
+```
+
+The wrapped form has no commas between items. Auto-fix writes items two spaces deeper than `tags` and puts `]` at the `tags` indent. Surrounding blank lines are owned by [`tags_placement`](#tags_placement); this rule only rewrites the array. [`collapse_assignment_values`](#collapse_assignment_values) does not collapse `tags`.
+
+Override the cutoff with `wrap_at` (a positive integer, default 64):
+
+```yaml
+wrap_tags_values:
+  wrap_at: 64
 ```
 
 ## Team-specific rules

@@ -118,6 +118,24 @@ describe("fixture linting", () => {
       true,
     );
 
+    const wrapTags = {
+      path: path.join(fixtures, "violations/wrap_tags_values.xs"),
+      text: readFileSync(path.join(fixtures, "violations/wrap_tags_values.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([wrapTags], config).some((v) => v.ruleId === "wrap_tags_values"),
+      true,
+    );
+
+    const tagsPlacement = {
+      path: path.join(fixtures, "violations/tags_placement.xs"),
+      text: readFileSync(path.join(fixtures, "violations/tags_placement.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([tagsPlacement], config).some((v) => v.ruleId === "tags_placement"),
+      true,
+    );
+
     const guidPlacement = {
       path: path.join(fixtures, "violations/guid_placement.xs"),
       text: readFileSync(path.join(fixtures, "violations/guid_placement.xs"), "utf8"),

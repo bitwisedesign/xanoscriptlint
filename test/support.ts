@@ -147,6 +147,31 @@ export const ENUM_V62 = ["alpha", "bravo", "x".repeat(42)];
 export const ENUM_V63 = ["alpha", "bravo", "x".repeat(43)];
 export const ENUM_V64 = ["alpha", "bravo", "x".repeat(44)];
 
+export const TAGS_V63 = ["domain:widgets", "surface:client", "x".repeat(25)];
+export const TAGS_V64 = ["domain:widgets", "surface:client", "x".repeat(26)];
+export const TAGS_SHORT = ["domain:widgets"];
+export const TAGS_AGENT = ["domain:widgets", "surface:ai_agent", "concern:generative"];
+export const TAGS_ADVISOR = [
+  "domain:identity",
+  "surface:ai_agent",
+  "pipeline:widget_advisor",
+  "concern:generative",
+];
+export const TAGS_LEDGER = [
+  "domain:practice",
+  "surface:ai_tool",
+  "pipeline:widget_session_proposer",
+];
+
+export function inlineTagsLine(tags: string[]): string {
+  return `  tags = [${tags.map((tag) => JSON.stringify(tag)).join(", ")}]`;
+}
+
+export function wrappedTagsBlock(tags: string[]): string {
+  const items = tags.map((tag) => `    ${JSON.stringify(tag)}`).join("\n");
+  return `  tags = [\n${items}\n  ]`;
+}
+
 export const ASSIGN_LINE_62 = "x".repeat(41);
 export const ASSIGN_LINE_63 = "x".repeat(42);
 export const ASSIGN_LINE_64 = "x".repeat(43);
