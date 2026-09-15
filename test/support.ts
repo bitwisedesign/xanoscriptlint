@@ -326,6 +326,107 @@ export const NEGATIVE_DEFAULT_FIXED_DECLS = `    int quantity?="-1"
 export const NEGATIVE_DEFAULT_XS = wrapInputDecls(NEGATIVE_DEFAULT_DECLS);
 export const NEGATIVE_DEFAULT_FIXED_XS = wrapInputDecls(NEGATIVE_DEFAULT_FIXED_DECLS);
 
+export function wrapTestBlocks(tests: string): string {
+  return `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+
+${tests}}`;
+}
+
+export const BARE_TEST_NAME_XS = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query item {
+      mock = {
+        "catalog lists open shelves": {id: 1}
+        "inventory_restock_applies" : {id: 2}
+      }
+    }
+  }
+
+  response = $item
+
+  test "catalog lists open shelves" {
+    input = {id: 1}
+  }
+
+  test "inventory_restock_applies" {
+    input = {id: 2}
+  }
+}`;
+
+export const BARE_TEST_NAME_FIXED_XS = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query item {
+      mock = {
+        "catalog lists open shelves": {id: 1}
+        inventory_restock_applies   : {id: 2}
+      }
+    }
+  }
+
+  response = $item
+
+  test "catalog lists open shelves" {
+    input = {id: 1}
+  }
+
+  test inventory_restock_applies {
+    input = {id: 2}
+  }
+}`;
+
+export const BARE_TEST_NAME_MISALIGNED_XS = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query item {
+      mock = {
+        "catalog lists open shelves": {id: 1}
+        "inventory_restock_applies": {id: 2}
+      }
+    }
+  }
+
+  response = $item
+
+  test "inventory_restock_applies" {
+    input = {id: 2}
+  }
+}`;
+
+export const BARE_TEST_NAME_MISALIGNED_FIXED_XS = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query item {
+      mock = {
+        "catalog lists open shelves": {id: 1}
+        inventory_restock_applies   : {id: 2}
+      }
+    }
+  }
+
+  response = $item
+
+  test inventory_restock_applies {
+    input = {id: 2}
+  }
+}`;
+
 export function wrapInputBlock(entries: string): string {
   return `function "example" {
   input {

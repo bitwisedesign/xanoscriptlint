@@ -25,6 +25,10 @@ import {
   MOCK_SHORT_NAME,
   NEGATIVE_DEFAULT_FIXED_XS,
   NEGATIVE_DEFAULT_XS,
+  BARE_TEST_NAME_FIXED_XS,
+  BARE_TEST_NAME_MISALIGNED_FIXED_XS,
+  BARE_TEST_NAME_MISALIGNED_XS,
+  BARE_TEST_NAME_XS,
   NONCANONICAL_MULTILINE_MOCK_XS,
   NULL_RESPONSE_XS,
   OVERPADDED_LONG_MOCK_XS,
@@ -55,6 +59,7 @@ import {
   ZERO_SET_WRAPPED_MIXED_FIXED_XS,
   ZERO_SET_WRAPPED_MIXED_XS,
   wrapInputDecls,
+  wrapTestBlocks,
   wrapMockBlock,
   wrapAssign,
   wrapVarValue,
@@ -797,6 +802,106 @@ describe("fixFile", () => {
     assert.equal(againNeg.text, NEGATIVE_DEFAULT_FIXED_XS);
   });
 
+  it("unquotes identifier test names and mock keys", () => {
+    const result = fixFile({ path: "bare.xs", text: BARE_TEST_NAME_XS }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, BARE_TEST_NAME_FIXED_XS);
+    assert.equal(result.corrections.length, 2);
+    assert.equal(result.corrections[0]?.ruleId, "unquote_bare_test_names");
+    assert.equal(result.corrections[0]?.file, "bare.xs");
+    assert.equal(result.corrections[0]?.line, 9);
+    assert.equal(result.corrections[1]?.line, 20);
+
+    const again = fixFile({ path: "bare.xs", text: result.text }, config());
+    assert.equal(again.changed, false);
+    assert.equal(again.text, BARE_TEST_NAME_FIXED_XS);
+
+    const inlineFile = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query item {
+      mock = {"inventory_restock_applies": {id: 2}}
+    }
+  }
+
+  response = $item
+}`;
+    const inlineFixed = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query item {
+      mock = {inventory_restock_applies: {id: 2}}
+    }
+  }
+
+  response = $item
+}`;
+    const inline = fixFile({ path: "inline.xs", text: inlineFile }, config());
+    assert.equal(inline.changed, true);
+    assert.equal(inline.text, inlineFixed);
+
+    const aligned = fixFile(
+      { path: "misaligned.xs", text: BARE_TEST_NAME_MISALIGNED_XS },
+      config(),
+    );
+    assert.equal(aligned.changed, true);
+    assert.equal(aligned.text, BARE_TEST_NAME_MISALIGNED_FIXED_XS);
+    assert.equal(
+      aligned.corrections.some((c) => c.ruleId === "unquote_bare_test_names"),
+      true,
+    );
+    assert.equal(
+      aligned.corrections.some((c) => c.ruleId === "align_object_colons"),
+      true,
+    );
+  });
+
+  it("does not rewrite a suppressed unquote_bare_test_names violation", () => {
+    const suppressed = wrapTestBlocks(
+      `  // xanoscriptlint:disable:next unquote_bare_test_names
+  test "inventory_restock_applies" {
+    input = {id: 2}
+  }
+`,
+    );
+    const kept = fixFile({ path: "suppressed.xs", text: suppressed }, config());
+    assert.equal(kept.changed, false);
+    assert.equal(kept.text, suppressed);
+
+    const mixed = wrapTestBlocks(
+      `  // xanoscriptlint:disable:next unquote_bare_test_names
+  test "inventory_restock_applies" {
+    input = {id: 2}
+  }
+
+  test "catalog_restock_succeeds" {
+    input = {id: 3}
+  }
+`,
+    );
+    const mixedFixed = wrapTestBlocks(
+      `  // xanoscriptlint:disable:next unquote_bare_test_names
+  test "inventory_restock_applies" {
+    input = {id: 2}
+  }
+
+  test catalog_restock_succeeds {
+    input = {id: 3}
+  }
+`,
+    );
+    const result = fixFile({ path: "mixed.xs", text: mixed }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, mixedFixed);
+    assert.equal(result.corrections.length, 1);
+    assert.equal(result.corrections[0]?.ruleId, "unquote_bare_test_names");
+    assert.equal(result.corrections[0]?.line, 15);
+  });
+
   it("preserves line endings and suppressions when rewriting numeric defaults", () => {
     const zeroLines = ZERO_DEFAULT_XS.split("\n");
     const fixedLines = ZERO_DEFAULT_FIXED_XS.split("\n");
@@ -1129,7 +1234,7 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
 
   response = $ok
 
-  test "ok" {
+  test ok {
     expect.to_equal ($ok) {
       value = 1
     }
@@ -1145,7 +1250,7 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
 
   response = $ok
 
-  test "ok" {
+  test ok {
     expect.to_equal ($ok) {
       value = 1
     }
@@ -1203,7 +1308,7 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
 
   response = $ok
 
-  test "ok" {
+  test ok {
     expect.to_equal ($ok) {
       value = 1
     }
@@ -1221,7 +1326,7 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
 
   response = $ok
 
-  test "ok" {
+  test ok {
     expect.to_equal ($ok) {
       value = 1
     }
@@ -1287,7 +1392,7 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
 
   response = $ok
 
-  test "ok" {
+  test ok {
     expect.to_equal ($ok) {
       value = 1
     }
@@ -1304,7 +1409,7 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
 
   response = $ok
 
-  test "ok" {
+  test ok {
     expect.to_equal ($ok) {
       value = 1
     }

@@ -49,6 +49,9 @@ import {
   wrapAssign,
   wrapReturn,
   wrapVarValue,
+  wrapTestBlocks,
+  BARE_TEST_NAME_XS,
+  BARE_TEST_NAME_FIXED_XS,
   inlinePiped,
   wrappedPiped,
   inlineAssignObj,
@@ -1240,6 +1243,140 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     );
   });
 
+  it("unquote_bare_test_names flags quoted identifier test names and mock keys", () => {
+    const hits = lintFile({ path: "bare.xs", text: BARE_TEST_NAME_XS }, config()).filter(
+      (v) => v.ruleId === "unquote_bare_test_names",
+    );
+    assert.equal(hits.length, 2);
+    assert.equal(hits[0]?.line, 9);
+    assert.equal(hits[0]?.column, 9);
+    assert.equal(hits[0]?.severity, "warning");
+    assert.equal(
+      hits[0]?.message,
+      "quoted mock key must be unquoted; Xano strips quotes on push",
+    );
+    assert.equal(hits[1]?.line, 20);
+    assert.equal(hits[1]?.column, 8);
+    assert.equal(
+      hits[1]?.message,
+      "quoted test name must be unquoted; Xano strips quotes on push",
+    );
+
+    const clean = lintFile({ path: "ok.xs", text: BARE_TEST_NAME_FIXED_XS }, config());
+    assert.equal(
+      clean.some((v) => v.ruleId === "unquote_bare_test_names"),
+      false,
+    );
+
+    const single = wrapTestBlocks(`  test 'inventory_restock_applies' {\n    input = {id: 2}\n  }\n`);
+    const singleHits = lintFile({ path: "single.xs", text: single }, config()).filter(
+      (v) => v.ruleId === "unquote_bare_test_names",
+    );
+    assert.equal(singleHits.length, 1);
+    assert.equal(singleHits[0]?.line, 10);
+
+    const inlineFile = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query item {
+      mock = {"inventory_restock_applies": {id: 2}}
+    }
+  }
+
+  response = $item
+}`;
+    const inlineHits = lintFile({ path: "inline.xs", text: inlineFile }, config()).filter(
+      (v) => v.ruleId === "unquote_bare_test_names",
+    );
+    assert.equal(inlineHits.length, 1);
+    assert.equal(inlineHits[0]?.line, 7);
+    assert.equal(
+      inlineHits[0]?.message,
+      "quoted mock key must be unquoted; Xano strips quotes on push",
+    );
+
+    const nested = wrapMockBlock(
+      `        "inventory_restock_applies": {
+          "nested_bare_key": 1
+        }`,
+    );
+    const nestedHits = lintFile({ path: "nested.xs", text: nested }, config()).filter(
+      (v) => v.ruleId === "unquote_bare_test_names",
+    );
+    assert.equal(nestedHits.length, 1);
+    assert.equal(nestedHits[0]?.line, 8);
+
+    const keyword = wrapTestBlocks(`  test "input" {\n    input = {id: 1}\n  }\n`);
+    assert.equal(
+      lintFile({ path: "kw.xs", text: keyword }, config()).some(
+        (v) => v.ruleId === "unquote_bare_test_names",
+      ),
+      false,
+    );
+
+    const hyphen = wrapTestBlocks(`  test "inventory-restock-applies" {\n    input = {id: 2}\n  }\n`);
+    assert.equal(
+      lintFile({ path: "hyphen.xs", text: hyphen }, config()).some(
+        (v) => v.ruleId === "unquote_bare_test_names",
+      ),
+      false,
+    );
+
+    const commented = wrapTestBlocks(`  // test "inventory_restock_applies" {\n`);
+    assert.equal(
+      lintFile({ path: "c.xs", text: commented }, config()).some(
+        (v) => v.ruleId === "unquote_bare_test_names",
+      ),
+      false,
+    );
+
+    const fenced = `function "example" {
+  input {
+  }
+
+  stack {
+    var $agent {
+      value = {
+        prompt: \`\`\`
+          test "inventory_restock_applies" {
+          mock = {
+            "inventory_restock_applies": {id: 2}
+          }
+          \`\`\`
+      }
+    }
+  }
+
+  response = $ok
+}`;
+    assert.equal(
+      lintFile({ path: "fence.xs", text: fenced }, config()).some(
+        (v) => v.ruleId === "unquote_bare_test_names",
+      ),
+      false,
+    );
+
+    const disabled = lintFile(
+      { path: "off.xs", text: BARE_TEST_NAME_XS },
+      config({ disabled_rules: ["unquote_bare_test_names"] }),
+    );
+    assert.equal(
+      disabled.some((v) => v.ruleId === "unquote_bare_test_names"),
+      false,
+    );
+
+    const warned = lintFile(
+      { path: "warn.xs", text: BARE_TEST_NAME_XS },
+      config({ unquote_bare_test_names: "error" }),
+    );
+    assert.equal(
+      warned.find((v) => v.ruleId === "unquote_bare_test_names")?.severity,
+      "error",
+    );
+  });
+
   it("wrap_enum_values uses compact JSON length, not value count", () => {
     assert.equal(JSON.stringify(ENUM_V62).length, 62);
     assert.equal(JSON.stringify(ENUM_V63).length, 63);
@@ -2081,7 +2218,7 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
 
   response = $ok
 
-  test "ok" {
+  test ok {
     expect.to_equal ($ok) {
       value = 1
     }
@@ -2141,7 +2278,7 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
 
   response = $ok
 
-  test "ok" {
+  test ok {
     expect.to_equal ($ok) {
       value = 1
     }
@@ -2187,7 +2324,7 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
 
   response = $ok
 
-  test "ok" {
+  test ok {
     expect.to_equal ($ok) {
       value = 1
     }
@@ -2362,7 +2499,7 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
 
   response = $ok
 
-  test "ok" {
+  test ok {
     expect.to_equal ($ok) {
       value = 1
     }
@@ -2387,7 +2524,7 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
 
   response = $ok
 
-  test "ok" {
+  test ok {
     expect.to_equal ($ok) {
       value = 1
     }

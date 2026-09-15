@@ -22,6 +22,7 @@ describe("config enablement", () => {
     assert.equal(config.enabledRuleIds.has("no_zero_numeric_default"), false);
     assert.equal(config.enabledRuleIds.has("no_zero_set_filter"), false);
     assert.equal(config.enabledRuleIds.has("quote_negative_numeric_default"), false);
+    assert.equal(config.enabledRuleIds.has("unquote_bare_test_names"), false);
     assert.equal(config.enabledRuleIds.has("wrap_enum_values"), false);
     assert.equal(config.enabledRuleIds.has("wrap_piped_values"), false);
     assert.deepEqual(config.included, ["**/*.xs"]);
