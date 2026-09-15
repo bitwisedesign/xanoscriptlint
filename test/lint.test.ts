@@ -127,6 +127,15 @@ describe("fixture linting", () => {
       true,
     );
 
+    const unquoteBare = {
+      path: path.join(fixtures, "violations/unquote_bare_test_names.xs"),
+      text: readFileSync(path.join(fixtures, "violations/unquote_bare_test_names.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([unquoteBare], config).some((v) => v.ruleId === "unquote_bare_test_names"),
+      true,
+    );
+
     const trailingComments = {
       path: path.join(fixtures, "violations/no_trailing_comments.xs"),
       text: readFileSync(path.join(fixtures, "violations/no_trailing_comments.xs"), "utf8"),

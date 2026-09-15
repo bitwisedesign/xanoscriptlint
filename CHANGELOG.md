@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Opt-in `unquote_bare_test_names` flags a quoted `test` name or top-level `mock` key whose text is a bare identifier (warning). Auto-fix drops the quotes; own-line mock keys keep their colon column so `align_object_colons` can re-align in the same `--fix` pass.
 - Opt-in `no_zero_set_filter` flags `|set:` of a bare numeric `0` (error). A literal `|set:"name":0` on an object-literal base auto-fixes by seeding the field on the object and collapsing the statement to one line; a variable base, dynamic key, nested path, or a base that already has a non-zero value for that key is reported without a rewrite.
 
 ### Changed

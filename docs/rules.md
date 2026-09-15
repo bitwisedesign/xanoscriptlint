@@ -14,6 +14,7 @@
 | [`no_zero_numeric_default`](#no_zero_numeric_default) | opt-in | warning | yes | Numeric defaults of `0` must be omitted |
 | [`no_zero_set_filter`](#no_zero_set_filter) | opt-in | error | yes | A `set:` filter of numeric `0` does not write the field |
 | [`quote_negative_numeric_default`](#quote_negative_numeric_default) | opt-in | warning | yes | Negative numeric defaults must be quoted |
+| [`unquote_bare_test_names`](#unquote_bare_test_names) | opt-in | warning | yes | Quoted `test` names and top-level `mock` keys with no spaces must be unquoted |
 | [`wrap_enum_values`](#wrap_enum_values) | opt-in | warning | yes | Enum `values` arrays wrap when compact JSON length reaches 64 |
 | [`wrap_piped_values`](#wrap_piped_values) | opt-in | warning | yes | Assignment filter pipelines wrap at pipe length 34 or 3+ filters; a grouped base stays inline |
 
@@ -283,6 +284,31 @@ decimal drift?=-2.5
 Already-quoted negatives are canonical. A negative zero (`-0`) is owned by `no_zero_numeric_default`, which omits the default instead of quoting it.
 
 Auto-fixable with `--fix`: the unquoted negative is wrapped in double quotes. Spacing around `=` and any trailing `filters=` clause or metadata block are preserved.
+
+## unquote_bare_test_names
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
+
+Xano strips quotes from a `test` name when the name is a bare identifier — letters, digits, and underscores, starting with a letter or underscore. A name with a space, hyphen, or other punctuation stays quoted. The same rewrite applies independently to a top-level key in `mock = { ... }`; Xano does not require a `test` of that name.
+
+```xs
+test inventory_restock_applies {
+  input = {id: 2}
+}
+
+test "catalog lists open shelves" {
+  input = {id: 1}
+}
+
+mock = {
+  "catalog lists open shelves": {id: 1}
+  inventory_restock_applies   : {id: 2}
+}
+```
+
+Quoted names that are already identifiers (`test "inventory_restock_applies"`, `"inventory_restock_applies":`) are push/pull churn. Nested keys inside a mock value, comment lines, and content inside triple-backtick fences or `"""` strings are left alone. `input`, `stack`, `response`, `test`, `mock`, `guid`, and `filters` stay quoted so unquoting cannot change how the line parses.
+
+Auto-fixable with `--fix`: the quotes are dropped. Own-line mock keys keep their colon column (two spaces replace the quotes) so a later [`align_object_colons`](#align_object_colons) pass can re-align the block to the new longest name in one `--fix`.
 
 ## wrap_enum_values
 
