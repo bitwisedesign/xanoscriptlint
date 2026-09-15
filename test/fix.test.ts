@@ -11,6 +11,14 @@ import {
   CLEAN_XS,
   ENUM_V63,
   ENUM_V64,
+  TAGS_V63,
+  TAGS_V64,
+  TAGS_SHORT,
+  TAGS_AGENT,
+  TAGS_ADVISOR,
+  TAGS_LEDGER,
+  inlineTagsLine,
+  wrappedTagsBlock,
   inlineEnumDecl,
   wrappedEnumDecl,
   FENCED_INPUT_ARRAY_XS,
@@ -1447,5 +1455,271 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
       config({ disabled_rules: ["guid_placement"] }),
     );
     assert.equal(off.changed, false);
+  });
+
+  it("wraps an over-threshold tags array without inserting blanks", () => {
+    const text = `function "example" {
+  response = $ok
+${inlineTagsLine(TAGS_V64)}
+  guid = "g1"
+}`;
+    const expected = `function "example" {
+  response = $ok
+${wrappedTagsBlock(TAGS_V64)}
+  guid = "g1"
+}`;
+    const result = fixFile(
+      { path: "wrap-tags.xs", text },
+      config({ only_rules: ["wrap_tags_values"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.equal(result.corrections[0]?.ruleId, "wrap_tags_values");
+
+    const again = fixFile(
+      { path: "wrap-tags.xs", text: result.text },
+      config({ only_rules: ["wrap_tags_values"] }),
+    );
+    assert.equal(again.changed, false);
+  });
+
+  it("collapses an under-threshold wrapped tags array without removing blanks", () => {
+    const text = `function "example" {
+  response = $ok
+${wrappedTagsBlock(TAGS_V63)}
+
+  guid = "g1"
+}`;
+    const expected = `function "example" {
+  response = $ok
+${inlineTagsLine(TAGS_V63)}
+
+  guid = "g1"
+}`;
+    const result = fixFile(
+      { path: "inline-tags.xs", text },
+      config({ only_rules: ["wrap_tags_values"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.equal(result.corrections[0]?.ruleId, "wrap_tags_values");
+  });
+
+  it("moves tags before llm and keeps a short array inline", () => {
+    const text = `agent widget_drafter {
+  canonical = "wDft"
+  llm = {
+    type: "openai"
+    system_prompt: "draft"
+  }
+  tools = [
+    {name: "validate_widget"}
+  ]
+
+${inlineTagsLine(TAGS_AGENT)}
+  guid = "g1"
+}`;
+    const expected = `agent widget_drafter {
+  canonical = "wDft"
+${inlineTagsLine(TAGS_AGENT)}
+  llm = {
+    type: "openai"
+    system_prompt: "draft"
+  }
+  tools = [
+    {name: "validate_widget"}
+  ]
+
+  guid = "g1"
+}`;
+    const result = fixFile(
+      { path: "agent-tags.xs", text },
+      config({ only_rules: ["tags_placement"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.equal(result.corrections[0]?.ruleId, "tags_placement");
+  });
+
+  it("moves a four-tag array before llm without wrapping", () => {
+    const text = `agent widget_advisor {
+  canonical = "PLACEHOLDER"
+  llm = {
+    type: "openai"
+    system_prompt: "advise"
+  }
+  tools = [
+    {name: "record_widget_suggestion"}
+  ]
+
+${inlineTagsLine(TAGS_ADVISOR)}
+  guid = "g1"
+}`;
+    const expected = `agent widget_advisor {
+  canonical = "PLACEHOLDER"
+${inlineTagsLine(TAGS_ADVISOR)}
+  llm = {
+    type: "openai"
+    system_prompt: "advise"
+  }
+  tools = [
+    {name: "record_widget_suggestion"}
+  ]
+
+  guid = "g1"
+}`;
+    const result = fixFile(
+      { path: "advisor-tags.xs", text },
+      config({ only_rules: ["tags_placement"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+  });
+
+  it("inserts a blank line after a wrapped tags array before guid", () => {
+    const text = `tool compute_widget_ledger {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ledger
+${wrappedTagsBlock(TAGS_LEDGER)}
+  guid = "g1"
+}`;
+    const expected = `tool compute_widget_ledger {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ledger
+${wrappedTagsBlock(TAGS_LEDGER)}
+
+  guid = "g1"
+}`;
+    const result = fixFile(
+      { path: "ledger-tags.xs", text },
+      config({ only_rules: ["tags_placement"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+  });
+
+  it("does not insert a blank line after a trailing wrapped tags array", () => {
+    const text = `function "example" {
+  response = $ok
+${wrappedTagsBlock(TAGS_V64)}
+}`;
+    const result = fixFile(
+      { path: "trailing-tags.xs", text },
+      config({ only_rules: ["tags_placement"] }),
+    );
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
+
+    const extraBlank = `function "example" {
+  response = $ok
+${wrappedTagsBlock(TAGS_V64)}
+
+}`;
+    const extra = fixFile(
+      { path: "trailing-tags-blank.xs", text: extraBlank },
+      config({ only_rules: ["tags_placement"] }),
+    );
+    assert.equal(extra.changed, true);
+    assert.equal(extra.text, text);
+  });
+
+  it("moves tags before tests and leaves guid spacing intact", () => {
+    const text = `function "Widgets/cascade_complete" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $result
+
+  test lower_stronger {
+    input = {
+      ok: true
+    }
+  }
+
+${inlineTagsLine(TAGS_SHORT)}
+  guid = "g1"
+}`;
+    const expected = `function "Widgets/cascade_complete" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $result
+${inlineTagsLine(TAGS_SHORT)}
+
+  test lower_stronger {
+    input = {
+      ok: true
+    }
+  }
+
+  guid = "g1"
+}`;
+    const result = fixFile(
+      { path: "cascade-tags.xs", text },
+      config({ only_rules: ["tags_placement"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+  });
+
+  it("wraps tags then places them in one formatting pass", () => {
+    const text = `agent widget_advisor {
+  canonical = "PLACEHOLDER"
+  llm = {type: "openai", system_prompt: "advise"}
+  tools = [{name: "record_widget_suggestion"}]
+${inlineTagsLine(TAGS_ADVISOR)}
+  guid = "g1"
+}`;
+    const expected = `agent widget_advisor {
+  canonical = "PLACEHOLDER"
+${wrappedTagsBlock(TAGS_ADVISOR)}
+
+  llm = {type: "openai", system_prompt: "advise"}
+  tools = [{name: "record_widget_suggestion"}]
+  guid = "g1"
+}`;
+    const result = fixFile({ path: "converge-tags.xs", text }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.equal(
+      result.corrections.some((c) => c.ruleId === "wrap_tags_values"),
+      true,
+    );
+    assert.equal(
+      result.corrections.some((c) => c.ruleId === "tags_placement"),
+      true,
+    );
+
+    const again = fixFile({ path: "converge-tags.xs", text: result.text }, config());
+    assert.equal(again.changed, false);
+    assert.equal(again.text, expected);
+  });
+
+  it("does not rewrite a suppressed wrap_tags_values violation", () => {
+    const text = `function "example" {
+  response = $ok
+  // xanoscriptlint:disable:next wrap_tags_values
+${inlineTagsLine(TAGS_V64)}
+  guid = "g1"
+}`;
+    const result = fixFile({ path: "suppressed-tags.xs", text }, config());
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
   });
 });

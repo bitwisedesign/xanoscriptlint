@@ -3,6 +3,7 @@ import { joinLineRecords, splitLineRecords } from "./line_records.js";
 import type { LineRecord } from "./line_records.js";
 import type { Rule, RuleOptions, SourceFile, Violation } from "./types.js";
 import { DEFAULT_WRAP_AT, enumValuesOpenLines } from "./wrap_enum_values.js";
+import { tagsOpenLines } from "./wrap_tags_values.js";
 
 const COMPOUND_EQ = "!<>=+*/-";
 
@@ -339,6 +340,7 @@ function skipSpan(text: string, start: number, closer: string): number | null {
 function findAssignmentSites(lines: string[]): AssignmentSite[] {
   const text = lines.join("\n");
   const enumLines = enumValuesOpenLines(lines);
+  const tagLines = tagsOpenLines(lines);
   const sites: AssignmentSite[] = [];
   let i = 0;
   while (i < text.length) {
@@ -401,7 +403,7 @@ function findAssignmentSites(lines: string[]): AssignmentSite[] {
     }
     i += 1;
   }
-  return sites.filter((site) => !enumLines.has(site.openLine));
+  return sites.filter((site) => !enumLines.has(site.openLine) && !tagLines.has(site.openLine));
 }
 
 function eligible(site: AssignmentSite): boolean {
