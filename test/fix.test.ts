@@ -871,6 +871,35 @@ describe("fixFile", () => {
     const kept = fixFile({ path: "suppressed.xs", text: suppressed }, config());
     assert.equal(kept.changed, false);
     assert.equal(kept.text, suppressed);
+
+    const mixed = wrapTestBlocks(
+      `  // xanoscriptlint:disable:next unquote_bare_test_names
+  test "inventory_restock_applies" {
+    input = {id: 2}
+  }
+
+  test "catalog_restock_succeeds" {
+    input = {id: 3}
+  }
+`,
+    );
+    const mixedFixed = wrapTestBlocks(
+      `  // xanoscriptlint:disable:next unquote_bare_test_names
+  test "inventory_restock_applies" {
+    input = {id: 2}
+  }
+
+  test catalog_restock_succeeds {
+    input = {id: 3}
+  }
+`,
+    );
+    const result = fixFile({ path: "mixed.xs", text: mixed }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, mixedFixed);
+    assert.equal(result.corrections.length, 1);
+    assert.equal(result.corrections[0]?.ruleId, "unquote_bare_test_names");
+    assert.equal(result.corrections[0]?.line, 15);
   });
 
   it("preserves line endings and suppressions when rewriting numeric defaults", () => {
