@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Opt-in `no_zero_set_filter` flags `|set:` of a bare numeric `0` (error). A literal `|set:"name":0` on an object-literal base auto-fixes by seeding the field on the object and collapsing the statement to one line; a variable base, dynamic key, nested path, or a base that already has a non-zero value for that key is reported without a rewrite.
 
+### Changed
+
+- `wrap_piped_values` now treats a grouped base (`(…)`, a non-empty `[…]` / `{…}`) as always-inline, matching Xano's push form. A hand-wrapped grouped-base chain is a warning and auto-fixes to one line. Anyone already opted into this rule will start seeing those hits.
+
 ## [0.4.1] - 2026-09-14
 
 ### Fixed

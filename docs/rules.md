@@ -15,7 +15,7 @@
 | [`no_zero_set_filter`](#no_zero_set_filter) | opt-in | error | yes | A `set:` filter of numeric `0` does not write the field |
 | [`quote_negative_numeric_default`](#quote_negative_numeric_default) | opt-in | warning | yes | Negative numeric defaults must be quoted |
 | [`wrap_enum_values`](#wrap_enum_values) | opt-in | warning | yes | Enum `values` arrays wrap when compact JSON length reaches 64 |
-| [`wrap_piped_values`](#wrap_piped_values) | opt-in | warning | yes | Assignment filter pipelines wrap at pipe length 34 or 3+ filters |
+| [`wrap_piped_values`](#wrap_piped_values) | opt-in | warning | yes | Assignment filter pipelines wrap at pipe length 34 or 3+ filters; a grouped base stays inline |
 
 List the same catalog from the CLI with `xanoscriptlint rules`.
 
@@ -320,7 +320,7 @@ wrap_enum_values:
 
 Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
 
-Xano wraps an assignment's filter pipeline when the pipe portion — every top-level `|filter` segment, indentation and base excluded — is 34 UTF-8 bytes or longer, or when there are three or more top-level filters. Shorter one- and two-filter chains stay on one line. The pulled file is canonical; a locally inline long chain (or a wrapped short chain) is push/pull churn.
+Xano wraps an assignment's filter pipeline when the pipe portion — every top-level `|filter` segment, indentation and base excluded — is 34 UTF-8 bytes or longer, or when there are three or more top-level filters. Shorter one- and two-filter chains stay on one line. A grouped base (`(…)`, a non-empty `[…]` / `{…}`) stays on one line at any length and filter count; empty `{}` and `[]`, including whitespace-only `{ }` / `[ ]`, still wrap. The pulled file is canonical; a locally inline long chain (or a wrapped short chain, or a wrapped grouped-base chain) is push/pull churn.
 
 The threshold is not the reconstructed line length used by [`collapse_assignment_values`](#collapse_assignment_values). A chain at deep indent can stay inline while a shorter line at shallow indent wraps, because only the `|…` bytes count. Multi-byte characters count as more than one: `|concat:"••••••••"` is 18 characters and 34 bytes, so it wraps.
 
@@ -335,6 +335,8 @@ value = $cart
   |to_text
   |to_lower
   |trim
+
+value = {value_awarded: 0}|set:"reward_id":$reward_id|set:"quantity":$quantity_stored
 ```
 
 A filter of the form `|name:(<chain>)` applies the same rule to the inner chain:
@@ -347,9 +349,9 @@ value = []
   )
 ```
 
-The rule skips a chain whose base is grouped (`(…)`, a non-empty `[…]` / `{…}`), whose expression contains `$$` outside strings, whose base already spans multiple lines, or whose span includes a triple-backtick fence, `"""` block, backtick expression, trailing `//`, or a tab. Empty `{}` and `[]` bases do wrap. `||` is not a filter.
+The rule skips a chain whose expression contains `$$` outside strings (including a grouped-base chain that would otherwise collapse), whose base already spans multiple lines, or whose span includes a triple-backtick fence, `"""` block, backtick expression, trailing `//`, or a tab. `||` is not a filter.
 
-Auto-fixable with `--fix`: an inline chain is rewritten with the base on the assignment line and one filter per continuation (statement indent + 2), and a wrapped chain below the threshold collapses to one line.
+Auto-fixable with `--fix`: an inline chain is rewritten with the base on the assignment line and one filter per continuation (statement indent + 2), and a wrapped chain below the threshold — or any wrapped grouped-base chain — collapses to one line.
 
 Override the cutoffs with `wrap_at` and `filter_limit` (positive integers, defaults 34 and 3):
 

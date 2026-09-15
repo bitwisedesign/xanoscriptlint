@@ -205,6 +205,19 @@ export const PIPE_33 = `|concat:"${"x".repeat(23)}"`;
 export const PIPE_34 = `|concat:"${"x".repeat(24)}"`;
 export const PIPE_BYTES_33 = `|concat:"${"•".repeat(7)}xx"`;
 export const PIPE_BYTES_34 = `|concat:"${"•".repeat(8)}"`;
+export const ISSUED_ITEM_FILTERS = [
+  `|set:"reward_log_uuid":$issued_row.reward_log_uuid`,
+  `|set:"reward_id":$reward_id`,
+  `|set:"reward_uuid":$reward_uuid`,
+  `|set:"reward_type":$reward_type`,
+  `|set:"reward_name_snapshot":$reward_name`,
+  `|set:"reward_configuration_snapshot":$ok_snapshot`,
+  `|set:"reward_association_uuid":$assoc_uuid`,
+  `|set:"source_type":$source_type`,
+  `|set:"quantity":$quantity_stored`,
+  `|set:"balance_after":$balance_after`,
+  `|set:"delivery_uuid":$delivery_uuid`,
+];
 
 export function inlinePiped(base: string, ...filters: string[]): string {
   return `${base}${filters.join("")}`;
