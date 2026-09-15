@@ -25,6 +25,7 @@ interface PipeChainSite {
   collapsed: string;
   pipeBytes: number;
   filterCount: number;
+  groupedBase: boolean;
   eligible: boolean;
   canonical: string[];
 }
@@ -61,12 +62,16 @@ function hasLambdaSigil(text: string): boolean {
   return false;
 }
 
+function isEmptyContainer(trimmed: string, open: "{" | "[", close: "}" | "]"): boolean {
+  return trimmed.startsWith(open) && trimmed.endsWith(close) && trimmed.slice(1, -1).trim() === "";
+}
+
 function isGroupedBase(base: string): boolean {
   const trimmed = base.trim();
   return (
     trimmed.startsWith("(") ||
-    (trimmed.startsWith("[") && trimmed !== "[]") ||
-    (trimmed.startsWith("{") && trimmed !== "{}")
+    (trimmed.startsWith("[") && !isEmptyContainer(trimmed, "[", "]")) ||
+    (trimmed.startsWith("{") && !isEmptyContainer(trimmed, "{", "}"))
   );
 }
 
@@ -178,12 +183,12 @@ function findPipeChains(lines: string[], wrapAt: number, limit: number): PipeCha
       continue;
     }
     const prefix = `${match[1]}${match[2]}${match[3]}`;
+    const groupedBase = isGroupedBase(split.base);
     const eligible =
       !span.skip &&
       !span.multilineBase &&
       !rangeHasTab(lines, i, span.closeLine) &&
-      !hasLambdaSigil(span.collapsed) &&
-      !isGroupedBase(split.base);
+      !hasLambdaSigil(span.collapsed);
     const canonical = eligible
       ? renderCanonical(prefix, span.collapsed, match[1].length, wrapAt, limit)
       : null;
@@ -195,6 +200,7 @@ function findPipeChains(lines: string[], wrapAt: number, limit: number): PipeCha
       collapsed: span.collapsed,
       pipeBytes: pipeBytesOf(split.filters),
       filterCount: split.filters.length,
+      groupedBase,
       eligible,
       canonical: canonical ?? [],
     });
@@ -215,6 +221,9 @@ function sameLines(left: string[], right: string[]): boolean {
 }
 
 function mismatchMessage(site: PipeChainSite, wrapAt: number, limit: number): string {
+  if (site.groupedBase) {
+    return `${site.owner} piped value with a grouped base must be inline`;
+  }
   const wantsWrap = shouldWrap(site.collapsed, wrapAt, limit);
   if (!wantsWrap) {
     return `${site.owner} piped value of pipe length ${site.pipeBytes} must be inline (threshold ${wrapAt})`;
@@ -270,7 +279,7 @@ function replaceSite(records: LineRecord[], site: PipeChainSite): boolean {
 export const wrapPipedValues: Rule = {
   id: "wrap_piped_values",
   description:
-    "Assignment filter pipelines wrap when the pipe portion reaches 34 UTF-8 bytes or has 3+ filters (Xano rewrites this on push)",
+    "Assignment filter pipelines wrap when the pipe portion reaches 34 UTF-8 bytes or has 3+ filters; a grouped base stays inline (Xano rewrites this on push)",
   defaultEnabled: false,
   defaultSeverity: "warning",
   numericOptions: ["wrap_at", "filter_limit"],

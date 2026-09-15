@@ -93,7 +93,7 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 | `no_zero_set_filter` | ⚪️ | ❌ | ✅ | `set:` of numeric `0` (does not write the field; seed it on the object literal) |
 | `quote_negative_numeric_default` | ⚪️ | ⚠️ | ✅ | Unquoted negative numeric default (Xano quotes it on push) |
 | `wrap_enum_values` | ⚪️ | ⚠️ | ✅ | Enum `values` array is inline at compact JSON length 64+ or wrapped below 64 (Xano rewrites this on push) |
-| `wrap_piped_values` | ⚪️ | ⚠️ | ✅ | Assignment filter pipeline is inline at pipe length 34+ or 3+ filters, or wrapped below that (Xano rewrites this on push) |
+| `wrap_piped_values` | ⚪️ | ⚠️ | ✅ | Assignment filter pipeline is inline at pipe length 34+ or 3+ filters, or wrapped below that; a grouped base stays inline (Xano rewrites this on push) |
 
 🟢 on · ⚪️ off · ❌ error · ⚠️ warning · ✅ auto-fix. Off-by-default rules are enabled with `opt_in_rules` or `--opt-in` (`--opt-in all` enables every built-in).
 

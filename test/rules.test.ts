@@ -60,6 +60,7 @@ import {
   PIPE_34,
   PIPE_BYTES_33,
   PIPE_BYTES_34,
+  ISSUED_ITEM_FILTERS,
   formattingOptInRules,
 } from "./support.js";
 
@@ -1461,17 +1462,7 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     assert.equal(wrapped33.length, 1);
   });
 
-  it("wrap_piped_values skips lambdas, grouped bases, fences, tabs, and multiline bases", () => {
-    const lambda = wrapVarValue(
-      `$rows|filter:$$.status == "open"|map:$$.id|set:"cart_uuid":$cart_uuid`,
-    );
-    assert.equal(
-      lintFile({ path: "lambda.xs", text: lambda }, config()).some(
-        (v) => v.ruleId === "wrap_piped_values",
-      ),
-      false,
-    );
-
+  it("wrap_piped_values keeps an inline grouped base clean", () => {
     const grouped = wrapVarValue(
       `($year ~ "-01-01")|parse_timestamp:"Y-m-d H:i:s":$timezone`,
     );
@@ -1485,6 +1476,90 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     const nonemptyArray = wrapVarValue(`[$cart.id, $order.id]|join:"${"x".repeat(30)}"`);
     assert.equal(
       lintFile({ path: "arr.xs", text: nonemptyArray }, config()).some(
+        (v) => v.ruleId === "wrap_piped_values",
+      ),
+      false,
+    );
+
+    const longLine = inlinePiped("{value_awarded: 0}", ...ISSUED_ITEM_FILTERS);
+    assert.equal(longLine.length > 400, true);
+    assert.equal(
+      lintFile({ path: "issued.xs", text: wrapVarValue(longLine) }, config()).some(
+        (v) => v.ruleId === "wrap_piped_values",
+      ),
+      false,
+    );
+  });
+
+  it("wrap_piped_values collapses a wrapped grouped base", () => {
+    const objectHits = lintFile(
+      {
+        path: "wobj.xs",
+        text: wrapVarValue(wrappedPiped("{value_awarded: 0}", ...ISSUED_ITEM_FILTERS)),
+      },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_piped_values");
+    assert.equal(objectHits.length, 1);
+    assert.equal(objectHits[0]?.severity, "warning");
+    assert.equal(
+      objectHits[0]?.message,
+      "value piped value with a grouped base must be inline",
+    );
+
+    const parenHits = lintFile(
+      {
+        path: "wparen.xs",
+        text: wrapVarValue(
+          wrappedPiped(
+            `($year ~ "-01-01")`,
+            `|parse_timestamp:"Y-m-d H:i:s":$timezone`,
+          ),
+        ),
+      },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_piped_values");
+    assert.equal(parenHits.length, 1);
+    assert.equal(
+      parenHits[0]?.message,
+      "value piped value with a grouped base must be inline",
+    );
+
+    const arrayHits = lintFile(
+      {
+        path: "warr.xs",
+        text: wrapVarValue(
+          wrappedPiped(`[$cart.id, $order.id]`, `|join:"${"x".repeat(30)}"`),
+        ),
+      },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_piped_values");
+    assert.equal(arrayHits.length, 1);
+    assert.equal(
+      arrayHits[0]?.message,
+      "value piped value with a grouped base must be inline",
+    );
+  });
+
+  it("wrap_piped_values skips lambdas, fences, tabs, and multiline bases", () => {
+    const lambda = wrapVarValue(
+      `$rows|filter:$$.status == "open"|map:$$.id|set:"cart_uuid":$cart_uuid`,
+    );
+    assert.equal(
+      lintFile({ path: "lambda.xs", text: lambda }, config()).some(
+        (v) => v.ruleId === "wrap_piped_values",
+      ),
+      false,
+    );
+
+    const groupedLambda = wrapVarValue(
+      wrappedPiped(
+        `($rows|filter:$$.status == "open")`,
+        `|map:$$.id`,
+        `|set:"cart_uuid":$cart_uuid`,
+      ),
+    );
+    assert.equal(
+      lintFile({ path: "grouped-lambda.xs", text: groupedLambda }, config()).some(
         (v) => v.ruleId === "wrap_piped_values",
       ),
       false,
@@ -1561,6 +1636,20 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
       config(),
     ).filter((v) => v.ruleId === "wrap_piped_values");
     assert.equal(emptyObject.length, 1);
+
+    const spacedArray = lintFile(
+      { path: "spaced-arr.xs", text: wrapVarValue(inlinePiped("[ ]", PIPE_34)) },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_piped_values");
+    assert.equal(spacedArray.length, 1);
+    assert.match(spacedArray[0]?.message ?? "", /must be wrapped/);
+
+    const spacedObject = lintFile(
+      { path: "spaced-obj.xs", text: wrapVarValue(inlinePiped("{ }", PIPE_34)) },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_piped_values");
+    assert.equal(spacedObject.length, 1);
+    assert.match(spacedObject[0]?.message ?? "", /must be wrapped/);
 
     const responseHits = lintFile(
       {

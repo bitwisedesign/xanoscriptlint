@@ -68,6 +68,7 @@ import {
   ASSIGN_LINE_64,
   PIPE_33,
   PIPE_34,
+  ISSUED_ITEM_FILTERS,
   formattingOptInRules,
 } from "./support.js";
 
@@ -895,6 +896,19 @@ describe("fixFile", () => {
     assert.equal(result.corrections[0]?.ruleId, "wrap_piped_values");
 
     const again = fixFile({ path: "inline-pipe.xs", text: result.text }, config());
+    assert.equal(again.changed, false);
+    assert.equal(again.text, expected);
+  });
+
+  it("collapses a wrapped grouped-base piped assignment and is idempotent", () => {
+    const text = wrapVarValue(wrappedPiped("{value_awarded: 0}", ...ISSUED_ITEM_FILTERS));
+    const expected = wrapVarValue(inlinePiped("{value_awarded: 0}", ...ISSUED_ITEM_FILTERS));
+    const result = fixFile({ path: "issued-pipe.xs", text }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.equal(result.corrections[0]?.ruleId, "wrap_piped_values");
+
+    const again = fixFile({ path: "issued-pipe.xs", text: result.text }, config());
     assert.equal(again.changed, false);
     assert.equal(again.text, expected);
   });
