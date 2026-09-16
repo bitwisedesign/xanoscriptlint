@@ -39,7 +39,14 @@ function readQuoted(
     }
     if (ch === "\\") {
       const next = text[i + 1];
-      if (next === "n" || next === "t" || next === "r" || next === "u") {
+      if (
+        next === "n" ||
+        next === "t" ||
+        next === "r" ||
+        next === "u" ||
+        next === "b" ||
+        next === "f"
+      ) {
         return null;
       }
       escape = true;

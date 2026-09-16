@@ -1507,7 +1507,7 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     );
 
     const escaped = wrapInputDecls(`    enum lane {
-      values = ["alpha\\n", "bravo\\t", "x\\u0041", "cr\\r"]
+      values = ["alpha\\n", "bravo\\t", "x\\u0041", "cr\\r", "bs\\b", "ff\\f"]
     }`);
     assert.equal(
       lintFile(
@@ -1597,7 +1597,7 @@ ${tagsLine}
 
     const escaped = `function "example" {
   response = $ok
-  tags = ["alpha\\n", "bravo\\t", "x\\u0041", "cr\\r"]
+  tags = ["alpha\\n", "bravo\\t", "x\\u0041", "cr\\r", "bs\\b", "ff\\f"]
   guid = "g1"
 }`;
     assert.equal(

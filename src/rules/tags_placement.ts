@@ -410,7 +410,7 @@ function violationsFor(
 export const tagsPlacement: Rule = {
   id: "tags_placement",
   description:
-    "tags sits immediately before guid, test, llm, tools, or cache, with blank lines matching Xano push form",
+    "tags sits immediately before the first of llm, tools, test, cache, or guid, with blank lines matching Xano push form",
   defaultEnabled: false,
   defaultSeverity: "warning",
   lint(file: SourceFile, options: RuleOptions): Violation[] {
