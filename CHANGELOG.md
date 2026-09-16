@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in `tags_placement` flags a declaration `tags = [...]` that is not immediately before the first of `llm`, `tools`, `test`, `cache`, or `guid`, or that has the wrong blank lines around it (warning). Auto-fix moves the block and inserts or removes those blanks to match Xano's push form.
+- Opt-in `wrap_tags_values` flags a `tags` array that is inline at compact JSON length 64 or longer, or wrapped below that cutoff (warning). Auto-fix rewrites the array to Xano's push form (comma-separated one-liner, or one quoted item per line with no commas). Surrounding blanks stay with `tags_placement`. The cutoff is configurable with `wrap_at`. `collapse_assignment_values` no longer collapses `tags`.
+
 ## [0.5.0] - 2026-09-15
 
 ### Added

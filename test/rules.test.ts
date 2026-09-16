@@ -9,6 +9,12 @@ import {
   ENUM_V62,
   ENUM_V63,
   ENUM_V64,
+  TAGS_V63,
+  TAGS_V64,
+  TAGS_SHORT,
+  TAGS_AGENT,
+  inlineTagsLine,
+  wrappedTagsBlock,
   inlineEnumDecl,
   wrappedEnumDecl,
   EMPTY_RUN_XS,
@@ -84,6 +90,18 @@ function config(overrides: Parameters<typeof resolveConfig>[0] = {}) {
 function guidHits(text: string, overrides: Parameters<typeof resolveConfig>[0] = {}) {
   return lintFile({ path: "a.xs", text }, config(overrides)).filter(
     (v) => v.ruleId === "guid_placement",
+  );
+}
+
+function tagsHits(text: string, overrides: Parameters<typeof resolveConfig>[0] = {}) {
+  return lintFile({ path: "a.xs", text }, config(overrides)).filter(
+    (v) => v.ruleId === "tags_placement",
+  );
+}
+
+function wrapTagsHits(text: string, overrides: Parameters<typeof resolveConfig>[0] = {}) {
+  return lintFile({ path: "a.xs", text }, config(overrides)).filter(
+    (v) => v.ruleId === "wrap_tags_values",
   );
 }
 
@@ -1489,7 +1507,7 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     );
 
     const escaped = wrapInputDecls(`    enum lane {
-      values = ["alpha\\n", "bravo\\t", "x\\u0041", "cr\\r"]
+      values = ["alpha\\n", "bravo\\t", "x\\u0041", "cr\\r", "bs\\b", "ff\\f"]
     }`);
     assert.equal(
       lintFile(
@@ -1498,6 +1516,120 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
       ).some((v) => v.ruleId === "wrap_enum_values"),
       false,
     );
+  });
+
+  it("wrap_tags_values uses compact JSON length, not value count", () => {
+    assert.equal(JSON.stringify(TAGS_V63).length, 63);
+    assert.equal(JSON.stringify(TAGS_V64).length, 64);
+
+    const functionWith = (tagsLine: string) => `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+${tagsLine}
+  guid = "g1"
+}`;
+
+    const inline63 = wrapTagsHits(functionWith(inlineTagsLine(TAGS_V63)));
+    assert.equal(inline63.length, 0);
+
+    const inline64 = wrapTagsHits(functionWith(inlineTagsLine(TAGS_V64)));
+    assert.equal(inline64.length, 1);
+    assert.equal(inline64[0]?.line, 9);
+    assert.equal(inline64[0]?.column, 3);
+    assert.equal(inline64[0]?.severity, "warning");
+    assert.equal(
+      inline64[0]?.message,
+      "tags of compact length 64 must be wrapped (threshold 64)",
+    );
+
+    const wrapped63 = wrapTagsHits(functionWith(wrappedTagsBlock(TAGS_V63)));
+    assert.equal(wrapped63.length, 1);
+    assert.equal(
+      wrapped63[0]?.message,
+      "tags of compact length 63 must be inline (threshold 64)",
+    );
+
+    const wrapped64 = wrapTagsHits(functionWith(wrappedTagsBlock(TAGS_V64)));
+    assert.equal(wrapped64.length, 0);
+  });
+
+  it("wrap_tags_values skips non-string arrays, comments inside values, fenced bodies, and non-round-trippable escapes", () => {
+    const nonString = `function "example" {
+  response = $ok
+  tags = ["domain:widgets", 1, "surface:client"]
+  guid = "g1"
+}`;
+    assert.equal(wrapTagsHits(nonString).length, 0);
+
+    const commented = `function "example" {
+  response = $ok
+  tags = [
+    "domain:widgets"
+    // not a value
+    "surface:client"
+  ]
+  guid = "g1"
+}`;
+    assert.equal(wrapTagsHits(commented).length, 0);
+
+    const fenced = `function "example" {
+  input {
+  }
+
+  stack {
+    var $ok {
+      value = {
+        system_prompt: """
+          tags = [${TAGS_V64.map((value) => JSON.stringify(value)).join(", ")}]
+          """
+      }
+    }
+  }
+
+  response = $ok
+}`;
+    assert.equal(wrapTagsHits(fenced).length, 0);
+
+    const escaped = `function "example" {
+  response = $ok
+  tags = ["alpha\\n", "bravo\\t", "x\\u0041", "cr\\r", "bs\\b", "ff\\f"]
+  guid = "g1"
+}`;
+    assert.equal(
+      wrapTagsHits(escaped, { wrap_tags_values: { wrap_at: 1 } }).length,
+      0,
+    );
+  });
+
+  it("wrap_tags_values honors disabled_rules, severity, and wrap_at", () => {
+    const text = `function "example" {
+  response = $ok
+${inlineTagsLine(TAGS_V64)}
+  guid = "g1"
+}`;
+    const disabled = wrapTagsHits(text, { disabled_rules: ["wrap_tags_values"] });
+    assert.equal(disabled.length, 0);
+
+    const warned = wrapTagsHits(text, { wrap_tags_values: "error" });
+    assert.equal(warned[0]?.severity, "error");
+
+    const lowered = wrapTagsHits(text, { wrap_tags_values: { wrap_at: 80 } });
+    assert.equal(lowered.length, 0);
+
+    const raised = wrapTagsHits(
+      `function "example" {
+  response = $ok
+${inlineTagsLine(TAGS_SHORT)}
+  guid = "g1"
+}`,
+      { wrap_tags_values: { wrap_at: 1 } },
+    );
+    assert.equal(raised.length, 1);
   });
 
   it("wrap_piped_values uses pipe-portion byte length, not line length", () => {
@@ -2013,7 +2145,7 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     assert.match(returned[0]?.message ?? "", /^return value of line length \d+ must be inline/);
   });
 
-  it("collapse_assignment_values skips pipes, comments, fences, non-colon objects, tabs, and enum values", () => {
+  it("collapse_assignment_values skips pipes, comments, fences, non-colon objects, tabs, enum values, and tags", () => {
     const piped = `function "example" {
   input {
   }
@@ -2102,6 +2234,18 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
       0,
     );
     assert.equal(enumHits.filter((v) => v.ruleId === "wrap_enum_values").length, 1);
+
+    const tagsText = `function "example" {
+  response = $ok
+${wrappedTagsBlock(TAGS_V63)}
+  guid = "g1"
+}`;
+    const tagHits = lintFile({ path: "tags.xs", text: tagsText }, config());
+    assert.equal(
+      tagHits.filter((v) => v.ruleId === "collapse_assignment_values").length,
+      0,
+    );
+    assert.equal(tagHits.filter((v) => v.ruleId === "wrap_tags_values").length, 1);
   });
 
   it("collapse_assignment_values honors disabled_rules, severity, and wrap_at", () => {
@@ -2556,6 +2700,253 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
   guid = "g1"
 }`;
     assert.equal(guidHits(suppressed).length, 0);
+  });
+
+  it("tags_placement accepts tags immediately before each anchor", () => {
+    const samples = [
+      `function "example" {
+  response = $ok
+${inlineTagsLine(TAGS_SHORT)}
+  guid = "g1"
+}`,
+      `function "example" {
+  response = $ok
+${inlineTagsLine(TAGS_SHORT)}
+
+  test widget_reindex {
+    input = {}
+  }
+
+  guid = "g1"
+}`,
+      `agent widget_drafter {
+  canonical = "wDft"
+${inlineTagsLine(TAGS_AGENT)}
+  llm = {
+    type: "openai"
+  }
+  guid = "g1"
+}`,
+      `mcp_server widget_admin {
+  canonical = "wAdm"
+  instructions = "admin"
+${inlineTagsLine(TAGS_SHORT)}
+  tools = [{name: "list_widgets"}]
+  guid = "g1"
+}`,
+      `query "client_config" {
+  response = $config
+${inlineTagsLine(TAGS_SHORT)}
+  cache = {ttl: 60}
+  guid = "g1"
+}`,
+    ];
+    for (const text of samples) {
+      assert.deepEqual(tagsHits(text), [], text);
+    }
+  });
+
+  it("tags_placement accepts tags at the end when there is no anchor", () => {
+    const text = `function "example" {
+  response = $ok
+${inlineTagsLine(TAGS_SHORT)}
+}`;
+    assert.deepEqual(tagsHits(text), []);
+    assert.deepEqual(
+      tagsHits(`function "example" {
+  response = $ok
+}`),
+      [],
+    );
+    assert.deepEqual(
+      tagsHits(`function "example" {
+  response = $ok
+${wrappedTagsBlock(TAGS_V64)}
+}`),
+      [],
+    );
+  });
+
+  it("tags_placement flags tags after guid, test, llm, tools, or cache", () => {
+    const afterGuid = `function "example" {
+  response = $ok
+  guid = "g1"
+${inlineTagsLine(TAGS_SHORT)}
+}`;
+    const guidHit = tagsHits(afterGuid);
+    assert.equal(guidHit.length, 1);
+    assert.equal(guidHit[0]?.severity, "warning");
+    assert.equal(guidHit[0]?.message, "tags must be placed immediately before `guid`");
+
+    const afterTest = `function "example" {
+  response = $ok
+
+  test widget_reindex {
+    input = {}
+  }
+
+${inlineTagsLine(TAGS_SHORT)}
+  guid = "g1"
+}`;
+    assert.equal(
+      tagsHits(afterTest)[0]?.message,
+      "tags must be placed immediately before `test`",
+    );
+
+    const afterLlm = `agent widget_drafter {
+  canonical = "wDft"
+  llm = {
+    type: "openai"
+  }
+${inlineTagsLine(TAGS_AGENT)}
+  guid = "g1"
+}`;
+    assert.equal(
+      tagsHits(afterLlm)[0]?.message,
+      "tags must be placed immediately before `llm`",
+    );
+
+    const afterTools = `mcp_server widget_admin {
+  canonical = "wAdm"
+  instructions = "admin"
+  tools = [{name: "list_widgets"}]
+${inlineTagsLine(TAGS_SHORT)}
+  guid = "g1"
+}`;
+    assert.equal(
+      tagsHits(afterTools)[0]?.message,
+      "tags must be placed immediately before `tools`",
+    );
+
+    const afterCache = `query "client_config" {
+  response = $config
+  cache = {ttl: 60}
+${inlineTagsLine(TAGS_SHORT)}
+  guid = "g1"
+}`;
+    assert.equal(
+      tagsHits(afterCache)[0]?.message,
+      "tags must be placed immediately before `cache`",
+    );
+  });
+
+  it("tags_placement flags blank lines above and below tags", () => {
+    const missingAbove = `function "example" {
+  response = {
+    ok: true
+  }
+${inlineTagsLine(TAGS_SHORT)}
+  guid = "g1"
+}`;
+    const missingAboveHits = tagsHits(missingAbove);
+    assert.equal(
+      missingAboveHits.some(
+        (v) => v.message === "tags must have a blank line above it when it follows a block closer",
+      ),
+      true,
+    );
+
+    const extraAbove = `function "example" {
+  response = $ok
+
+${inlineTagsLine(TAGS_SHORT)}
+  guid = "g1"
+}`;
+    assert.equal(
+      tagsHits(extraAbove).some(
+        (v) =>
+          v.message ===
+          "tags must not have a blank line above it when it follows a single-line value",
+      ),
+      true,
+    );
+
+    const extraBelow = `function "example" {
+  response = $ok
+${inlineTagsLine(TAGS_SHORT)}
+
+  guid = "g1"
+}`;
+    assert.equal(
+      tagsHits(extraBelow).some(
+        (v) =>
+          v.message ===
+          "tags must not have a blank line below it when followed by a single-line value",
+      ),
+      true,
+    );
+
+    const missingBelowWrapped = `function "example" {
+  response = $ok
+${wrappedTagsBlock(TAGS_V64)}
+  guid = "g1"
+}`;
+    assert.equal(
+      tagsHits(missingBelowWrapped).some(
+        (v) =>
+          v.message ===
+          "tags must have a blank line below it when it is wrapped or followed by a test block",
+      ),
+      true,
+    );
+
+    const missingBelowTest = `function "example" {
+  response = $ok
+${inlineTagsLine(TAGS_SHORT)}
+  test widget_reindex {
+    input = {}
+  }
+
+  guid = "g1"
+}`;
+    assert.equal(
+      tagsHits(missingBelowTest).some(
+        (v) =>
+          v.message ===
+          "tags must have a blank line below it when it is wrapped or followed by a test block",
+      ),
+      true,
+    );
+
+    const blankBeforeCloser = `function "example" {
+  response = $ok
+${wrappedTagsBlock(TAGS_V64)}
+
+}`;
+    assert.equal(
+      tagsHits(blankBeforeCloser).some(
+        (v) =>
+          v.message ===
+          "tags must not have a blank line below it when followed by a single-line value",
+      ),
+      true,
+    );
+  });
+
+  it("tags_placement ignores tags inside literals and honors disabled_rules", () => {
+    const fenced = `function "example" {
+  stack {
+    var $ok {
+      value = {
+        system_prompt: """
+          tags = ["domain:widgets"]
+          guid = "nested"
+          """
+      }
+    }
+  }
+
+  response = $ok
+  guid = "g1"
+}`;
+    assert.deepEqual(tagsHits(fenced), []);
+
+    const misplaced = `function "example" {
+  response = $ok
+  guid = "g1"
+${inlineTagsLine(TAGS_SHORT)}
+}`;
+    assert.equal(tagsHits(misplaced, { disabled_rules: ["tags_placement"] }).length, 0);
   });
 
   it("no_trailing_comments flags comments in the construct tail", () => {
