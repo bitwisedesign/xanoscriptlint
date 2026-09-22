@@ -1712,6 +1712,64 @@ ${wrappedTagsBlock(TAGS_V64)}
     assert.equal(extra.text, text);
   });
 
+  it("moves tags before external_access", () => {
+    const text = `query "admin/encryption_test" verb=POST {
+  response = $result
+  external_access = false
+${inlineTagsLine(TAGS_SHORT)}
+  guid = "g1"
+}`;
+    const expected = `query "admin/encryption_test" verb=POST {
+  response = $result
+${inlineTagsLine(TAGS_SHORT)}
+  external_access = false
+  guid = "g1"
+}`;
+    const result = fixFile(
+      { path: "external-access-tags.xs", text },
+      config({ only_rules: ["tags_placement"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.equal(result.corrections[0]?.ruleId, "tags_placement");
+
+    const again = fixFile(
+      { path: "external-access-tags.xs", text: result.text },
+      config({ only_rules: ["tags_placement"] }),
+    );
+    assert.equal(again.changed, false);
+    assert.equal(again.text, expected);
+  });
+
+  it("inserts a blank line after a wrapped tags array before external_access", () => {
+    const text = `query "admin/encryption_test" verb=POST {
+  response = $result
+${wrappedTagsBlock(TAGS_V64)}
+  external_access = false
+  guid = "g1"
+}`;
+    const expected = `query "admin/encryption_test" verb=POST {
+  response = $result
+${wrappedTagsBlock(TAGS_V64)}
+
+  external_access = false
+  guid = "g1"
+}`;
+    const result = fixFile(
+      { path: "external-access-wrapped-tags.xs", text },
+      config({ only_rules: ["tags_placement"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+
+    const again = fixFile(
+      { path: "external-access-wrapped-tags.xs", text: result.text },
+      config({ only_rules: ["tags_placement"] }),
+    );
+    assert.equal(again.changed, false);
+    assert.equal(again.text, expected);
+  });
+
   it("moves tags before tests and leaves guid spacing intact", () => {
     const text = `function "Widgets/cascade_complete" {
   input {

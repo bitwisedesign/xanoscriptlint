@@ -16,7 +16,7 @@
 | [`no_zero_set_filter`](#no_zero_set_filter) | opt-in | error | yes | A `set:` filter of numeric `0` does not write the field |
 | [`quote_negative_numeric_default`](#quote_negative_numeric_default) | opt-in | warning | yes | Negative numeric defaults must be quoted |
 | [`separator_indentation`](#separator_indentation) | opt-in | warning | yes | Whitespace-only lines use the enclosing block opener's indent |
-| [`tags_placement`](#tags_placement) | opt-in | warning | yes | `tags` sits immediately before the first of `llm`, `tools`, `test`, `cache`, or `guid`, with Xano blank-line rules |
+| [`tags_placement`](#tags_placement) | opt-in | warning | yes | `tags` sits immediately before the first of `llm`, `tools`, `test`, `cache`, `external_access`, or `guid`, with Xano blank-line rules |
 | [`unquote_bare_test_names`](#unquote_bare_test_names) | opt-in | warning | yes | Quoted `test` names and top-level `mock` keys with no spaces must be unquoted |
 | [`unquote_enum_defaults`](#unquote_enum_defaults) | opt-in | warning | yes | Quoted enum defaults that are bare identifiers must be unquoted |
 | [`wrap_enum_values`](#wrap_enum_values) | opt-in | warning | yes | Enum `values` arrays wrap when compact JSON length reaches 64 |
@@ -369,9 +369,9 @@ Auto-fixable with `--fix`. This rule runs last, so it normalizes separator width
 
 Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
 
-Xano places a declaration's `tags = [...]` immediately before the first of `llm`, `tools`, `test`, `cache`, or `guid`. Everything else in the body — `canonical`, `response`, `input`, `stack`, `schema` — stays above `tags`. A missing `tags` is allowed.
+Xano places a declaration's `tags = [...]` immediately before the first of `llm`, `tools`, `test`, `cache`, `external_access`, or `guid`. Everything else in the body — `canonical`, `response`, `input`, `stack`, `schema` — stays above `tags`. A missing `tags` is allowed.
 
-Blank lines follow the predecessor and the form of the array. Exactly one blank line above `tags` when the previous statement is a bare `}` or `]`. No blank line above otherwise. Exactly one blank line below `tags` when a following member exists and the array is wrapped, or when that member is a `test` block. No blank line below when a single-line `tags` is followed by `guid`, `llm`, `tools`, or `cache`, or when `tags` is the last member of the declaration.
+Blank lines follow the predecessor and the form of the array. Exactly one blank line above `tags` when the previous statement is a bare `}` or `]`. No blank line above otherwise. Exactly one blank line below `tags` when a following member exists and the array is wrapped, or when that member is a `test` block. No blank line below when a single-line `tags` is followed by `guid`, `llm`, `tools`, `cache`, or `external_access`, or when `tags` is the last member of the declaration.
 
 ```xs
   canonical = "wDft"
@@ -400,6 +400,13 @@ Blank lines follow the predecessor and the form of the array. Exactly one blank 
     "pipeline:widget_session_proposer"
   ]
 
+  guid = "g1"
+```
+
+```xs
+  response = $result
+  tags = ["domain:platform", "surface:admin", "concern:security"]
+  external_access = false
   guid = "g1"
 ```
 

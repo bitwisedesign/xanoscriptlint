@@ -94,7 +94,7 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 | `no_zero_set_filter` | ⚪️ | ❌ | ✅ | `set:` of numeric `0` (does not write the field; seed it on the object literal) |
 | `quote_negative_numeric_default` | ⚪️ | ⚠️ | ✅ | Unquoted negative numeric default (Xano quotes it on push) |
 | `separator_indentation` | ⚪️ | ⚠️ | ✅ | Whitespace-only line whose width is not the enclosing block opener's indent (Xano rewrites this on push) |
-| `tags_placement` | ⚪️ | ⚠️ | ✅ | `tags` not immediately before the first of `llm`, `tools`, `test`, `cache`, or `guid`, or with the wrong blank lines around it (Xano rewrites this on push) |
+| `tags_placement` | ⚪️ | ⚠️ | ✅ | `tags` not immediately before the first of `llm`, `tools`, `test`, `cache`, `external_access`, or `guid`, or with the wrong blank lines around it (Xano rewrites this on push) |
 | `unquote_bare_test_names` | ⚪️ | ⚠️ | ✅ | Quoted `test "name"` or top-level `mock` key `"name"` when `name` has no spaces (Xano strips those quotes on push) |
 | `unquote_enum_defaults` | ⚪️ | ⚠️ | ✅ | Quoted enum default that is a bare identifier (Xano strips the quotes on push) |
 | `wrap_enum_values` | ⚪️ | ⚠️ | ✅ | Enum `values` array is inline at compact JSON length 64+ or wrapped below 64 (Xano rewrites this on push) |

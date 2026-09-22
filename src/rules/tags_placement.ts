@@ -6,7 +6,7 @@ import { literalLines } from "./numeric_declarations.js";
 import { TAGS_OPENER, findMatchingBracket, rangeHasTab } from "./string_arrays.js";
 import type { Rule, RuleOptions, SourceFile, Violation } from "./types.js";
 
-const ANCHORS = new Set(["guid", "llm", "tools", "cache", "test"]);
+const ANCHORS = new Set(["guid", "llm", "tools", "cache", "test", "external_access"]);
 
 const MSG_NEED_BLANK_ABOVE =
   "tags must have a blank line above it when it follows a block closer";
@@ -410,7 +410,7 @@ function violationsFor(
 export const tagsPlacement: Rule = {
   id: "tags_placement",
   description:
-    "tags sits immediately before the first of llm, tools, test, cache, or guid, with blank lines matching Xano push form",
+    "tags sits immediately before the first of llm, tools, test, cache, external_access, or guid, with blank lines matching Xano push form",
   defaultEnabled: false,
   defaultSeverity: "warning",
   lint(file: SourceFile, options: RuleOptions): Violation[] {
