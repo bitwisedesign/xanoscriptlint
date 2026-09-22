@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-22
+
 ### Added
 
 - Opt-in `indentation` flags a code line whose indent is not two spaces per nesting level, including a wrapped filter pipeline that is not at its opener's indent plus two (warning). A nested object whose longest key exceeds the enclosing object's longest key stays at that enclosing indent, matching Xano's push form. Auto-fix rewrites the indent and shifts a triple-backtick or `"""` body with its opener. An unbalanced file, an unterminated fence or `"""` string, or a tab indent is left alone.
