@@ -85,6 +85,7 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 | `empty_function_run` | 🟢 | ❌ | — | `function.run ""` / `function.run ''` |
 | `fence_multiline_values` | ⚪️ | ⚠️ | ✅ | Multiline mock or input value not wrapped in a triple-backtick fence (Xano fences it on push); `function.run` mocks stay compact |
 | `guid_placement` | ⚪️ | ⚠️ | ✅ | `guid` with a blank line after a single-line value, or without one after a `}` / `]` closer |
+| `indentation` | ⚪️ | ⚠️ | ✅ | Code indented other than two spaces per nesting level, or a wrapped filter pipeline not at its opener's indent plus two (Xano rewrites this on push) |
 | `no_null_response` | ⚪️ | ⚠️ | ✅ | `response = null` (use `response = {}`) |
 | `no_reserved_var` | 🟢 | ❌ | — | reserved variable name declared via `var`, `var.update`, `as`, or `each as` |
 | `no_trailing_comments` | 🟢 | ⚠️ | — | `//` above `guid` or after the file's closing `}` (Xano moves it to the header on push) |
@@ -92,6 +93,7 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 | `no_zero_numeric_default` | ⚪️ | ⚠️ | ✅ | Explicit numeric default of `0` (Xano strips it on push) |
 | `no_zero_set_filter` | ⚪️ | ❌ | ✅ | `set:` of numeric `0` (does not write the field; seed it on the object literal) |
 | `quote_negative_numeric_default` | ⚪️ | ⚠️ | ✅ | Unquoted negative numeric default (Xano quotes it on push) |
+| `separator_indentation` | ⚪️ | ⚠️ | ✅ | Whitespace-only line whose width is not the enclosing block opener's indent (Xano rewrites this on push) |
 | `tags_placement` | ⚪️ | ⚠️ | ✅ | `tags` not immediately before the first of `llm`, `tools`, `test`, `cache`, or `guid`, or with the wrong blank lines around it (Xano rewrites this on push) |
 | `unquote_bare_test_names` | ⚪️ | ⚠️ | ✅ | Quoted `test "name"` or top-level `mock` key `"name"` when `name` has no spaces (Xano strips those quotes on push) |
 | `unquote_enum_defaults` | ⚪️ | ⚠️ | ✅ | Quoted enum default that is a bare identifier (Xano strips the quotes on push) |

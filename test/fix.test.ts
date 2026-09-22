@@ -85,6 +85,24 @@ import {
   PIPE_34,
   ISSUED_ITEM_FILTERS,
   formattingOptInRules,
+  INDENT_TRANSACTION_XS,
+  INDENT_FLAT_NESTED_XS,
+  INDENT_FLAT_NESTED_DEEP_XS,
+  INDENT_TRANSACTION_FIXED_XS,
+  INDENT_NESTED_XS,
+  INDENT_NESTED_FIXED_XS,
+  INDENT_FOREACH_XS,
+  INDENT_CHAIN_GROUPS_XS,
+  INDENT_CHAIN_GROUPS_BROKEN_XS,
+  INDENT_FOREACH_FIXED_XS,
+  INDENT_FENCE_XS,
+  INDENT_FENCE_FIXED_XS,
+  INDENT_TRIPLE_XS,
+  INDENT_TRIPLE_FIXED_XS,
+  INDENT_TRIPLE_SKIP_XS,
+  INDENT_TRIPLE_SKIP_FIXED_XS,
+  SEPARATOR_XS,
+  SEPARATOR_FIXED_XS,
 } from "./support.js";
 
 function config(overrides: Parameters<typeof resolveConfig>[0] = {}) {
@@ -1774,6 +1792,215 @@ ${inlineTagsLine(TAGS_V64)}
   guid = "g1"
 }`;
     const result = fixFile({ path: "suppressed-tags.xs", text }, config());
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
+  });
+
+  it("reindents a db.transaction body and is idempotent", () => {
+    const opted = { only_rules: ["indentation"] };
+    const result = fixFile({ path: "tx.xs", text: INDENT_TRANSACTION_XS }, config(opted));
+    assert.equal(result.changed, true);
+    assert.equal(result.text, INDENT_TRANSACTION_FIXED_XS);
+    assert.equal(
+      result.corrections.every((c) => c.ruleId === "indentation"),
+      true,
+    );
+    const again = fixFile({ path: "tx.xs", text: result.text }, config(opted));
+    assert.equal(again.changed, false);
+    assert.equal(again.text, INDENT_TRANSACTION_FIXED_XS);
+  });
+
+  it("flattens a nested object whose longest key exceeds the parent", () => {
+    const opted = { only_rules: ["indentation"] };
+    const clean = fixFile({ path: "flat.xs", text: INDENT_FLAT_NESTED_XS }, config(opted));
+    assert.equal(clean.changed, false);
+    const result = fixFile(
+      { path: "deep.xs", text: INDENT_FLAT_NESTED_DEEP_XS },
+      config(opted),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, INDENT_FLAT_NESTED_XS);
+  });
+
+  it("drops chain indent after a multi-group pipe closer", () => {
+    const opted = { only_rules: ["indentation"] };
+    const clean = fixFile({ path: "groups.xs", text: INDENT_CHAIN_GROUPS_XS }, config(opted));
+    assert.equal(clean.changed, false);
+    const result = fixFile(
+      { path: "groups-broken.xs", text: INDENT_CHAIN_GROUPS_BROKEN_XS },
+      config(opted),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, INDENT_CHAIN_GROUPS_XS);
+  });
+
+  it("reindents pipe continuations from the chain opener", () => {
+    const result = fixFile(
+      { path: "each.xs", text: INDENT_FOREACH_XS },
+      config({ only_rules: ["indentation"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, INDENT_FOREACH_FIXED_XS);
+  });
+
+  it("shifts a fence body with its opener", () => {
+    const result = fixFile(
+      { path: "fence.xs", text: INDENT_FENCE_XS },
+      config({ only_rules: ["indentation"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, INDENT_FENCE_FIXED_XS);
+  });
+
+  it("shifts a triple-quoted body with its opener", () => {
+    const result = fixFile(
+      { path: "triple.xs", text: INDENT_TRIPLE_XS },
+      config({ only_rules: ["indentation"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, INDENT_TRIPLE_FIXED_XS);
+  });
+
+  it("skips an opener whose body would shift past column 0", () => {
+    const opted = { only_rules: ["indentation"] };
+    const result = fixFile({ path: "skip.xs", text: INDENT_TRIPLE_SKIP_XS }, config(opted));
+    assert.equal(result.changed, true);
+    assert.equal(result.text, INDENT_TRIPLE_SKIP_FIXED_XS);
+    assert.match(result.text, /value = """/);
+    const again = fixFile({ path: "skip.xs", text: result.text }, config(opted));
+    assert.equal(again.changed, false);
+  });
+
+  it("reindents a nested object and aligns its colons in one pass", () => {
+    const result = fixFile(
+      { path: "nested.xs", text: INDENT_NESTED_XS },
+      config({ only_rules: ["indentation", "align_object_colons"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, INDENT_NESTED_FIXED_XS);
+    assert.equal(
+      result.corrections.some((c) => c.ruleId === "indentation"),
+      true,
+    );
+    assert.equal(
+      result.corrections.some((c) => c.ruleId === "align_object_colons"),
+      true,
+    );
+    const again = fixFile(
+      { path: "nested.xs", text: result.text },
+      config({ only_rules: ["indentation", "align_object_colons"] }),
+    );
+    assert.equal(again.changed, false);
+  });
+
+  it("does not rewrite a suppressed indentation line", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    // xanoscriptlint:disable:next indentation
+  db.add widget {
+    data = {id: $id}
+  }
+  }
+
+  response = $ok
+}`;
+    const expected = `function "example" {
+  input {
+  }
+
+  stack {
+    // xanoscriptlint:disable:next indentation
+  db.add widget {
+      data = {id: $id}
+    }
+  }
+
+  response = $ok
+}`;
+    const result = fixFile(
+      { path: "suppressed-indent.xs", text },
+      config({ only_rules: ["indentation"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+  });
+
+  it("rewrites whitespace-only lines to the enclosing opener indent", () => {
+    const opted = { only_rules: ["separator_indentation"] };
+    const result = fixFile({ path: "sep.xs", text: SEPARATOR_XS }, config(opted));
+    assert.equal(result.changed, true);
+    assert.equal(result.text, SEPARATOR_FIXED_XS);
+    const again = fixFile({ path: "sep.xs", text: result.text }, config(opted));
+    assert.equal(again.changed, false);
+  });
+
+  it("reindents code and then rewidths separators in one pass", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+  var $ok {
+    value = 1
+  }
+
+  var $next {
+    value = 2
+  }
+  }
+
+  response = $ok
+}`;
+    const expected = `function "example" {
+  input {
+  }
+
+  stack {
+    var $ok {
+      value = 1
+    }
+  
+    var $next {
+      value = 2
+    }
+  }
+
+  response = $ok
+}`;
+    const result = fixFile(
+      { path: "both.xs", text },
+      config({ only_rules: ["indentation", "separator_indentation"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.equal(
+      result.corrections.some((c) => c.ruleId === "indentation"),
+      true,
+    );
+    assert.equal(
+      result.corrections.some((c) => c.ruleId === "separator_indentation"),
+      true,
+    );
+  });
+
+  it("does not rewrite a suppressed separator line", () => {
+    const text = `function "example" {
+  input {
+  }
+  // xanoscriptlint:disable separator_indentation
+  
+  stack {
+  }
+
+  response = $ok
+}`;
+    const result = fixFile(
+      { path: "suppressed-sep.xs", text },
+      config({ only_rules: ["separator_indentation"] }),
+    );
     assert.equal(result.changed, false);
     assert.equal(result.text, text);
   });
