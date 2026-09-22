@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { runCustomRules } from "./customRules.js";
 import type { ResolvedConfig } from "./config.js";
 import { builtinRules } from "./rules/index.js";
-import type { Correction, SourceFile, Violation } from "./rules/types.js";
+import type { Correction, FixResult, SourceFile, Violation } from "./rules/types.js";
 import { isSuppressed, parseSuppressions } from "./suppress.js";
 
 export function readSourceFile(filePath: string): SourceFile {
@@ -54,23 +54,42 @@ export function fixFile(
     if (violations.length === 0) {
       continue;
     }
-    const next = rule.fix(current, options);
-    if (next === null || next === current.text) {
+    const next = normalizeFix(rule.fix(current, options));
+    if (next === null || next.text === current.text) {
       continue;
     }
     for (const violation of violations) {
+      if (next.appliedLines !== undefined && !next.appliedLines.has(violation.line)) {
+        continue;
+      }
       corrections.push({
         ruleId: rule.id,
         file: file.path,
         line: violation.line,
       });
     }
-    current = { path: file.path, text: next };
+    current = { path: file.path, text: next.text };
   }
   return {
     text: current.text,
     changed: current.text !== file.text,
     corrections,
+  };
+}
+
+function normalizeFix(
+  next: string | FixResult | null,
+): { text: string; appliedLines?: ReadonlySet<number> } | null {
+  if (next === null) {
+    return null;
+  }
+  if (typeof next === "string") {
+    return { text: next };
+  }
+  return {
+    text: next.text,
+    appliedLines:
+      next.appliedLines === undefined ? undefined : new Set(next.appliedLines),
   };
 }
 

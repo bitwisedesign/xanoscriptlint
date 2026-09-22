@@ -3,6 +3,7 @@ import { collapseAssignmentValues } from "./collapse_assignment_values.js";
 import { emptyFunctionRun } from "./empty_function_run.js";
 import { fenceMultilineValues } from "./fence_multiline_values.js";
 import { guidPlacement } from "./guid_placement.js";
+import { indentation } from "./indentation.js";
 import { noNullResponse } from "./no_null_response.js";
 import { noTrailingComments } from "./no_trailing_comments.js";
 import { noTrailingNewline } from "./no_trailing_newline.js";
@@ -10,6 +11,7 @@ import { noReservedVar } from "./no_reserved_var.js";
 import { noZeroNumericDefault } from "./no_zero_numeric_default.js";
 import { noZeroSetFilter } from "./no_zero_set_filter.js";
 import { quoteNegativeNumericDefault } from "./quote_negative_numeric_default.js";
+import { separatorIndentation } from "./separator_indentation.js";
 import { tagsPlacement } from "./tags_placement.js";
 import { unquoteBareTestNames } from "./unquote_bare_test_names.js";
 import { unquoteEnumDefaults } from "./unquote_enum_defaults.js";
@@ -19,6 +21,7 @@ import { wrapTagsValues } from "./wrap_tags_values.js";
 import type { Rule } from "./types.js";
 
 export const builtinRules: Rule[] = [
+  indentation,
   noZeroSetFilter,
   collapseAssignmentValues,
   fenceMultilineValues,
@@ -37,6 +40,7 @@ export const builtinRules: Rule[] = [
   noZeroNumericDefault,
   quoteNegativeNumericDefault,
   unquoteEnumDefaults,
+  separatorIndentation,
 ];
 
 export function builtinRuleById(id: string): Rule | undefined {

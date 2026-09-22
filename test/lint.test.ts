@@ -182,6 +182,45 @@ describe("fixture linting", () => {
     );
   });
 
+  it("committed indentation fixtures match when those rules are opted in", () => {
+    const config = resolveConfig(
+      { opt_in_rules: ["indentation", "separator_indentation"] },
+      fixtures,
+      null,
+    );
+    const clean = {
+      path: path.join(fixtures, "clean/ok.xs"),
+      text: readFileSync(path.join(fixtures, "clean/ok.xs"), "utf8"),
+    };
+    assert.deepEqual(lintFiles([clean], config), []);
+
+    const indent = {
+      path: path.join(fixtures, "violations/indentation.xs"),
+      text: readFileSync(path.join(fixtures, "violations/indentation.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([indent], config).some((v) => v.ruleId === "indentation"),
+      true,
+    );
+    assert.equal(
+      lintFiles([indent], config).some((v) => v.ruleId === "separator_indentation"),
+      false,
+    );
+
+    const separator = {
+      path: path.join(fixtures, "violations/separator_indentation.xs"),
+      text: readFileSync(path.join(fixtures, "violations/separator_indentation.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([separator], config).some((v) => v.ruleId === "separator_indentation"),
+      true,
+    );
+    assert.equal(
+      lintFiles([separator], config).some((v) => v.ruleId === "indentation"),
+      false,
+    );
+  });
+
   it("committed no_zero_set_filter fixture matches when that rule is opted in", () => {
     const config = resolveConfig({ opt_in_rules: ["no_zero_set_filter"] }, fixtures, null);
     const zeroSet = {

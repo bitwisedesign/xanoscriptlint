@@ -7,6 +7,7 @@
 | [`empty_function_run`](#empty_function_run) | on | error | no | `function.run` must not be called with an empty name |
 | [`fence_multiline_values`](#fence_multiline_values) | opt-in | warning | yes | Multiline mock and input values must be wrapped in a triple-backtick fence |
 | [`guid_placement`](#guid_placement) | opt-in | warning | yes | `guid` needs a blank line above it only when it follows a block closer |
+| [`indentation`](#indentation) | opt-in | warning | yes | Code uses two spaces per nesting level; a wrapped filter pipeline sits at its opener's indent plus two |
 | [`no_null_response`](#no_null_response) | opt-in | warning | yes | Do not assign `response = null` |
 | [`no_reserved_var`](#no_reserved_var) | on | error | no | Do not declare a reserved variable name |
 | [`no_trailing_comments`](#no_trailing_comments) | on | warning | no | `//` above `guid` or after the file's closing `}` |
@@ -14,6 +15,7 @@
 | [`no_zero_numeric_default`](#no_zero_numeric_default) | opt-in | warning | yes | Numeric defaults of `0` must be omitted |
 | [`no_zero_set_filter`](#no_zero_set_filter) | opt-in | error | yes | A `set:` filter of numeric `0` does not write the field |
 | [`quote_negative_numeric_default`](#quote_negative_numeric_default) | opt-in | warning | yes | Negative numeric defaults must be quoted |
+| [`separator_indentation`](#separator_indentation) | opt-in | warning | yes | Whitespace-only lines use the enclosing block opener's indent |
 | [`tags_placement`](#tags_placement) | opt-in | warning | yes | `tags` sits immediately before the first of `llm`, `tools`, `test`, `cache`, or `guid`, with Xano blank-line rules |
 | [`unquote_bare_test_names`](#unquote_bare_test_names) | opt-in | warning | yes | Quoted `test` names and top-level `mock` keys with no spaces must be unquoted |
 | [`unquote_enum_defaults`](#unquote_enum_defaults) | opt-in | warning | yes | Quoted enum defaults that are bare identifiers must be unquoted |
@@ -152,6 +154,55 @@ A multiline `tags` array is rewritten by [`wrap_tags_values`](#wrap_tags_values)
 
 Auto-fixable with `--fix`: a missing blank line is inserted, a forbidden blank line is removed, and extra blank lines collapse to one.
 
+## indentation
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
+
+Xano rewrites indentation on push. Two spaces per unclosed `{`, `[`, or `(`. A line that starts with `}`, `]`, or `)` dedents one level. The pulled file is canonical; a local indent that does not match is push/pull churn. Wrapping a stack into `db.transaction` without indenting the body is the usual miss.
+
+```xs
+    db.transaction {
+      stack {
+        db.add widget {
+          data = {id: $id}
+        }
+      }
+    }
+```
+
+A wrapped filter pipeline is the exception. Continuation lines whose first token is `|` (not `||`) sit at the chain opener's indent plus two, not at the brace depth of the line. The opener may itself open a parenthesis, so the continuation is not "one level deeper than the current depth":
+
+```xs
+    foreach ($declared
+      |get:"tracker_uuids"
+      |first_notnull:[]) {
+      each as $uuid {
+```
+
+A nested `|name:(…)` group needs no extra rule. The parenthesis already adds a level, so the inner filters sit two spaces past the outer filter. A blank line between filters does not end the chain; the next `|filter` stays at the same indent. When the opener opens more than one group, the chain's extra indent ends once those groups close, including when the next line is shallower than the first continuation.
+
+A nested object whose longest key is longer than the enclosing object's longest key does not take a level of its own. Its entries stay at the enclosing entries' indent, and its `}` sits with the enclosing object's `{`. Quoted keys count their quotes. `join` entries, whose names are longer than `table` / `type` / `where`, and a nested object whose keys are all shorter, still indent one more level.
+
+```xs
+      data = {
+        job_uuid: $job_uuid
+        job_type: "generate_round_coaching"
+        status  : "pending"
+        user_id : $auth.id
+        input   : {
+        round_uuid   : $round_uuid
+        sync_inbox_id: $inbox.id
+        model        : $model
+      }
+      }
+```
+
+Content inside a triple-backtick fence or a `"""` string is not indented on its own. When the line that opens the fence or string is mis-indented, auto-fix shifts the nonblank body lines, including the closer, by the same amount, so the relative indent inside the literal is preserved. Whitespace-only lines in the body stay as they are. If that shift would move any nonblank body line past column 0, that opener is left unchanged.
+
+The rule reports nothing when the file is not safe to re-indent: braces, brackets, or parentheses do not balance, a fence or `"""` string is unterminated, or any line's indentation contains a tab.
+
+Auto-fixable with `--fix`. [`separator_indentation`](#separator_indentation) owns whitespace-only lines. This rule runs first, so later rules that derive indent from the line they rewrite see the corrected columns.
+
 ## no_null_response
 
 `response = null` is not allowed; use an empty object instead. Off by default; enable with `opt_in_rules` or `--opt-in`.
@@ -287,6 +338,32 @@ decimal drift?=-2.5
 Already-quoted negatives are canonical. A negative zero (`-0`) is owned by `no_zero_numeric_default`, which omits the default instead of quoting it.
 
 Auto-fixable with `--fix`: the unquoted negative is wrapped in double quotes. Spacing around `=` and any trailing `filters=` clause or metadata block are preserved.
+
+## separator_indentation
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
+
+Xano does not leave a truly empty line between statements inside a block. A whitespace-only line carries the indent of the enclosing block's opener: two spaces inside `stack {`, six inside a nested `if {`, and none at the top level of the file. The pulled file is canonical; an empty line where Xano stores spaces (or spaces where Xano stores an empty line) is push/pull churn.
+
+```xs
+  stack {
+    var $ok {
+      value = 1
+    }
+  
+    var $next {
+      value = 2
+    }
+  }
+```
+
+The line between the two `var` blocks is two spaces, the same indent as `stack`. A line between top-level members such as `input` and `stack` is empty. Inside a nested object that stays at its parent's indent, the whitespace line matches that object's opener line, not the dedented `}`.
+
+This rule only rewrites lines that are already whitespace-only. Inserting and removing blank lines stays with [`guid_placement`](#guid_placement), [`tags_placement`](#tags_placement), and [`wrap_enum_values`](#wrap_enum_values). Lines inside a triple-backtick fence or a `"""` string are left alone; [`indentation`](#indentation) shifts those with the opener.
+
+The same bail conditions as [`indentation`](#indentation) apply: an unbalanced file, an unterminated fence or `"""` string, or a tab in any line's indentation is not rewritten.
+
+Auto-fixable with `--fix`. This rule runs last, so it normalizes separator widths after other rules have moved lines.
 
 ## tags_placement
 

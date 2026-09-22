@@ -73,6 +73,22 @@ import {
   PIPE_BYTES_34,
   ISSUED_ITEM_FILTERS,
   formattingOptInRules,
+  INDENT_TRANSACTION_XS,
+  INDENT_FLAT_NESTED_XS,
+  INDENT_FLAT_NESTED_DEEP_XS,
+  INDENT_FLAT_SEPARATOR_XS,
+  INDENT_FLAT_SEPARATOR_SHALLOW_XS,
+  INDENT_FOREACH_XS,
+  INDENT_PIPE_BLANK_XS,
+  INDENT_PIPE_BLANK_DEEP_XS,
+  INDENT_CHAIN_GROUPS_XS,
+  INDENT_CHAIN_GROUPS_BROKEN_XS,
+  INDENT_FENCE_XS,
+  INDENT_TRIPLE_XS,
+  INDENT_TRIPLE_SKIP_XS,
+  INDENT_UNBALANCED_XS,
+  INDENT_TAB_XS,
+  SEPARATOR_XS,
 } from "./support.js";
 
 function config(overrides: Parameters<typeof resolveConfig>[0] = {}) {
@@ -113,6 +129,18 @@ function trailingCommentHits(
 ) {
   return lintFile({ path: "a.xs", text }, config(overrides)).filter(
     (v) => v.ruleId === "no_trailing_comments",
+  );
+}
+
+function indentHits(text: string, overrides: Parameters<typeof resolveConfig>[0] = {}) {
+  return lintFile({ path: "a.xs", text }, config(overrides)).filter(
+    (v) => v.ruleId === "indentation",
+  );
+}
+
+function separatorHits(text: string, overrides: Parameters<typeof resolveConfig>[0] = {}) {
+  return lintFile({ path: "a.xs", text }, config(overrides)).filter(
+    (v) => v.ruleId === "separator_indentation",
   );
 }
 
@@ -3290,5 +3318,150 @@ ${inlineTagsLine(TAGS_SHORT)}
     );
     const hit = violations.find((v) => v.ruleId === "empty_function_run");
     assert.equal(hit?.severity, "warning");
+  });
+
+  it("indentation flags under-indented blocks, pipe continuations, and shifted bodies", () => {
+    const opted = { opt_in_rules: ["indentation"] };
+    assert.deepEqual(indentHits(CLEAN_XS, opted), []);
+
+    const transaction = indentHits(INDENT_TRANSACTION_XS, opted);
+    assert.deepEqual(
+      transaction.map((v) => v.line),
+      [8, 9, 10, 11, 12],
+    );
+    assert.equal(transaction[0]?.message, "expected indent 8, found 6");
+    assert.equal(transaction[0]?.severity, "warning");
+    assert.equal(transaction[2]?.message, "expected indent 10, found 8");
+
+    const pipes = indentHits(INDENT_FOREACH_XS, opted);
+    assert.deepEqual(
+      pipes.map((v) => v.line),
+      [7, 8],
+    );
+    assert.equal(pipes[0]?.message, "expected indent 6, found 4");
+
+    assert.deepEqual(indentHits(INDENT_PIPE_BLANK_XS, opted), []);
+    const pipeBlank = indentHits(INDENT_PIPE_BLANK_DEEP_XS, opted);
+    assert.deepEqual(
+      pipeBlank.map((v) => v.line),
+      [10],
+    );
+    assert.equal(pipeBlank[0]?.message, "expected indent 8, found 10");
+
+    assert.deepEqual(indentHits(INDENT_CHAIN_GROUPS_XS, opted), []);
+    const groups = indentHits(INDENT_CHAIN_GROUPS_BROKEN_XS, opted);
+    assert.deepEqual(
+      groups.map((v) => v.line),
+      [10],
+    );
+    assert.equal(groups[0]?.message, "expected indent 4, found 2");
+
+    const fence = indentHits(INDENT_FENCE_XS, opted);
+    assert.deepEqual(
+      fence.map((v) => v.line),
+      [7, 8, 13],
+    );
+
+    const triple = indentHits(INDENT_TRIPLE_XS, opted);
+    assert.deepEqual(
+      triple.map((v) => v.line),
+      [6, 7, 10],
+    );
+
+    const skip = indentHits(INDENT_TRIPLE_SKIP_XS, opted);
+    assert.deepEqual(
+      skip.map((v) => v.line),
+      [6, 7, 10],
+    );
+
+    assert.deepEqual(indentHits(INDENT_FLAT_NESTED_XS, opted), []);
+    const deep = indentHits(INDENT_FLAT_NESTED_DEEP_XS, opted);
+    assert.deepEqual(
+      deep.map((v) => v.line),
+      [13, 14, 15, 16],
+    );
+    assert.equal(deep[0]?.message, "expected indent 8, found 10");
+    assert.equal(deep[3]?.message, "expected indent 6, found 8");
+  });
+
+  it("indentation reports nothing for an unbalanced file or a tab indent", () => {
+    const opted = { only_rules: ["indentation", "separator_indentation"] };
+    assert.deepEqual(indentHits(INDENT_UNBALANCED_XS, opted), []);
+    assert.deepEqual(indentHits(INDENT_TAB_XS, opted), []);
+
+    const crossed = `function "example" {
+input {
+]
+
+  stack {
+  }
+}`;
+    assert.deepEqual(indentHits(crossed, opted), []);
+    assert.deepEqual(separatorHits(crossed, opted), []);
+  });
+
+  it("indentation is opt-in and honors disable directives", () => {
+    assert.deepEqual(indentHits(INDENT_TRANSACTION_XS), []);
+
+    const disabled = indentHits(INDENT_TRANSACTION_XS, {
+      opt_in_rules: ["indentation"],
+      disabled_rules: ["indentation"],
+    });
+    assert.deepEqual(disabled, []);
+
+    const suppressed = `function "example" {
+  input {
+  }
+
+  stack {
+    // xanoscriptlint:disable:next indentation
+  db.add widget {
+      data = {id: $id}
+    }
+  }
+
+  response = $ok
+}`;
+    assert.deepEqual(indentHits(suppressed, { opt_in_rules: ["indentation"] }), []);
+  });
+
+  it("separator_indentation flags whitespace-only lines at the wrong width", () => {
+    const opted = { opt_in_rules: ["separator_indentation"] };
+    assert.deepEqual(separatorHits(CLEAN_XS, opted), []);
+    assert.deepEqual(separatorHits(INDENT_FLAT_SEPARATOR_XS, opted), []);
+    const flatSep = separatorHits(INDENT_FLAT_SEPARATOR_SHALLOW_XS, opted);
+    assert.deepEqual(
+      flatSep.map((v) => v.line),
+      [14],
+    );
+    assert.equal(flatSep[0]?.message, "expected separator width 8, found 6");
+
+    const hits = separatorHits(SEPARATOR_XS, opted);
+    assert.deepEqual(
+      hits.map((v) => v.line),
+      [4, 9],
+    );
+    assert.equal(hits[0]?.message, "expected separator width 0, found 2");
+    assert.equal(hits[1]?.message, "expected separator width 2, found 0");
+    assert.equal(hits[0]?.severity, "warning");
+  });
+
+  it("separator_indentation is opt-in and honors disable directives", () => {
+    assert.deepEqual(separatorHits(SEPARATOR_XS), []);
+
+    const suppressed = `function "example" {
+  input {
+  }
+  // xanoscriptlint:disable separator_indentation
+  
+  stack {
+  }
+
+  response = $ok
+}`;
+    assert.deepEqual(
+      separatorHits(suppressed, { opt_in_rules: ["separator_indentation"] }),
+      [],
+    );
   });
 });
