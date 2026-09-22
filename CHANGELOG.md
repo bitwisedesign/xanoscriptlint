@@ -7,12 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
-
-- `indentation` drops a wrapped filter chain's extra indent when the chain closes through more than one group. A later line at a shallower depth keeps its own indent.
-- `separator_indentation` uses the enclosing opener line's indent. A whitespace line inside a nested object that stays flat with its parent matches that object's opener, not the dedented `}`.
-- `indentation` `--fix` no longer counts a line it left unchanged, such as a fence or `"""` opener whose body would shift past column 0.
-
 ### Added
 
 - Opt-in `indentation` flags a code line whose indent is not two spaces per nesting level, including a wrapped filter pipeline that is not at its opener's indent plus two (warning). A nested object whose longest key exceeds the enclosing object's longest key stays at that enclosing indent, matching Xano's push form. Auto-fix rewrites the indent and shifts a triple-backtick or `"""` body with its opener. An unbalanced file, an unterminated fence or `"""` string, or a tab indent is left alone.

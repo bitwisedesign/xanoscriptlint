@@ -16,6 +16,7 @@ interface Scan {
   delta: number;
   startsCloser: boolean;
   mode: LineMode;
+  mismatch: boolean;
 }
 
 export function leadingSpaces(line: string): number {
@@ -42,7 +43,16 @@ function isPipeContinuation(line: string): boolean {
   return trimmed.startsWith("|") && !trimmed.startsWith("||");
 }
 
+type Delimiter = "{" | "[" | "(";
+
+const CLOSER_TO_OPENER: Record<"}" | "]" | ")", Delimiter> = {
+  "}": "{",
+  "]": "[",
+  ")": "(",
+};
+
 interface ObjectFrame {
+  kind: Delimiter;
   maxKey: number;
   flatten: boolean;
   openerIndent: number;
@@ -236,6 +246,7 @@ function objectFrame(
   const maxKey = keyed ? (directKeyMax(lines, lineIndex, brace) ?? -1) : -1;
   const parent = parentKeyMax(stack);
   return {
+    kind: "{",
     maxKey,
     flatten: colon && maxKey >= 0 && parent >= 0 && maxKey > parent,
     openerIndent,
@@ -243,8 +254,13 @@ function objectFrame(
 }
 
 function enclosingOpenerIndent(stack: ObjectFrame[]): number | null {
-  const top = stack[stack.length - 1];
-  return top === undefined ? null : top.openerIndent;
+  for (let i = stack.length - 1; i >= 0; i -= 1) {
+    const frame = stack[i];
+    if (frame?.kind === "{") {
+      return frame.openerIndent;
+    }
+  }
+  return null;
 }
 
 function lineStartsWithCloser(line: string, mode: LineMode): boolean {
@@ -280,16 +296,17 @@ function scan(
   let startsCloser = false;
   let seenCode = false;
   let openersOnLine = 0;
+  let mismatch = false;
   if (mode === "fence") {
     const closer = line.indexOf(FENCE);
     if (closer < 0) {
-      return { delta: 0, startsCloser: false, mode: "fence" };
+      return { delta: 0, startsCloser: false, mode: "fence", mismatch };
     }
     i = closer + FENCE.length;
   } else if (mode === "triple") {
     const closer = line.indexOf(TRIPLE);
     if (closer < 0) {
-      return { delta: 0, startsCloser: false, mode: "triple" };
+      return { delta: 0, startsCloser: false, mode: "triple", mismatch };
     }
     i = closer + TRIPLE.length;
   }
@@ -300,7 +317,7 @@ function scan(
     if (line.startsWith(FENCE, i)) {
       const closer = line.indexOf(FENCE, i + FENCE.length);
       if (closer < 0) {
-        return { delta, startsCloser, mode: "fence" };
+        return { delta, startsCloser, mode: "fence", mismatch };
       }
       i = closer + FENCE.length;
       continue;
@@ -308,7 +325,7 @@ function scan(
     if (line.startsWith(TRIPLE, i)) {
       const closer = line.indexOf(TRIPLE, i + TRIPLE.length);
       if (closer < 0) {
-        return { delta, startsCloser, mode: "triple" };
+        return { delta, startsCloser, mode: "triple", mismatch };
       }
       i = closer + TRIPLE.length;
       continue;
@@ -328,8 +345,11 @@ function scan(
       continue;
     }
     if (ch === "{" || ch === "[" || ch === "(") {
+      const openerIndent = lineIndent + 2 * openersOnLine;
       if (ch === "{") {
-        stack.push(objectFrame(lines, lineIndex, line, i, stack, lineIndent + 2 * openersOnLine));
+        stack.push(objectFrame(lines, lineIndex, line, i, stack, openerIndent));
+      } else {
+        stack.push({ kind: ch, maxKey: -1, flatten: false, openerIndent });
       }
       openersOnLine += 1;
       delta += 1;
@@ -341,11 +361,14 @@ function scan(
       if (!seenCode) {
         startsCloser = true;
       }
-      if (ch === "}") {
+      const top = stack[stack.length - 1];
+      if (top === undefined || top.kind !== CLOSER_TO_OPENER[ch]) {
+        mismatch = true;
+      } else {
         stack.pop();
-      }
-      if (openersOnLine > 0) {
-        openersOnLine -= 1;
+        if (openersOnLine > 0) {
+          openersOnLine -= 1;
+        }
       }
       delta -= 1;
       seenCode = true;
@@ -355,7 +378,7 @@ function scan(
     seenCode = true;
     i += 1;
   }
-  return { delta, startsCloser, mode: "code" };
+  return { delta, startsCloser, mode: "code", mismatch };
 }
 
 export function planIndent(lines: string[]): IndentPlan {
@@ -419,12 +442,12 @@ export function planIndent(lines: string[]): IndentPlan {
       opaqueOpen = null;
     }
     depth += scanned.delta;
-    if (depth < 0) {
+    if (depth < 0 || scanned.mismatch) {
       reliable = false;
     }
     mode = scanned.mode;
   }
-  if (depth !== 0 || mode !== "code") {
+  if (depth !== 0 || mode !== "code" || objects.length > 0) {
     reliable = false;
   }
   return { expected, separator, bodyOf, reliable };

@@ -3375,9 +3375,19 @@ ${inlineTagsLine(TAGS_SHORT)}
   });
 
   it("indentation reports nothing for an unbalanced file or a tab indent", () => {
-    const opted = { only_rules: ["indentation"] };
+    const opted = { only_rules: ["indentation", "separator_indentation"] };
     assert.deepEqual(indentHits(INDENT_UNBALANCED_XS, opted), []);
     assert.deepEqual(indentHits(INDENT_TAB_XS, opted), []);
+
+    const crossed = `function "example" {
+input {
+]
+
+  stack {
+  }
+}`;
+    assert.deepEqual(indentHits(crossed, opted), []);
+    assert.deepEqual(separatorHits(crossed, opted), []);
   });
 
   it("indentation is opt-in and honors disable directives", () => {
