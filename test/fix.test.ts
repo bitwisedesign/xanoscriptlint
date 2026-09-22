@@ -33,6 +33,8 @@ import {
   MOCK_SHORT_NAME,
   NEGATIVE_DEFAULT_FIXED_XS,
   NEGATIVE_DEFAULT_XS,
+  ENUM_DEFAULT_FIXED_XS,
+  ENUM_DEFAULT_XS,
   BARE_TEST_NAME_FIXED_XS,
   BARE_TEST_NAME_MISALIGNED_FIXED_XS,
   BARE_TEST_NAME_MISALIGNED_XS,
@@ -956,6 +958,59 @@ describe("fixFile", () => {
       result.corrections.some((c) => c.ruleId === "quote_negative_numeric_default"),
       false,
     );
+  });
+
+  it("unquotes a bare-identifier enum default", () => {
+    const result = fixFile({ path: "enum.xs", text: ENUM_DEFAULT_XS }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, ENUM_DEFAULT_FIXED_XS);
+    assert.equal(result.corrections.length, 3);
+    assert.equal(result.corrections[0]?.ruleId, "unquote_enum_defaults");
+    assert.equal(result.corrections[0]?.file, "enum.xs");
+    assert.equal(result.corrections[0]?.line, 3);
+    assert.equal(result.corrections[1]?.line, 6);
+    assert.equal(result.corrections[2]?.line, 9);
+
+    const again = fixFile({ path: "enum.xs", text: result.text }, config());
+    assert.equal(again.changed, false);
+    assert.equal(again.text, ENUM_DEFAULT_FIXED_XS);
+  });
+
+  it("does not rewrite a suppressed unquote_enum_defaults violation", () => {
+    const suppressed = wrapInputDecls(
+      `    // xanoscriptlint:disable:next unquote_enum_defaults
+    enum shipping_speed?="standard" {
+      values = ["standard", "express"]
+    }`,
+    );
+    const kept = fixFile({ path: "suppressed.xs", text: suppressed }, config());
+    assert.equal(kept.changed, false);
+    assert.equal(kept.text, suppressed);
+
+    const mixed = wrapInputDecls(
+      `    // xanoscriptlint:disable:next unquote_enum_defaults
+    enum shipping_speed?="standard" {
+      values = ["standard", "express"]
+    }
+    enum fulfillment_mode?="pickup" {
+      values = ["pickup", "delivery"]
+    }`,
+    );
+    const mixedFixed = wrapInputDecls(
+      `    // xanoscriptlint:disable:next unquote_enum_defaults
+    enum shipping_speed?="standard" {
+      values = ["standard", "express"]
+    }
+    enum fulfillment_mode?=pickup {
+      values = ["pickup", "delivery"]
+    }`,
+    );
+    const result = fixFile({ path: "mixed.xs", text: mixed }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, mixedFixed);
+    assert.equal(result.corrections.length, 1);
+    assert.equal(result.corrections[0]?.ruleId, "unquote_enum_defaults");
+    assert.equal(result.corrections[0]?.line, 7);
   });
 
   it("wraps an over-threshold enum values array and inserts the whitespace line", () => {

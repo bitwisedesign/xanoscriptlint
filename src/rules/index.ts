@@ -12,6 +12,7 @@ import { noZeroSetFilter } from "./no_zero_set_filter.js";
 import { quoteNegativeNumericDefault } from "./quote_negative_numeric_default.js";
 import { tagsPlacement } from "./tags_placement.js";
 import { unquoteBareTestNames } from "./unquote_bare_test_names.js";
+import { unquoteEnumDefaults } from "./unquote_enum_defaults.js";
 import { wrapEnumValues } from "./wrap_enum_values.js";
 import { wrapPipedValues } from "./wrap_piped_values.js";
 import { wrapTagsValues } from "./wrap_tags_values.js";
@@ -35,6 +36,7 @@ export const builtinRules: Rule[] = [
   noNullResponse,
   noZeroNumericDefault,
   quoteNegativeNumericDefault,
+  unquoteEnumDefaults,
 ];
 
 export function builtinRuleById(id: string): Rule | undefined {

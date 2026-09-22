@@ -145,6 +145,15 @@ describe("fixture linting", () => {
       true,
     );
 
+    const unquoteEnum = {
+      path: path.join(fixtures, "violations/unquote_enum_defaults.xs"),
+      text: readFileSync(path.join(fixtures, "violations/unquote_enum_defaults.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([unquoteEnum], config).some((v) => v.ruleId === "unquote_enum_defaults"),
+      true,
+    );
+
     const unquoteBare = {
       path: path.join(fixtures, "violations/unquote_bare_test_names.xs"),
       text: readFileSync(path.join(fixtures, "violations/unquote_bare_test_names.xs"), "utf8"),
