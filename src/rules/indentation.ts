@@ -2,7 +2,7 @@ import { isSuppressed, parseSuppressions } from "../suppress.js";
 import { leadingSpaces, planIndent } from "./indent_model.js";
 import { joinLineRecords, splitLineRecords } from "./line_records.js";
 import type { LineRecord } from "./line_records.js";
-import type { Rule, RuleOptions, SourceFile, Violation } from "./types.js";
+import type { FixResult, Rule, RuleOptions, SourceFile, Violation } from "./types.js";
 
 function indentMessage(expected: number, found: number): string {
   return `expected indent ${expected}, found ${found}`;
@@ -87,7 +87,7 @@ export const indentation: Rule = {
     const lines = splitLineRecords(file.text).map((record) => record.content);
     return violationsFor(file, lines, severity);
   },
-  fix(file: SourceFile, options: RuleOptions): string | null {
+  fix(file: SourceFile, options: RuleOptions): FixResult | null {
     const suppressions = parseSuppressions(file.text);
     const rewriteLines = new Set(
       indentation
@@ -107,19 +107,19 @@ export const indentation: Rule = {
     const indexes = [...rewriteLines]
       .map((line) => line - 1)
       .sort((a, b) => b - a);
-    let changed = false;
+    const appliedLines: number[] = [];
     for (const index of indexes) {
       if (applyLine(lines, index, plan)) {
-        changed = true;
+        appliedLines.push(index + 1);
       }
     }
-    if (!changed) {
+    if (appliedLines.length === 0) {
       return null;
     }
     const next: LineRecord[] = records.map((record, index) => ({
       ...record,
       content: lines[index] ?? record.content,
     }));
-    return joinLineRecords(next);
+    return { text: joinLineRecords(next), appliedLines };
   },
 };

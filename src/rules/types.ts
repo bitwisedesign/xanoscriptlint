@@ -26,6 +26,11 @@ export interface Correction {
   line: number;
 }
 
+export interface FixResult {
+  text: string;
+  appliedLines?: readonly number[];
+}
+
 export interface Rule {
   id: string;
   description: string;
@@ -33,5 +38,5 @@ export interface Rule {
   defaultSeverity: Severity;
   numericOptions?: readonly string[];
   lint(file: SourceFile, options: RuleOptions): Violation[];
-  fix?(file: SourceFile, options: RuleOptions): string | null;
+  fix?(file: SourceFile, options: RuleOptions): string | FixResult | null;
 }

@@ -103,6 +103,8 @@ import {
   INDENT_TRIPLE_SKIP_FIXED_XS,
   SEPARATOR_XS,
   SEPARATOR_FIXED_XS,
+  INDENT_FLAT_SEPARATOR_XS,
+  INDENT_FLAT_SEPARATOR_SHALLOW_XS,
 } from "./support.js";
 
 function config(overrides: Parameters<typeof resolveConfig>[0] = {}) {
@@ -1866,6 +1868,10 @@ ${inlineTagsLine(TAGS_V64)}
     const result = fixFile({ path: "skip.xs", text: INDENT_TRIPLE_SKIP_XS }, config(opted));
     assert.equal(result.changed, true);
     assert.equal(result.text, INDENT_TRIPLE_SKIP_FIXED_XS);
+    assert.deepEqual(
+      result.corrections.map((correction) => correction.line),
+      [6, 10],
+    );
     assert.match(result.text, /value = """/);
     const again = fixFile({ path: "skip.xs", text: result.text }, config(opted));
     assert.equal(again.changed, false);
@@ -1926,6 +1932,21 @@ ${inlineTagsLine(TAGS_V64)}
     );
     assert.equal(result.changed, true);
     assert.equal(result.text, expected);
+  });
+
+  it("gives a flattened object's separator the opener line's indent", () => {
+    const opted = { only_rules: ["separator_indentation"] };
+    const clean = fixFile(
+      { path: "flat-sep.xs", text: INDENT_FLAT_SEPARATOR_XS },
+      config(opted),
+    );
+    assert.equal(clean.changed, false);
+    const result = fixFile(
+      { path: "flat-sep-shallow.xs", text: INDENT_FLAT_SEPARATOR_SHALLOW_XS },
+      config(opted),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, INDENT_FLAT_SEPARATOR_XS);
   });
 
   it("rewrites whitespace-only lines to the enclosing opener indent", () => {

@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - `indentation` drops a wrapped filter chain's extra indent when the chain closes through more than one group. A later line at a shallower depth keeps its own indent.
+- `separator_indentation` uses the enclosing opener line's indent. A whitespace line inside a nested object that stays flat with its parent matches that object's opener, not the dedented `}`.
+- `indentation` `--fix` no longer counts a line it left unchanged, such as a fence or `"""` opener whose body would shift past column 0.
 
 ### Added
 

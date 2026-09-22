@@ -76,6 +76,8 @@ import {
   INDENT_TRANSACTION_XS,
   INDENT_FLAT_NESTED_XS,
   INDENT_FLAT_NESTED_DEEP_XS,
+  INDENT_FLAT_SEPARATOR_XS,
+  INDENT_FLAT_SEPARATOR_SHALLOW_XS,
   INDENT_FOREACH_XS,
   INDENT_CHAIN_GROUPS_XS,
   INDENT_CHAIN_GROUPS_BROKEN_XS,
@@ -3406,6 +3408,13 @@ ${inlineTagsLine(TAGS_SHORT)}
   it("separator_indentation flags whitespace-only lines at the wrong width", () => {
     const opted = { opt_in_rules: ["separator_indentation"] };
     assert.deepEqual(separatorHits(CLEAN_XS, opted), []);
+    assert.deepEqual(separatorHits(INDENT_FLAT_SEPARATOR_XS, opted), []);
+    const flatSep = separatorHits(INDENT_FLAT_SEPARATOR_SHALLOW_XS, opted);
+    assert.deepEqual(
+      flatSep.map((v) => v.line),
+      [14],
+    );
+    assert.equal(flatSep[0]?.message, "expected separator width 8, found 6");
 
     const hits = separatorHits(SEPARATOR_XS, opted);
     assert.deepEqual(

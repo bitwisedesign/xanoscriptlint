@@ -357,7 +357,7 @@ Xano does not leave a truly empty line between statements inside a block. A whit
   }
 ```
 
-The line between the two `var` blocks is two spaces, the same indent as `stack`. A line between top-level members such as `input` and `stack` is empty.
+The line between the two `var` blocks is two spaces, the same indent as `stack`. A line between top-level members such as `input` and `stack` is empty. Inside a nested object that stays at its parent's indent, the whitespace line matches that object's opener line, not the dedented `}`.
 
 This rule only rewrites lines that are already whitespace-only. Inserting and removing blank lines stays with [`guid_placement`](#guid_placement), [`tags_placement`](#tags_placement), and [`wrap_enum_values`](#wrap_enum_values). Lines inside a triple-backtick fence or a `"""` string are left alone; [`indentation`](#indentation) shifts those with the opener.
 

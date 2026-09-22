@@ -45,6 +45,7 @@ function isPipeContinuation(line: string): boolean {
 interface ObjectFrame {
   maxKey: number;
   flatten: boolean;
+  openerIndent: number;
 }
 
 function nestOffset(stack: ObjectFrame[]): number {
@@ -222,7 +223,14 @@ function parentKeyMax(stack: ObjectFrame[]): number {
   return -1;
 }
 
-function objectFrame(lines: string[], lineIndex: number, line: string, brace: number, stack: ObjectFrame[]): ObjectFrame {
+function objectFrame(
+  lines: string[],
+  lineIndex: number,
+  line: string,
+  brace: number,
+  stack: ObjectFrame[],
+  openerIndent: number,
+): ObjectFrame {
   const colon = isColonBrace(line, brace);
   const keyed = colon || isAssignBrace(line, brace) || isReturnBrace(line, brace);
   const maxKey = keyed ? (directKeyMax(lines, lineIndex, brace) ?? -1) : -1;
@@ -230,14 +238,48 @@ function objectFrame(lines: string[], lineIndex: number, line: string, brace: nu
   return {
     maxKey,
     flatten: colon && maxKey >= 0 && parent >= 0 && maxKey > parent,
+    openerIndent,
   };
 }
 
-function scan(line: string, mode: LineMode, stack: ObjectFrame[], lines: string[], lineIndex: number): Scan {
+function enclosingOpenerIndent(stack: ObjectFrame[]): number | null {
+  const top = stack[stack.length - 1];
+  return top === undefined ? null : top.openerIndent;
+}
+
+function lineStartsWithCloser(line: string, mode: LineMode): boolean {
+  if (mode !== "code") {
+    return false;
+  }
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (ch === " " || ch === "\t") {
+      continue;
+    }
+    if (line.startsWith("//", i) || line.startsWith(FENCE, i) || line.startsWith(TRIPLE, i)) {
+      return false;
+    }
+    if (ch === '"' || ch === "'") {
+      return false;
+    }
+    return ch === "}" || ch === "]" || ch === ")";
+  }
+  return false;
+}
+
+function scan(
+  line: string,
+  mode: LineMode,
+  stack: ObjectFrame[],
+  lines: string[],
+  lineIndex: number,
+  lineIndent: number,
+): Scan {
   let i = 0;
   let delta = 0;
   let startsCloser = false;
   let seenCode = false;
+  let openersOnLine = 0;
   if (mode === "fence") {
     const closer = line.indexOf(FENCE);
     if (closer < 0) {
@@ -287,8 +329,9 @@ function scan(line: string, mode: LineMode, stack: ObjectFrame[], lines: string[
     }
     if (ch === "{" || ch === "[" || ch === "(") {
       if (ch === "{") {
-        stack.push(objectFrame(lines, lineIndex, line, i, stack));
+        stack.push(objectFrame(lines, lineIndex, line, i, stack, lineIndent + 2 * openersOnLine));
       }
+      openersOnLine += 1;
       delta += 1;
       seenCode = true;
       i += 1;
@@ -300,6 +343,9 @@ function scan(line: string, mode: LineMode, stack: ObjectFrame[], lines: string[
       }
       if (ch === "}") {
         stack.pop();
+      }
+      if (openersOnLine > 0) {
+        openersOnLine -= 1;
       }
       delta -= 1;
       seenCode = true;
@@ -346,7 +392,9 @@ export function planIndent(lines: string[]): IndentPlan {
       }
     }
     const nest = inChain ? 0 : nestOffset(objects);
-    const scanned = scan(line, startMode, objects, lines, i);
+    const lineIndent =
+      2 * (depth - (lineStartsWithCloser(line, startMode) ? 1 : 0)) + chainOffset + nest;
+    const scanned = scan(line, startMode, objects, lines, i, lineIndent);
     if (startMode === "code") {
       const blank = line.trim().length === 0;
       if (!blank) {
@@ -357,7 +405,9 @@ export function planIndent(lines: string[]): IndentPlan {
         }
         prevExpected = value;
       } else {
-        separator[i] = Math.max(0, 2 * depth - 2 + chainOffset + nest);
+        const openerIndent = enclosingOpenerIndent(objects);
+        separator[i] =
+          openerIndent === null ? Math.max(0, 2 * depth - 2 + chainOffset + nest) : Math.max(0, openerIndent);
       }
     }
     if (startMode === "code" && scanned.mode !== "code") {
