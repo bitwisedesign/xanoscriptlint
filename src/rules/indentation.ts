@@ -64,12 +64,20 @@ function applyLine(lines: string[], index: number, plan: ReturnType<typeof planI
   const bodyEnd = plan.bodyOf.get(index);
   if (bodyEnd !== undefined) {
     for (let j = index + 1; j <= bodyEnd; j += 1) {
-      if (!canShift(lines[j] ?? "", delta)) {
+      const body = lines[j] ?? "";
+      if (body.trim().length === 0) {
+        continue;
+      }
+      if (!canShift(body, delta)) {
         return false;
       }
     }
     for (let j = index + 1; j <= bodyEnd; j += 1) {
-      lines[j] = shiftBy(lines[j] ?? "", delta);
+      const body = lines[j] ?? "";
+      if (body.trim().length === 0) {
+        continue;
+      }
+      lines[j] = shiftBy(body, delta);
     }
   }
   lines[index] = withIndent(current, expected);

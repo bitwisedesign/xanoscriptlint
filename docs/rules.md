@@ -179,7 +179,7 @@ A wrapped filter pipeline is the exception. Continuation lines whose first token
       each as $uuid {
 ```
 
-A nested `|name:(…)` group needs no extra rule. The parenthesis already adds a level, so the inner filters sit two spaces past the outer filter. When the opener opens more than one group, the chain's extra indent ends once those groups close, including when the next line is shallower than the first continuation.
+A nested `|name:(…)` group needs no extra rule. The parenthesis already adds a level, so the inner filters sit two spaces past the outer filter. A blank line between filters does not end the chain; the next `|filter` stays at the same indent. When the opener opens more than one group, the chain's extra indent ends once those groups close, including when the next line is shallower than the first continuation.
 
 A nested object whose longest key is longer than the enclosing object's longest key does not take a level of its own. Its entries stay at the enclosing entries' indent, and its `}` sits with the enclosing object's `{`. Quoted keys count their quotes. `join` entries, whose names are longer than `table` / `type` / `where`, and a nested object whose keys are all shorter, still indent one more level.
 
@@ -197,7 +197,7 @@ A nested object whose longest key is longer than the enclosing object's longest 
       }
 ```
 
-Content inside a triple-backtick fence or a `"""` string is not indented on its own. When the line that opens the fence or string is mis-indented, auto-fix shifts the whole body, including the closer, by the same amount, so the relative indent inside the literal is preserved. If that shift would move any body line past column 0, that opener is left unchanged.
+Content inside a triple-backtick fence or a `"""` string is not indented on its own. When the line that opens the fence or string is mis-indented, auto-fix shifts the nonblank body lines, including the closer, by the same amount, so the relative indent inside the literal is preserved. Whitespace-only lines in the body stay as they are. If that shift would move any nonblank body line past column 0, that opener is left unchanged.
 
 The rule reports nothing when the file is not safe to re-indent: braces, brackets, or parentheses do not balance, a fence or `"""` string is unterminated, or any line's indentation contains a tab.
 

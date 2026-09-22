@@ -404,7 +404,7 @@ export function planIndent(lines: string[]): IndentPlan {
     if (startMode === "code") {
       const blank = line.trim().length === 0;
       const pipe = !blank && isPipeContinuation(line);
-      if (inChain && (depth < chainDepth || (depth === chainDepth && !pipe))) {
+      if (inChain && !blank && (depth < chainDepth || (depth === chainDepth && !pipe))) {
         inChain = false;
         chainOffset = 0;
       }

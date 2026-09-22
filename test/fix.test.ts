@@ -92,11 +92,15 @@ import {
   INDENT_NESTED_XS,
   INDENT_NESTED_FIXED_XS,
   INDENT_FOREACH_XS,
+  INDENT_PIPE_BLANK_XS,
+  INDENT_PIPE_BLANK_DEEP_XS,
   INDENT_CHAIN_GROUPS_XS,
   INDENT_CHAIN_GROUPS_BROKEN_XS,
   INDENT_FOREACH_FIXED_XS,
   INDENT_FENCE_XS,
   INDENT_FENCE_FIXED_XS,
+  INDENT_OPAQUE_BLANK_XS,
+  INDENT_OPAQUE_BLANK_FIXED_XS,
   INDENT_TRIPLE_XS,
   INDENT_TRIPLE_FIXED_XS,
   INDENT_TRIPLE_SKIP_XS,
@@ -1836,6 +1840,18 @@ ${inlineTagsLine(TAGS_V64)}
     assert.equal(result.text, INDENT_CHAIN_GROUPS_XS);
   });
 
+  it("keeps a pipe chain across a blank line between filters", () => {
+    const opted = { only_rules: ["indentation"] };
+    const clean = fixFile({ path: "pipe-blank.xs", text: INDENT_PIPE_BLANK_XS }, config(opted));
+    assert.equal(clean.changed, false);
+    const result = fixFile(
+      { path: "pipe-blank-deep.xs", text: INDENT_PIPE_BLANK_DEEP_XS },
+      config(opted),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, INDENT_PIPE_BLANK_XS);
+  });
+
   it("reindents pipe continuations from the chain opener", () => {
     const result = fixFile(
       { path: "each.xs", text: INDENT_FOREACH_XS },
@@ -1843,6 +1859,15 @@ ${inlineTagsLine(TAGS_V64)}
     );
     assert.equal(result.changed, true);
     assert.equal(result.text, INDENT_FOREACH_FIXED_XS);
+  });
+
+  it("leaves blank lines inside a shifted fence or triple-quoted body", () => {
+    const result = fixFile(
+      { path: "opaque-blank.xs", text: INDENT_OPAQUE_BLANK_XS },
+      config({ only_rules: ["indentation"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, INDENT_OPAQUE_BLANK_FIXED_XS);
   });
 
   it("shifts a fence body with its opener", () => {

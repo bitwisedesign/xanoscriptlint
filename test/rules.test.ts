@@ -79,6 +79,8 @@ import {
   INDENT_FLAT_SEPARATOR_XS,
   INDENT_FLAT_SEPARATOR_SHALLOW_XS,
   INDENT_FOREACH_XS,
+  INDENT_PIPE_BLANK_XS,
+  INDENT_PIPE_BLANK_DEEP_XS,
   INDENT_CHAIN_GROUPS_XS,
   INDENT_CHAIN_GROUPS_BROKEN_XS,
   INDENT_FENCE_XS,
@@ -3337,6 +3339,14 @@ ${inlineTagsLine(TAGS_SHORT)}
       [7, 8],
     );
     assert.equal(pipes[0]?.message, "expected indent 6, found 4");
+
+    assert.deepEqual(indentHits(INDENT_PIPE_BLANK_XS, opted), []);
+    const pipeBlank = indentHits(INDENT_PIPE_BLANK_DEEP_XS, opted);
+    assert.deepEqual(
+      pipeBlank.map((v) => v.line),
+      [10],
+    );
+    assert.equal(pipeBlank[0]?.message, "expected indent 8, found 10");
 
     assert.deepEqual(indentHits(INDENT_CHAIN_GROUPS_XS, opted), []);
     const groups = indentHits(INDENT_CHAIN_GROUPS_BROKEN_XS, opted);
