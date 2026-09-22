@@ -16,6 +16,7 @@
 | [`quote_negative_numeric_default`](#quote_negative_numeric_default) | opt-in | warning | yes | Negative numeric defaults must be quoted |
 | [`tags_placement`](#tags_placement) | opt-in | warning | yes | `tags` sits immediately before the first of `llm`, `tools`, `test`, `cache`, or `guid`, with Xano blank-line rules |
 | [`unquote_bare_test_names`](#unquote_bare_test_names) | opt-in | warning | yes | Quoted `test` names and top-level `mock` keys with no spaces must be unquoted |
+| [`unquote_enum_defaults`](#unquote_enum_defaults) | opt-in | warning | yes | Quoted enum defaults that are bare identifiers must be unquoted |
 | [`wrap_enum_values`](#wrap_enum_values) | opt-in | warning | yes | Enum `values` arrays wrap when compact JSON length reaches 64 |
 | [`wrap_piped_values`](#wrap_piped_values) | opt-in | warning | yes | Assignment filter pipelines wrap at pipe length 34 or 3+ filters; a grouped base stays inline |
 | [`wrap_tags_values`](#wrap_tags_values) | opt-in | warning | yes | Declaration `tags` arrays wrap when compact JSON length reaches 64 |
@@ -353,6 +354,28 @@ mock = {
 Quoted names that are already identifiers (`test "inventory_restock_applies"`, `"inventory_restock_applies":`) are push/pull churn. Nested keys inside a mock value, comment lines, and content inside triple-backtick fences or `"""` strings are left alone. `input`, `stack`, `response`, `test`, `mock`, `guid`, and `filters` stay quoted so unquoting cannot change how the line parses.
 
 Auto-fixable with `--fix`: the quotes are dropped. Own-line mock keys keep their colon column (two spaces replace the quotes) so a later [`align_object_colons`](#align_object_colons) pass can re-align the block to the new longest name in one `--fix`.
+
+## unquote_enum_defaults
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
+
+Xano strips quotes from an enum declaration default on push when the value is a bare identifier — letters, digits, and underscores, starting with a letter or underscore. A quoted `"standard"` becomes `standard`. The pulled file is canonical; a locally quoted identifier is push/pull churn.
+
+```xs
+enum shipping_speed?="standard" {
+  values = ["standard", "express"]
+}
+
+enum content_type?="application/json" {
+  values = ["application/json", "text/plain"]
+}
+```
+
+A value that is not a bare identifier stays quoted. Unquoting `"application/json"` or `"next day"` is a parse error, so those defaults are left alone. `true`, `false`, and `null` stay quoted too, because unquoting them would turn the default into a boolean or null literal.
+
+The declaration's opening `{` must be on the same line. Comment lines and the bodies of `"""` strings and triple-backtick fences are ignored.
+
+Auto-fixable with `--fix`: the quotes are dropped. Spacing around `=` is preserved.
 
 ## wrap_enum_values
 

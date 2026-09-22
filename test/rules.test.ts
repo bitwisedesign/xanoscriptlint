@@ -29,6 +29,8 @@ import {
   NONCANONICAL_MULTILINE_MOCK_XS,
   NEGATIVE_DEFAULT_FIXED_XS,
   NEGATIVE_DEFAULT_XS,
+  ENUM_DEFAULT_FIXED_XS,
+  ENUM_DEFAULT_XS,
   NULL_RESPONSE_XS,
   OVERPADDED_LONG_MOCK_XS,
   UNDERPADDED_MOCK_XS,
@@ -1258,6 +1260,157 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     assert.equal(
       warned.find((v) => v.ruleId === "quote_negative_numeric_default")?.severity,
       "warning",
+    );
+  });
+
+  it("unquote_enum_defaults flags quoted bare-identifier enum defaults", () => {
+    const hits = lintFile({ path: "enum.xs", text: ENUM_DEFAULT_XS }, config()).filter(
+      (v) => v.ruleId === "unquote_enum_defaults",
+    );
+    assert.equal(hits.length, 3);
+    assert.equal(hits[0]?.line, 3);
+    assert.equal(hits[0]?.column, 26);
+    assert.equal(hits[0]?.severity, "warning");
+    assert.equal(
+      hits[0]?.message,
+      "quoted enum default must be unquoted; Xano strips quotes on push",
+    );
+    assert.equal(hits[1]?.line, 6);
+    assert.equal(hits[1]?.column, 28);
+    assert.equal(hits[2]?.line, 9);
+    assert.equal(hits[2]?.column, 25);
+
+    const clean = lintFile({ path: "ok.xs", text: ENUM_DEFAULT_FIXED_XS }, config());
+    assert.equal(
+      clean.some((v) => v.ruleId === "unquote_enum_defaults"),
+      false,
+    );
+
+    const forms = wrapInputDecls(
+      `    enum status? = "draft" {
+      values = ["draft", "live"]
+    }
+    enum? channel?="email" {
+      values = ["email", "sms"]
+    }
+    enum[] lanes?="north" {
+      values = ["north", "south"]
+    }`,
+    );
+    const formHits = lintFile({ path: "forms.xs", text: forms }, config()).filter(
+      (v) => v.ruleId === "unquote_enum_defaults",
+    );
+    assert.equal(formHits.length, 3);
+    assert.equal(formHits[0]?.column, 20);
+
+    const allowed = wrapInputDecls(
+      `    enum shipping_speed?=standard {
+      values = ["standard", "express"]
+    }
+    enum content_type?="application/json" {
+      values = ["application/json", "text/plain"]
+    }
+    enum window_label?="next day" {
+      values = ["next day", "same day"]
+    }
+    enum flag?="true" {
+      values = ["true", "false"]
+    }
+    enum other?="false" {
+      values = ["false", "true"]
+    }
+    enum sentinel?="null" {
+      values = ["null", "other"]
+    }
+    enum tier?="1" {
+      values = ["1", "2"]
+    }`,
+    );
+    assert.equal(
+      lintFile({ path: "keep.xs", text: allowed }, config()).some(
+        (v) => v.ruleId === "unquote_enum_defaults",
+      ),
+      false,
+    );
+
+    const commented = wrapInputDecls(
+      `    // enum shipping_speed?="standard" {
+    //   values = ["standard", "express"]
+    // }`,
+    );
+    assert.equal(
+      lintFile({ path: "c.xs", text: commented }, config()).some(
+        (v) => v.ruleId === "unquote_enum_defaults",
+      ),
+      false,
+    );
+
+    const fenced = `function "example" {
+  input {
+  }
+
+  stack {
+    var $agent {
+      value = {
+        prompt: \`\`\`
+          enum shipping_speed?="standard" {
+            values = ["standard", "express"]
+          }
+          \`\`\`
+      }
+    }
+  }
+
+  response = $ok
+}`;
+    assert.equal(
+      lintFile({ path: "fence.xs", text: fenced }, config()).some(
+        (v) => v.ruleId === "unquote_enum_defaults",
+      ),
+      false,
+    );
+
+    const triple = `function "example" {
+  input {
+  }
+
+  stack {
+    var $agent {
+      value = {
+        system_prompt: """
+          enum shipping_speed?="standard" {
+            values = ["standard", "express"]
+          }
+          """
+      }
+    }
+  }
+
+  response = $ok
+}`;
+    assert.equal(
+      lintFile({ path: "triple.xs", text: triple }, config()).some(
+        (v) => v.ruleId === "unquote_enum_defaults",
+      ),
+      false,
+    );
+
+    const disabled = lintFile(
+      { path: "off.xs", text: ENUM_DEFAULT_XS },
+      config({ disabled_rules: ["unquote_enum_defaults"] }),
+    );
+    assert.equal(
+      disabled.some((v) => v.ruleId === "unquote_enum_defaults"),
+      false,
+    );
+
+    const warned = lintFile(
+      { path: "warn.xs", text: ENUM_DEFAULT_XS },
+      config({ unquote_enum_defaults: "error" }),
+    );
+    assert.equal(
+      warned.find((v) => v.ruleId === "unquote_enum_defaults")?.severity,
+      "error",
     );
   });
 

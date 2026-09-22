@@ -351,6 +351,47 @@ export const NEGATIVE_DEFAULT_FIXED_DECLS = `    int quantity?="-1"
 export const NEGATIVE_DEFAULT_XS = wrapInputDecls(NEGATIVE_DEFAULT_DECLS);
 export const NEGATIVE_DEFAULT_FIXED_XS = wrapInputDecls(NEGATIVE_DEFAULT_FIXED_DECLS);
 
+export const ENUM_DEFAULT_DECLS = `    enum shipping_speed?="standard" {
+      values = ["standard", "express"]
+    }
+    enum fulfillment_mode?='pickup' {
+      values = ["pickup", "delivery"]
+    }
+    enum[]? phase_bias?="warmup" {
+      values = ["warmup", "cooldown"]
+    }
+    enum content_type?="application/json" {
+      values = ["application/json", "text/plain"]
+    }
+    enum window_label?="next day" {
+      values = ["next day", "same day"]
+    }
+    enum sentinel?="null" {
+      values = ["null", "other"]
+    }`;
+
+export const ENUM_DEFAULT_FIXED_DECLS = `    enum shipping_speed?=standard {
+      values = ["standard", "express"]
+    }
+    enum fulfillment_mode?=pickup {
+      values = ["pickup", "delivery"]
+    }
+    enum[]? phase_bias?=warmup {
+      values = ["warmup", "cooldown"]
+    }
+    enum content_type?="application/json" {
+      values = ["application/json", "text/plain"]
+    }
+    enum window_label?="next day" {
+      values = ["next day", "same day"]
+    }
+    enum sentinel?="null" {
+      values = ["null", "other"]
+    }`;
+
+export const ENUM_DEFAULT_XS = wrapInputDecls(ENUM_DEFAULT_DECLS);
+export const ENUM_DEFAULT_FIXED_XS = wrapInputDecls(ENUM_DEFAULT_FIXED_DECLS);
+
 export function wrapTestBlocks(tests: string): string {
   return `function "example" {
   input {
