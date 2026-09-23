@@ -84,6 +84,7 @@ import {
   INDENT_CHAIN_GROUPS_XS,
   INDENT_CHAIN_GROUPS_BROKEN_XS,
   INDENT_FENCE_XS,
+  INDENT_FENCE_OUTDENTED_XS,
   INDENT_TRIPLE_XS,
   INDENT_TRIPLE_SKIP_XS,
   INDENT_UNBALANCED_XS,
@@ -3376,7 +3377,7 @@ ${inlineTagsLine(TAGS_SHORT)}
     const fence = indentHits(INDENT_FENCE_XS, opted);
     assert.deepEqual(
       fence.map((v) => v.line),
-      [7, 8, 13],
+      [7, 8, 9, 10, 11, 12, 13],
     );
 
     const triple = indentHits(INDENT_TRIPLE_XS, opted);
@@ -3399,6 +3400,16 @@ ${inlineTagsLine(TAGS_SHORT)}
     );
     assert.equal(deep[0]?.message, "expected indent 8, found 10");
     assert.equal(deep[3]?.message, "expected indent 6, found 8");
+
+    const outdented = indentHits(INDENT_FENCE_OUTDENTED_XS, opted);
+    assert.deepEqual(
+      outdented.map((v) => [v.line, v.message]),
+      [
+        [13, "expected indent 8, found 0"],
+        [14, "expected indent 10, found 2"],
+        [15, "expected indent 8, found 0"],
+      ],
+    );
   });
 
   it("indentation reports nothing for an unbalanced file or a tab indent", () => {

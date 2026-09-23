@@ -197,7 +197,9 @@ A nested object whose longest key is longer than the enclosing object's longest 
       }
 ```
 
-Content inside a triple-backtick fence or a `"""` string is not indented on its own. When the line that opens the fence or string is mis-indented, auto-fix shifts the nonblank body lines, including the closer, by the same amount, so the relative indent inside the literal is preserved. Whitespace-only lines in the body stay as they are. If that shift would move any nonblank body line past column 0, that opener is left unchanged.
+A block fence, one whose opening triple-backtick is the last thing on its line and whose closing line is just the triple-backtick, is indented. The least-indented nonblank body line and the closing fence sit at the opener's indent plus two, and every deeper line keeps its offset from that least indent. Xano strips that much on push, so a body that sits further left is flattened and the nesting is lost. A fence opened on a `|filter` nested inside a `(...)` group of an outer chain is the exception: its body and closer sit at the opener's own indent, because the chain already supplied the extra two spaces. Whitespace-only lines in the body stay as they are. Suppressing `indentation` on the opener or on any body or closer line leaves that whole fence unmoved, so the rest of the fence is not rewritten around a line that stays put.
+
+A fence with code on the same line as its opener or closer, and a `"""` string, are not indented on their own. When the line that opens one is mis-indented, auto-fix shifts the nonblank body lines, including the closer, by the same amount, so the relative indent inside the literal is preserved. If that shift would move any nonblank body line past column 0, that opener is left unchanged.
 
 The rule reports nothing when the file is not safe to re-indent: braces, brackets, or parentheses do not balance, a fence or `"""` string is unterminated, or any line's indentation contains a tab.
 

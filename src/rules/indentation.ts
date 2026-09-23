@@ -51,6 +51,22 @@ function violationsFor(
   return violations;
 }
 
+function suppressedFenceOpeners(
+  plan: ReturnType<typeof planIndent>,
+  suppressions: ReturnType<typeof parseSuppressions>,
+): Set<number> {
+  const frozen = new Set<number>();
+  for (const [index, opener] of plan.fenceOf) {
+    if (
+      isSuppressed(suppressions, index + 1, indentation.id) ||
+      isSuppressed(suppressions, opener + 1, indentation.id)
+    ) {
+      frozen.add(opener);
+    }
+  }
+  return frozen;
+}
+
 function applyLine(lines: string[], index: number, plan: ReturnType<typeof planIndent>): boolean {
   const expected = plan.expected[index];
   if (expected === null || expected === undefined) {
@@ -112,8 +128,16 @@ export const indentation: Rule = {
     if (!plan.reliable) {
       return null;
     }
+    const frozenFences = suppressedFenceOpeners(plan, suppressions);
     const indexes = [...rewriteLines]
       .map((line) => line - 1)
+      .filter((index) => {
+        if (frozenFences.has(index)) {
+          return false;
+        }
+        const opener = plan.fenceOf.get(index);
+        return opener === undefined || !frozenFences.has(opener);
+      })
       .sort((a, b) => b - a);
     const appliedLines: number[] = [];
     for (const index of indexes) {
