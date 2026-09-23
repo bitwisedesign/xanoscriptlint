@@ -9,6 +9,7 @@ export interface IndentPlan {
   expected: (number | null)[];
   separator: (number | null)[];
   bodyOf: Map<number, number>;
+  fenceOf: Map<number, number>;
   reliable: boolean;
 }
 
@@ -253,6 +254,53 @@ function objectFrame(
   };
 }
 
+function isBlockFenceOpener(line: string): boolean {
+  const at = line.lastIndexOf(FENCE);
+  if (at < 0) {
+    return false;
+  }
+  return line.slice(at + FENCE.length).trim().length === 0;
+}
+
+function planFenceBody(
+  lines: string[],
+  expected: (number | null)[],
+  fenceOf: Map<number, number>,
+  opener: number,
+  closer: number,
+  base: number,
+): boolean {
+  let min = -1;
+  for (let j = opener + 1; j < closer; j += 1) {
+    const body = lines[j] ?? "";
+    if (body.trim().length === 0) {
+      continue;
+    }
+    const indent = leadingSpaces(body);
+    if (min < 0 || indent < min) {
+      min = indent;
+    }
+  }
+  let negative = base < 0;
+  if (min >= 0) {
+    for (let j = opener + 1; j < closer; j += 1) {
+      const body = lines[j] ?? "";
+      if (body.trim().length === 0) {
+        continue;
+      }
+      const value = base + (leadingSpaces(body) - min);
+      expected[j] = value;
+      fenceOf.set(j, opener);
+      if (value < 0) {
+        negative = true;
+      }
+    }
+  }
+  expected[closer] = base;
+  fenceOf.set(closer, opener);
+  return negative;
+}
+
 function enclosingOpenerIndent(stack: ObjectFrame[]): number | null {
   for (let i = stack.length - 1; i >= 0; i -= 1) {
     const frame = stack[i];
@@ -385,6 +433,7 @@ export function planIndent(lines: string[]): IndentPlan {
   const expected: (number | null)[] = new Array<number | null>(lines.length).fill(null);
   const separator: (number | null)[] = new Array<number | null>(lines.length).fill(null);
   const bodyOf = new Map<number, number>();
+  const fenceOf = new Map<number, number>();
   let reliable = true;
   let depth = 0;
   let mode: LineMode = "code";
@@ -393,6 +442,7 @@ export function planIndent(lines: string[]): IndentPlan {
   let chainDepth = 0;
   let prevExpected = 0;
   let opaqueOpen: number | null = null;
+  let fenceOpen: { index: number; block: boolean; offset: number } | null = null;
   const objects: ObjectFrame[] = [];
 
   for (let i = 0; i < lines.length; i += 1) {
@@ -401,6 +451,7 @@ export function planIndent(lines: string[]): IndentPlan {
       reliable = false;
     }
     const startMode = mode;
+    let fenceOffset = 2;
     if (startMode === "code") {
       const blank = line.trim().length === 0;
       const pipe = !blank && isPipeContinuation(line);
@@ -412,6 +463,9 @@ export function planIndent(lines: string[]): IndentPlan {
         inChain = true;
         chainOffset = prevExpected + 2 - 2 * depth;
         chainDepth = depth;
+      }
+      if (pipe && inChain && depth > chainDepth) {
+        fenceOffset = 0;
       }
     }
     const nest = inChain ? 0 : nestOffset(objects);
@@ -433,13 +487,28 @@ export function planIndent(lines: string[]): IndentPlan {
           openerIndent === null ? Math.max(0, 2 * depth - 2 + chainOffset + nest) : Math.max(0, openerIndent);
       }
     }
-    if (startMode === "code" && scanned.mode !== "code") {
+    if (startMode === "code" && scanned.mode === "triple") {
       opaqueOpen = i;
-    } else if (startMode !== "code" && scanned.mode === "code") {
+    } else if (startMode === "code" && scanned.mode === "fence") {
+      fenceOpen = { index: i, block: isBlockFenceOpener(line), offset: fenceOffset };
+    } else if (startMode === "triple" && scanned.mode === "code") {
       if (opaqueOpen !== null && opaqueOpen !== i) {
         bodyOf.set(opaqueOpen, i);
       }
       opaqueOpen = null;
+    } else if (startMode === "fence" && scanned.mode === "code") {
+      if (fenceOpen !== null && fenceOpen.block && line.trim() === FENCE) {
+        const base = expected[fenceOpen.index];
+        if (
+          base === null ||
+          planFenceBody(lines, expected, fenceOf, fenceOpen.index, i, base + fenceOpen.offset)
+        ) {
+          reliable = false;
+        }
+      } else if (fenceOpen !== null && fenceOpen.index !== i) {
+        bodyOf.set(fenceOpen.index, i);
+      }
+      fenceOpen = null;
     }
     depth += scanned.delta;
     if (depth < 0 || scanned.mismatch) {
@@ -450,5 +519,5 @@ export function planIndent(lines: string[]): IndentPlan {
   if (depth !== 0 || mode !== "code" || objects.length > 0) {
     reliable = false;
   }
-  return { expected, separator, bodyOf, reliable };
+  return { expected, separator, bodyOf, fenceOf, reliable };
 }

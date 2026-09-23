@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-09-23
+
+### Fixed
+
+- `indentation` now flags and fixes a triple-backtick fence body whose least indent is not at its fence indent. Xano strips that indent on push and flattens anything shallower, so a body left of the fence was rewritten and the nesting was lost. Relative indent inside the body is kept. A fence opened on a filter nested inside a chain group stays at the opener's indent. Suppressing the rule on any line of a block fence leaves that whole fence unmoved.
+
 ## [0.6.0] - 2026-09-22
 
 ### Added

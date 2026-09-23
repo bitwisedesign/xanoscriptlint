@@ -99,6 +99,20 @@ import {
   INDENT_FOREACH_FIXED_XS,
   INDENT_FENCE_XS,
   INDENT_FENCE_FIXED_XS,
+  INDENT_FENCE_OUTDENTED_XS,
+  INDENT_FENCE_OUTDENTED_FIXED_XS,
+  INDENT_FENCE_OVERINDENTED_XS,
+  INDENT_FENCE_RELATIVE_XS,
+  INDENT_FENCE_PIPE_XS,
+  INDENT_FENCE_NESTED_CHAIN_XS,
+  INDENT_FENCE_NESTED_CHAIN_DEEP_XS,
+  INDENT_FENCE_INLINE_XS,
+  INDENT_FENCE_INLINE_FIXED_XS,
+  INDENT_FENCE_INLINE_CLOSER_XS,
+  INDENT_FENCE_INLINE_CLOSER_FIXED_XS,
+  INDENT_FENCE_SUPPRESSED_XS,
+  INDENT_FENCE_BODY_SUPPRESSED_XS,
+  INDENT_FENCE_BODY_SUPPRESSED_FIXED_XS,
   INDENT_OPAQUE_BLANK_XS,
   INDENT_OPAQUE_BLANK_FIXED_XS,
   INDENT_TRIPLE_XS,
@@ -1935,6 +1949,87 @@ ${inlineTagsLine(TAGS_V64)}
     );
     assert.equal(result.changed, true);
     assert.equal(result.text, INDENT_FENCE_FIXED_XS);
+  });
+
+  it("reindents an outdented fence body to the opener indent plus two", () => {
+    const opted = { only_rules: ["indentation"] };
+    const result = fixFile(
+      { path: "fence-out.xs", text: INDENT_FENCE_OUTDENTED_XS },
+      config(opted),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, INDENT_FENCE_OUTDENTED_FIXED_XS);
+    const again = fixFile({ path: "fence-out.xs", text: result.text }, config(opted));
+    assert.equal(again.changed, false);
+  });
+
+  it("dedents an over-indented fence body and keeps relative offsets", () => {
+    const result = fixFile(
+      { path: "fence-over.xs", text: INDENT_FENCE_OVERINDENTED_XS },
+      config({ only_rules: ["indentation"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, INDENT_FENCE_OUTDENTED_FIXED_XS);
+  });
+
+  it("leaves a correctly indented fence body, including relative offsets, unchanged", () => {
+    const opted = { only_rules: ["indentation"] };
+    const relative = fixFile(
+      { path: "fence-rel.xs", text: INDENT_FENCE_RELATIVE_XS },
+      config(opted),
+    );
+    assert.equal(relative.changed, false);
+    const piped = fixFile({ path: "fence-pipe.xs", text: INDENT_FENCE_PIPE_XS }, config(opted));
+    assert.equal(piped.changed, false);
+  });
+
+  it("keeps a nested-chain fence body at the opener indent", () => {
+    const opted = { only_rules: ["indentation"] };
+    const clean = fixFile(
+      { path: "fence-nested.xs", text: INDENT_FENCE_NESTED_CHAIN_XS },
+      config(opted),
+    );
+    assert.equal(clean.changed, false);
+    const result = fixFile(
+      { path: "fence-nested-deep.xs", text: INDENT_FENCE_NESTED_CHAIN_DEEP_XS },
+      config(opted),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, INDENT_FENCE_NESTED_CHAIN_XS);
+  });
+
+  it("shifts an inline fence with its opener instead of rebasing the body", () => {
+    const opted = { only_rules: ["indentation"] };
+    const result = fixFile(
+      { path: "fence-inline.xs", text: INDENT_FENCE_INLINE_XS },
+      config(opted),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, INDENT_FENCE_INLINE_FIXED_XS);
+    const closer = fixFile(
+      { path: "fence-inline-closer.xs", text: INDENT_FENCE_INLINE_CLOSER_XS },
+      config(opted),
+    );
+    assert.equal(closer.changed, true);
+    assert.equal(closer.text, INDENT_FENCE_INLINE_CLOSER_FIXED_XS);
+  });
+
+  it("does not reindent a fence body whose opener is suppressed", () => {
+    const result = fixFile(
+      { path: "fence-suppressed.xs", text: INDENT_FENCE_SUPPRESSED_XS },
+      config({ only_rules: ["indentation"] }),
+    );
+    assert.equal(result.changed, false);
+    assert.equal(result.text, INDENT_FENCE_SUPPRESSED_XS);
+  });
+
+  it("leaves a whole fence unmoved when one body line is suppressed", () => {
+    const result = fixFile(
+      { path: "fence-body-suppressed.xs", text: INDENT_FENCE_BODY_SUPPRESSED_XS },
+      config({ only_rules: ["indentation"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, INDENT_FENCE_BODY_SUPPRESSED_FIXED_XS);
   });
 
   it("shifts a triple-quoted body with its opener", () => {
