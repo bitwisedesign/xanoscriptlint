@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { resolveConfig } from "../src/config.js";
 import { fixFile } from "../src/lint.js";
@@ -2202,5 +2205,118 @@ ${inlineTagsLine(TAGS_V64)}
     );
     assert.equal(result.changed, false);
     assert.equal(result.text, text);
+  });
+
+  it("removes forbidden statement blanks and reports each site", () => {
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+    const before = readFileSync(path.join(fixtures, "violations/statement_spacing.xs"), "utf8");
+    const after = readFileSync(path.join(fixtures, "fixed/statement_spacing.xs"), "utf8");
+    const result = fixFile(
+      { path: "space.xs", text: before },
+      config({ only_rules: ["statement_spacing"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, after);
+    assert.deepEqual(
+      result.corrections.map((correction) => correction.line),
+      [5, 8, 13, 18, 28, 35, 43],
+    );
+    assert.equal(result.corrections[0]?.ruleId, "statement_spacing");
+
+    const again = fixFile(
+      { path: "space.xs", text: result.text },
+      config({ only_rules: ["statement_spacing"] }),
+    );
+    assert.equal(again.changed, false);
+  });
+
+  it("removes every blank in a forbidden gap and keeps CRLF endings", () => {
+    const text = [
+      'function "example" {',
+      "  input {",
+      "    int id",
+      "",
+      "",
+      "    text name",
+      "  }",
+      "",
+      "  stack {",
+      "  }",
+      "",
+      "  response = $ok",
+      "}",
+    ].join("\r\n");
+    const result = fixFile(
+      { path: "crlf.xs", text },
+      config({ only_rules: ["statement_spacing"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(/(?<!\r)\n/.test(result.text), false);
+    assert.match(result.text, /int id\r\n {4}text name/);
+    assert.match(result.text, /\}\r\n\r\n {2}stack \{/);
+  });
+
+  it("leaves a suppressed statement blank in place", () => {
+    const text = `function "example" {
+  input {
+    int id
+
+    text name
+    // xanoscriptlint:disable:previous statement_spacing
+  }
+
+  stack {
+  }
+
+  response = $ok
+}`;
+    const result = fixFile(
+      { path: "kept.xs", text },
+      config({ only_rules: ["statement_spacing"] }),
+    );
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
+  });
+
+  it("drops the blank after a collapse turns a statement into one line", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    function.run "Orders/dispatch" {
+      input = {
+        id: 1
+      }
+
+      mock = {ok: true}
+    } as $dispatch
+  }
+
+  response = $dispatch
+}`;
+    const expected = `function "example" {
+  input {
+  }
+
+  stack {
+    function.run "Orders/dispatch" {
+      input = {id: 1}
+      mock = {ok: true}
+    } as $dispatch
+  }
+
+  response = $dispatch
+}`;
+    const result = fixFile(
+      { path: "collapse.xs", text },
+      config({ only_rules: ["collapse_assignment_values", "statement_spacing"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.equal(
+      result.corrections.some((correction) => correction.ruleId === "statement_spacing"),
+      true,
+    );
   });
 });

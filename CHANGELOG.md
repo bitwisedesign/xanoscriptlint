@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Opt-in `statement_spacing` flags a blank line between sibling statements in `input`, `schema`, and `stack` when the previous statement is single-line and no comment is adjacent (warning). Auto-fix removes that blank. It does not insert a missing blank after a multi-line statement.
+
 ## [0.6.1] - 2026-09-23
 
 ### Fixed

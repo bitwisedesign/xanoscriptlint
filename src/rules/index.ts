@@ -12,6 +12,7 @@ import { noZeroNumericDefault } from "./no_zero_numeric_default.js";
 import { noZeroSetFilter } from "./no_zero_set_filter.js";
 import { quoteNegativeNumericDefault } from "./quote_negative_numeric_default.js";
 import { separatorIndentation } from "./separator_indentation.js";
+import { statementSpacing } from "./statement_spacing.js";
 import { tagsPlacement } from "./tags_placement.js";
 import { unquoteBareTestNames } from "./unquote_bare_test_names.js";
 import { unquoteEnumDefaults } from "./unquote_enum_defaults.js";
@@ -40,6 +41,7 @@ export const builtinRules: Rule[] = [
   noZeroNumericDefault,
   quoteNegativeNumericDefault,
   unquoteEnumDefaults,
+  statementSpacing,
   separatorIndentation,
 ];
 

@@ -16,6 +16,7 @@
 | [`no_zero_set_filter`](#no_zero_set_filter) | opt-in | error | yes | A `set:` filter of numeric `0` does not write the field |
 | [`quote_negative_numeric_default`](#quote_negative_numeric_default) | opt-in | warning | yes | Negative numeric defaults must be quoted |
 | [`separator_indentation`](#separator_indentation) | opt-in | warning | yes | Whitespace-only lines use the enclosing block opener's indent |
+| [`statement_spacing`](#statement_spacing) | opt-in | warning | yes | Blank lines between sibling statements only after a multi-line statement or next to a comment |
 | [`tags_placement`](#tags_placement) | opt-in | warning | yes | `tags` sits immediately before the first of `llm`, `tools`, `test`, `cache`, `external_access`, or `guid`, with Xano blank-line rules |
 | [`unquote_bare_test_names`](#unquote_bare_test_names) | opt-in | warning | yes | Quoted `test` names and top-level `mock` keys with no spaces must be unquoted |
 | [`unquote_enum_defaults`](#unquote_enum_defaults) | opt-in | warning | yes | Quoted enum defaults that are bare identifiers must be unquoted |
@@ -361,11 +362,48 @@ Xano does not leave a truly empty line between statements inside a block. A whit
 
 The line between the two `var` blocks is two spaces, the same indent as `stack`. A line between top-level members such as `input` and `stack` is empty. Inside a nested object that stays at its parent's indent, the whitespace line matches that object's opener line, not the dedented `}`.
 
-This rule only rewrites lines that are already whitespace-only. Inserting and removing blank lines stays with [`guid_placement`](#guid_placement), [`tags_placement`](#tags_placement), and [`wrap_enum_values`](#wrap_enum_values). Lines inside a triple-backtick fence or a `"""` string are left alone; [`indentation`](#indentation) shifts those with the opener.
+This rule only rewrites lines that are already whitespace-only. Inserting and removing blank lines stays with [`guid_placement`](#guid_placement), [`tags_placement`](#tags_placement), [`statement_spacing`](#statement_spacing), and [`wrap_enum_values`](#wrap_enum_values). Lines inside a triple-backtick fence or a `"""` string are left alone; [`indentation`](#indentation) shifts those with the opener.
 
 The same bail conditions as [`indentation`](#indentation) apply: an unbalanced file, an unterminated fence or `"""` string, or a tab in any line's indentation is not rewritten.
 
 Auto-fixable with `--fix`. This rule runs last, so it normalizes separator widths after other rules have moved lines.
+
+## statement_spacing
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
+
+Between two sibling statements, Xano keeps a blank line only when the previous statement spans more than one line, or when a `//` comment sits in the gap or directly above the previous statement. Any other blank is removed on push. This rule removes those blanks. It does not insert a missing blank after a multi-line statement.
+
+```xs
+input {
+  int id
+  text name
+}
+
+stack {
+  function.run "Orders/lookup" as $order
+  var $known {
+    value = false
+  }
+}
+```
+
+A comment keeps the blank on either side:
+
+```xs
+input {
+  int id
+
+  // owner of the open cart
+  int? owner_id?
+}
+```
+
+Scope is `input {`, `schema {`, and `stack {` when that block is a direct member of the top-level construct, plus every non-literal block nested inside those. That covers control-flow bodies, statement bodies such as `db.query` and `var`, a `db.transaction`'s nested `stack`, and a `schema {` nested in an `object` input. `test` bodies, other top-level members, and the lines around `tags` and `guid` are left alone.
+
+Skipped entirely: colon-object and array literal contents, triple-backtick fences, `"""` strings, blanks after a block opener, and blanks before a block closer. A statement is multi-line when its last code line is not its first, including a wrapped filter pipeline, so the blank after it stays. An unbalanced file, a mismatched closer, or an unterminated fence, `"""` string, or quote is not rewritten.
+
+Auto-fixable with `--fix`: every blank in a forbidden gap is deleted. The rule runs after the wrap and collapse rules and before [`separator_indentation`](#separator_indentation).
 
 ## tags_placement
 
