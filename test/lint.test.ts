@@ -221,6 +221,24 @@ describe("fixture linting", () => {
     );
   });
 
+  it("committed statement_spacing fixtures match when that rule is opted in", () => {
+    const config = resolveConfig({ opt_in_rules: ["statement_spacing"] }, fixtures, null);
+    const clean = {
+      path: path.join(fixtures, "clean/ok.xs"),
+      text: readFileSync(path.join(fixtures, "clean/ok.xs"), "utf8"),
+    };
+    assert.deepEqual(lintFiles([clean], config), []);
+
+    const spacing = {
+      path: path.join(fixtures, "violations/statement_spacing.xs"),
+      text: readFileSync(path.join(fixtures, "violations/statement_spacing.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([spacing], config).some((v) => v.ruleId === "statement_spacing"),
+      true,
+    );
+  });
+
   it("committed no_zero_set_filter fixture matches when that rule is opted in", () => {
     const config = resolveConfig({ opt_in_rules: ["no_zero_set_filter"] }, fixtures, null);
     const zeroSet = {

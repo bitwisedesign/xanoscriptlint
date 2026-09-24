@@ -23,7 +23,8 @@ export function formattingOptInRules(): string[] {
         rule.id !== "no_null_response" &&
         rule.id !== "no_zero_set_filter" &&
         rule.id !== "indentation" &&
-        rule.id !== "separator_indentation",
+        rule.id !== "separator_indentation" &&
+        rule.id !== "statement_spacing",
     )
     .map((rule) => rule.id);
 }

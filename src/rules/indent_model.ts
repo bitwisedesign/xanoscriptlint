@@ -85,12 +85,12 @@ function nonSpaceBefore(line: string, index: number): number {
   return i;
 }
 
-function isColonBrace(line: string, brace: number): boolean {
+export function isColonBrace(line: string, brace: number): boolean {
   const i = nonSpaceBefore(line, brace);
   return i >= 0 && line[i] === ":";
 }
 
-function isAssignBrace(line: string, brace: number): boolean {
+export function isAssignBrace(line: string, brace: number): boolean {
   const i = nonSpaceBefore(line, brace);
   if (i < 0 || line[i] !== "=") {
     return false;
@@ -99,7 +99,7 @@ function isAssignBrace(line: string, brace: number): boolean {
   return prev === "" || !"!<>=+".includes(prev);
 }
 
-function isReturnBrace(line: string, brace: number): boolean {
+export function isReturnBrace(line: string, brace: number): boolean {
   const i = nonSpaceBefore(line, brace);
   if (i < 5) {
     return false;

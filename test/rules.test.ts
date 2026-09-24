@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { resolveConfig } from "../src/config.js";
 import { lintFile } from "../src/lint.js";
@@ -144,6 +147,14 @@ function separatorHits(text: string, overrides: Parameters<typeof resolveConfig>
     (v) => v.ruleId === "separator_indentation",
   );
 }
+
+function statementSpacingHits(text: string, overrides: Parameters<typeof resolveConfig>[0] = {}) {
+  return lintFile({ path: "a.xs", text }, config(overrides)).filter(
+    (v) => v.ruleId === "statement_spacing",
+  );
+}
+
+const spacingFixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
 
 describe("built-in rules", () => {
   it("empty_function_run flags empty names and skips comments", () => {
@@ -3489,6 +3500,99 @@ input {
 }`;
     assert.deepEqual(
       separatorHits(suppressed, { opt_in_rules: ["separator_indentation"] }),
+      [],
+    );
+  });
+
+  it("statement_spacing is opt-in and flags a blank after a single-line sibling", () => {
+    const before = readFileSync(
+      path.join(spacingFixtures, "violations/statement_spacing.xs"),
+      "utf8",
+    );
+    const opted = { opt_in_rules: ["statement_spacing"] };
+    assert.deepEqual(statementSpacingHits(before), []);
+    const hits = statementSpacingHits(before, opted);
+    assert.deepEqual(
+      hits.map((v) => v.line),
+      [5, 8, 13, 18, 28, 35, 43],
+    );
+    assert.deepEqual(
+      hits.map((v) => v.column),
+      [5, 5, 5, 9, 5, 9, 7],
+    );
+    assert.equal(
+      hits[0]?.message,
+      "blank line not allowed after a single-line statement with no adjacent comment",
+    );
+    assert.equal(hits[0]?.severity, "warning");
+    const kept = readFileSync(
+      path.join(spacingFixtures, "clean/statement_spacing_kept.xs"),
+      "utf8",
+    );
+    assert.deepEqual(statementSpacingHits(kept, opted), []);
+  });
+
+  it("statement_spacing skips an unbalanced file and honors disable directives", () => {
+    const opted = { opt_in_rules: ["statement_spacing"] };
+    const unbalanced = `function "example" {
+  input {
+    int id
+
+    text name
+`;
+    assert.deepEqual(statementSpacingHits(unbalanced, opted), []);
+
+    const commented = `function "example" {
+  input {
+    // kept beside a comment
+    int id
+
+    text name
+
+    // and beside the next one
+    uuid order_uuid
+  }
+
+  stack {
+  }
+
+  response = $ok
+}`;
+    assert.deepEqual(statementSpacingHits(commented, opted), []);
+
+    const region = `// xanoscriptlint:disable statement_spacing
+function "example" {
+  input {
+    int other
+    int id
+
+    text name
+  }
+
+  stack {
+  }
+
+  response = $ok
+}`;
+    assert.deepEqual(statementSpacingHits(region, opted), []);
+
+    const disabled = `function "example" {
+  input {
+    int id
+
+    text name
+  }
+
+  stack {
+  }
+
+  response = $ok
+}`;
+    assert.deepEqual(
+      statementSpacingHits(disabled, {
+        opt_in_rules: ["statement_spacing"],
+        disabled_rules: ["statement_spacing"],
+      }),
       [],
     );
   });
