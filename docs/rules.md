@@ -5,7 +5,7 @@
 | [`align_object_colons`](#align_object_colons) | opt-in | warning | yes | Object entry colons must align to the longest name |
 | [`collapse_assignment_values`](#collapse_assignment_values) | opt-in | warning | yes | Wrapped assignment whose one-line form is under 64 UTF-8 bytes |
 | [`empty_function_run`](#empty_function_run) | on | error | no | `function.run` must not be called with an empty name |
-| [`fence_multiline_values`](#fence_multiline_values) | opt-in | warning | yes | Multiline mock and input values must be wrapped in a triple-backtick fence |
+| [`fence_multiline_values`](#fence_multiline_values) | opt-in | warning | yes | Multiline mock and input values must be fenced; a one-line fence body is unfenced |
 | [`guid_placement`](#guid_placement) | opt-in | warning | yes | `guid` needs a blank line above it only when it follows a block closer |
 | [`indentation`](#indentation) | opt-in | warning | yes | Code uses two spaces per nesting level; a wrapped filter pipeline sits at its opener's indent plus two |
 | [`no_null_response`](#no_null_response) | opt-in | warning | yes | Do not assign `response = null` |
@@ -96,7 +96,7 @@ Comment lines are ignored.
 
 Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
 
-Xano wraps multiline object and array values in `mock` and `input` blocks in a triple-backtick fence on push. Single-line values (`null`, numbers, strings, inline `{...}` / `[...]`) stay unfenced. An unfenced multiline value is push/pull churn.
+Xano wraps multiline object and array values in `mock` and `input` blocks in a triple-backtick fence on push. Single-line values (`null`, numbers, strings, inline `{...}` / `[...]`) stay unfenced. An unfenced multiline value, or a fence whose body is exactly one nonblank line, is push/pull churn.
 
 ````xs
 input = {
@@ -105,6 +105,7 @@ input = {
       {id: 8}
     ]
     ```
+  source: {localized: {en_US: {title: "Live"}}}
 }
 
 mock = {
@@ -122,11 +123,13 @@ mock = {
 }
 ````
 
-Only top-level entries of `mock = { ... }` and `input = { ... }` are checked. Nested properties inside an already-fenced value, and multiline objects in other contexts (`data`, `join`, `value`), are ignored because Xano does not fence those.
+Only top-level entries of `mock = { ... }` and `input = { ... }` are checked, including `function.run` mocks when unfencing. Nested properties inside an already-fenced value, and multiline objects in other contexts (`data`, `join`, `value`), are ignored because Xano does not fence those. Assignment fences (`value =`) and filter-argument fences (`|push:`) are left alone.
 
-`function.run` mock values stay compact. Xano CLI push accepts `{queued: []}` on those mocks and can reject a fenced rewrite, especially if `mock` loses indent relative to `input`. The rule does not fence those values. It does flag two consecutive fence openers (keys must not share one fence body) and a `mock` that is not indented with its `input` sibling inside `function.run`.
+A fence whose body is exactly one nonblank line is unfenced onto the key line. Multi-line bodies stay fenced even when they would be short if flattened; Xano unfences but does not collapse. An empty body, or a body that is only a comment, is left fenced.
 
-Auto-fixable with `--fix`: an eligible value is wrapped in a fence, the opening `{` or `[` moves onto the next line, and the body is indented two spaces relative to the key. Values that are not a bare `{` or `[` on the key line are reported but not rewritten. An outdented `function.run` `mock` is re-indented to match `input`. Consecutive fence openers are reported and left untouched.
+`function.run` mock values stay compact on the fence-insertion side. Xano CLI push accepts `{queued: []}` on those mocks and can reject a fenced rewrite, especially if `mock` loses indent relative to `input`. The rule does not wrap those values. It does flag two consecutive fence openers (keys must not share one fence body) and a `mock` that is not indented with its `input` sibling inside `function.run`.
+
+Auto-fixable with `--fix`: an eligible multiline value is wrapped in a fence, the opening `{` or `[` moves onto the next line, and the body is indented two spaces relative to the key. A one-line fence body is moved onto the key line and the fence is removed. Values that are not a bare `{` or `[` on the key line are reported but not rewritten. An outdented `function.run` `mock` is re-indented to match `input`. Consecutive fence openers are reported and left untouched.
 
 ## guid_placement
 

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { resolveConfig } from "../src/config.js";
-import { fixFile } from "../src/lint.js";
+import { fixFile, lintFile } from "../src/lint.js";
 import { builtinRules } from "../src/rules/index.js";
 import {
   AFTER_COLON_SPACES_MOCK_XS,
@@ -784,6 +784,244 @@ describe("fixFile", () => {
     assert.equal(kept.changed, true);
     assert.match(kept.text, /"checkout applies gift wrap": ```/);
     assert.match(kept.text, /\n {10}mock = \{\n/);
+  });
+
+  it("unfences a one-line fence body onto the key line", () => {
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+    const before = readFileSync(path.join(fixtures, "violations/fence_single_line.xs"), "utf8");
+    const after = readFileSync(path.join(fixtures, "fixed/fence_single_line.xs"), "utf8");
+    const result = fixFile(
+      { path: "one-line.xs", text: before },
+      config({ only_rules: ["fence_multiline_values"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, after);
+    assert.deepEqual(
+      result.corrections.map((correction) => correction.line),
+      [10, 22, 25, 39],
+    );
+    assert.equal(result.corrections[0]?.ruleId, "fence_multiline_values");
+
+    const again = fixFile(
+      { path: "one-line.xs", text: result.text },
+      config({ only_rules: ["fence_multiline_values"] }),
+    );
+    assert.equal(again.changed, false);
+
+    const aligned = fixFile(
+      { path: "one-line.xs", text: before },
+      config({ disabled_rules: ["no_trailing_newline"] }),
+    );
+    assert.equal(aligned.changed, true);
+    assert.equal(aligned.text, after);
+    assert.match(aligned.text, /source {7}: \{localized: \{en_US: \{title: "Live"\}\}\}/);
+    assert.match(aligned.text, /draft_source : \{localized: \{en_US: \{title: "Draft Title"\}\}\}/);
+  });
+
+  it("unfences a one-line fence and fences a sibling multiline value in one pass", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query item {
+      mock = {
+        "checkout applies gift wrap": {
+          issued: []
+        }
+        "checkout empty": \`\`\`
+          []
+          \`\`\`
+      }
+    }
+  }
+
+  response = $item
+}`;
+    const expected = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query item {
+      mock = {
+        "checkout applies gift wrap": \`\`\`
+          {
+            issued: []
+          }
+          \`\`\`
+        "checkout empty": []
+      }
+    }
+  }
+
+  response = $item
+}`;
+    const result = fixFile(
+      { path: "mixed-fence.xs", text },
+      config({ only_rules: ["fence_multiline_values"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    const again = fixFile(
+      { path: "mixed-fence.xs", text: result.text },
+      config({ only_rules: ["fence_multiline_values"] }),
+    );
+    assert.equal(again.changed, false);
+  });
+
+  it("preserves CRLF when unfencing a one-line fence at EOF", () => {
+    const source = `function "example" {
+  stack {
+    db.query item {
+      mock = {
+        "checkout empty": \`\`\`
+          []
+          \`\`\``;
+    const expected = `function "example" {
+  stack {
+    db.query item {
+      mock = {
+        "checkout empty": []`;
+    const result = fixFile(
+      { path: "crlf-unfence.xs", text: source.replace(/\n/g, "\r\n") },
+      config({ only_rules: ["fence_multiline_values"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected.replace(/\n/g, "\r\n"));
+  });
+
+  it("does not unfence a suppressed one-line fence", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query item {
+      mock = {
+        // xanoscriptlint:disable:next fence_multiline_values
+        "checkout empty": \`\`\`
+          []
+          \`\`\`
+      }
+    }
+  }
+
+  response = $item
+}`;
+    const result = fixFile({ path: "suppressed-unfence.xs", text }, config());
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
+  });
+
+  it("reindents an outdented function.run mock before unfencing a one-line body", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    function.run "Orders/dispatch" {
+      input = {id: 1}
+
+  mock = {
+    "checkout empty cart": \`\`\`
+      {queued: [], sent: [], done: false}
+      \`\`\`
+  }
+    } as $dispatch
+  }
+
+  response = $ok
+}`;
+    const result = fixFile(
+      { path: "outdent-unfence.xs", text },
+      config({ only_rules: ["fence_multiline_values"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(
+      result.text,
+      `function "example" {
+  input {
+  }
+
+  stack {
+    function.run "Orders/dispatch" {
+      input = {id: 1}
+
+      mock = {
+        "checkout empty cart": {queued: [], sent: [], done: false}
+      }
+    } as $dispatch
+  }
+
+  response = $ok
+}`,
+    );
+    const again = fixFile(
+      { path: "outdent-unfence.xs", text: result.text },
+      config({ only_rules: ["fence_multiline_values"] }),
+    );
+    assert.equal(again.changed, false);
+  });
+
+  it("does not produce a one-line fence body with every opt-in rule enabled", () => {
+    const allRules = builtinRules.filter((rule) => !rule.defaultEnabled).map((rule) => rule.id);
+    const allConfig = config({ opt_in_rules: allRules });
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+    const files: string[] = [];
+    const stack = [fixtures];
+    while (stack.length > 0) {
+      const dir = stack.pop() ?? "";
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          stack.push(full);
+        } else if (entry.name.endsWith(".xs")) {
+          files.push(full);
+        }
+      }
+    }
+    const samples = [
+      ...files.map((filePath) => ({
+        path: filePath,
+        text: readFileSync(filePath, "utf8"),
+      })),
+      {
+        path: "short-wrapped-mock.xs",
+        text: `function "example" {
+  input {
+  }
+
+  stack {
+    db.query item {
+      mock = {
+        queued: []
+      }
+    }
+  }
+
+  response = $item
+}`,
+      },
+      {
+        path: "short-multiline-fence.xs",
+        text: wrapMockBlock(`        "checkout applies gift wrap": \`\`\`
+          {
+            id: 12
+          }
+          \`\`\``),
+      },
+      { path: "run-compact.xs", text: VALID_FUNCTION_RUN_COMPACT_MOCK_XS },
+    ];
+    for (const file of samples) {
+      const result = fixFile(file, allConfig);
+      const hits = lintFile({ path: file.path, text: result.text }, allConfig).filter(
+        (violation) =>
+          violation.ruleId === "fence_multiline_values" &&
+          violation.message.startsWith("single-line"),
+      );
+      assert.deepEqual(hits, [], file.path);
+    }
   });
 
   it("does not rewrite a tab-indented multiline value", () => {
