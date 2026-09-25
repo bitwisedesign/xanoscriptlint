@@ -277,11 +277,13 @@ export function inlineEnumDecl(opener: string, values: string[]): string {
 export function wrappedEnumDecl(
   opener: string,
   values: string[],
-  blank = true,
+  blank = false,
+  comment?: string,
 ): string {
   const items = values.map((value) => `        ${JSON.stringify(value)}`).join("\n");
   const blankLine = blank ? "    \n" : "";
-  return `    ${opener} {
+  const commentLine = comment !== undefined ? `    // ${comment}\n` : "";
+  return `${commentLine}    ${opener} {
       values = [
 ${items}
       ]

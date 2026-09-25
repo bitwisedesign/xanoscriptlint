@@ -520,11 +520,20 @@ enum lane {
     "southbound_express_lane"
     "local_collector_road"
   ]
+}
+
+// Allowed routes for this field
+enum corridor {
+  values = [
+    "northbound_express_lane"
+    "southbound_express_lane"
+    "local_collector_road"
+  ]
 
 }
 ```
 
-The wrapped form has no commas between items. Auto-fix writes items two spaces deeper than `values`, puts `]` at the `values` indent, and inserts a whitespace-only line (spaces, matching the enum `}`) before the closing brace. Existing wrapped arrays are not restyled if they are already on the correct side of the threshold.
+The wrapped form has no commas between items. Auto-fix writes items two spaces deeper than `values` and puts `]` at the `values` indent. A whitespace-only line (spaces, matching the enum `}`) sits before the closing brace only when a `//` comment is on the line directly above the enum. Already-wrapped arrays get that separator added or removed; a locally wrong separator is push/pull churn.
 
 Override the cutoff with `wrap_at` (a positive integer, default 64):
 

@@ -1711,6 +1711,75 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     );
   });
 
+  it("wrap_enum_values flags a missing or extra separator on already-wrapped enums", () => {
+    const need = wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V64, false, "lane"));
+    const needHits = lintFile({ path: "need.xs", text: need }, config()).filter(
+      (v) => v.ruleId === "wrap_enum_values",
+    );
+    assert.equal(needHits.length, 1);
+    assert.equal(
+      needHits[0]?.message,
+      "wrapped enum values need a whitespace line before the enum's closing brace when a comment precedes the enum",
+    );
+    assert.equal(needHits[0]?.line, 5);
+    assert.equal(needHits[0]?.column, 7);
+
+    const extra = wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V64, true));
+    const extraHits = lintFile({ path: "extra.xs", text: extra }, config()).filter(
+      (v) => v.ruleId === "wrap_enum_values",
+    );
+    assert.equal(extraHits.length, 1);
+    assert.equal(
+      extraHits[0]?.message,
+      "wrapped enum values must not have a whitespace line before the enum's closing brace unless a comment precedes the enum",
+    );
+    assert.equal(extraHits[0]?.line, 4);
+
+    const withOne = wrappedEnumDecl("enum lane", ENUM_V64, true, "lane");
+    const withTwo = withOne.replace("      ]\n    \n    }", "      ]\n    \n    \n    }");
+    const extraWanted = lintFile(
+      { path: "two.xs", text: wrapInputDecls(withTwo) },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_enum_values");
+    assert.equal(extraWanted.length, 1);
+    assert.equal(
+      extraWanted[0]?.message,
+      "wrapped enum values need exactly one whitespace line before the enum's closing brace when a comment precedes the enum",
+    );
+
+    const keptComment = lintFile(
+      {
+        path: "kept-c.xs",
+        text: wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V64, true, "lane")),
+      },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_enum_values");
+    assert.equal(keptComment.length, 0);
+
+    const keptPlain = lintFile(
+      { path: "kept-p.xs", text: wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V64)) },
+      config(),
+    ).filter((v) => v.ruleId === "wrap_enum_values");
+    assert.equal(keptPlain.length, 0);
+
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+    const before = readFileSync(path.join(fixtures, "violations/wrap_enum_separator.xs"), "utf8");
+    const hits = lintFile({ path: "fixture.xs", text: before }, config()).filter(
+      (v) => v.ruleId === "wrap_enum_values",
+    );
+    assert.deepEqual(
+      hits.map((v) => v.line),
+      [5, 12, 21],
+    );
+    const kept = readFileSync(path.join(fixtures, "clean/wrap_enum_separator_kept.xs"), "utf8");
+    assert.equal(
+      lintFile({ path: "kept.xs", text: kept }, config()).some(
+        (v) => v.ruleId === "wrap_enum_values",
+      ),
+      false,
+    );
+  });
+
   it("wrap_tags_values uses compact JSON length, not value count", () => {
     assert.equal(JSON.stringify(TAGS_V63).length, 63);
     assert.equal(JSON.stringify(TAGS_V64).length, 64);
