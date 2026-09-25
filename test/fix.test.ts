@@ -1086,7 +1086,7 @@ describe("fixFile", () => {
 
   it("wraps an inline enum that already has a separator in one pass", () => {
     const withBlank = inlineEnumDecl("enum lane", ENUM_V64).replace(
-      /\n    \}$/,
+      /\n {4}\}$/,
       "\n    \n    }",
     );
     const plain = fixFile(
