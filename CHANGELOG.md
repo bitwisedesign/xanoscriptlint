@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Opt-in `statement_spacing` flags a blank line between sibling statements in `input`, `schema`, and `stack` when the previous statement is single-line and no comment is adjacent (warning). Auto-fix removes that blank. It does not insert a missing blank after a multi-line statement.
 
+### Changed
+
+- `wrap_enum_values` inserts the whitespace line before a wrapped enum's closing `}` only when a `//` comment sits directly above the enum. Already-wrapped enums with a missing or extra separator are reported and auto-fixed.
+
 ## [0.6.1] - 2026-09-23
 
 ### Fixed

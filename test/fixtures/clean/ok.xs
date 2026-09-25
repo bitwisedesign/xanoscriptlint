@@ -13,7 +13,6 @@ function "example" {
         "southbound_express_lane"
         "local_collector_road"
       ]
-    
     }
   }
 

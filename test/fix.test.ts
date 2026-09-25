@@ -1054,7 +1054,7 @@ describe("fixFile", () => {
     assert.equal(result.corrections[0]?.line, 7);
   });
 
-  it("wraps an over-threshold enum values array and inserts the whitespace line", () => {
+  it("wraps an over-threshold enum values array without a separator", () => {
     const text = wrapInputDecls(inlineEnumDecl("enum lane", ENUM_V64));
     const expected = wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V64));
     const result = fixFile({ path: "wrap.xs", text }, config());
@@ -1069,8 +1069,58 @@ describe("fixFile", () => {
     assert.equal(again.text, expected);
   });
 
+  it("wraps an over-threshold enum values array and inserts a separator when a comment precedes it", () => {
+    const text = wrapInputDecls(`    // lane\n${inlineEnumDecl("enum lane", ENUM_V64)}`);
+    const expected = wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V64, true, "lane"));
+    const result = fixFile({ path: "wrap-comment.xs", text }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.equal(result.corrections.length, 1);
+    assert.equal(result.corrections[0]?.ruleId, "wrap_enum_values");
+    assert.equal(result.corrections[0]?.line, 5);
+
+    const again = fixFile({ path: "wrap-comment.xs", text: result.text }, config());
+    assert.equal(again.changed, false);
+    assert.equal(again.text, expected);
+  });
+
+  it("wraps an inline enum that already has a separator in one pass", () => {
+    const withBlank = inlineEnumDecl("enum lane", ENUM_V64).replace(
+      /\n    \}$/,
+      "\n    \n    }",
+    );
+    const plain = fixFile(
+      { path: "inline-sep.xs", text: wrapInputDecls(withBlank) },
+      config({ only_rules: ["wrap_enum_values"] }),
+    );
+    const expectedPlain = wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V64));
+    assert.equal(plain.changed, true);
+    assert.equal(plain.text, expectedPlain);
+    const againPlain = fixFile(
+      { path: "inline-sep.xs", text: plain.text },
+      config({ only_rules: ["wrap_enum_values"] }),
+    );
+    assert.equal(againPlain.changed, false);
+
+    const commented = wrapInputDecls(`    // lane\n${withBlank}`);
+    const expectedCommented = wrapInputDecls(
+      wrappedEnumDecl("enum lane", ENUM_V64, true, "lane"),
+    );
+    const result = fixFile(
+      { path: "inline-sep-comment.xs", text: commented },
+      config({ only_rules: ["wrap_enum_values"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expectedCommented);
+    const again = fixFile(
+      { path: "inline-sep-comment.xs", text: result.text },
+      config({ only_rules: ["wrap_enum_values"] }),
+    );
+    assert.equal(again.changed, false);
+  });
+
   it("collapses an under-threshold wrapped enum values array", () => {
-    const text = wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V63));
+    const text = wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V63, true));
     const expected = wrapInputDecls(inlineEnumDecl("enum lane", ENUM_V63));
     const result = fixFile({ path: "inline.xs", text }, config());
     assert.equal(result.changed, true);
@@ -1186,6 +1236,18 @@ describe("fixFile", () => {
     const expected = wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V64));
     const crlf = source.replace(/\n/g, "\r\n");
     const result = fixFile({ path: "crlf.xs", text: crlf }, config());
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected.replace(/\n/g, "\r\n"));
+  });
+
+  it("preserves CRLF when inserting a wrapped enum separator", () => {
+    const source = wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V64, false, "lane"));
+    const expected = wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V64, true, "lane"));
+    const crlf = source.replace(/\n/g, "\r\n");
+    const result = fixFile(
+      { path: "crlf-sep.xs", text: crlf },
+      config({ only_rules: ["wrap_enum_values"] }),
+    );
     assert.equal(result.changed, true);
     assert.equal(result.text, expected.replace(/\n/g, "\r\n"));
   });
@@ -2228,6 +2290,62 @@ ${inlineTagsLine(TAGS_V64)}
       config({ only_rules: ["statement_spacing"] }),
     );
     assert.equal(again.changed, false);
+  });
+
+  it("fixes wrapped enum separators and wraps a commented over-threshold enum", () => {
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+    const before = readFileSync(path.join(fixtures, "violations/wrap_enum_separator.xs"), "utf8");
+    const after = readFileSync(path.join(fixtures, "fixed/wrap_enum_separator.xs"), "utf8");
+    const result = fixFile(
+      { path: "enum-sep.xs", text: before },
+      config({ only_rules: ["wrap_enum_values"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, after);
+    assert.deepEqual(
+      result.corrections.map((correction) => correction.line),
+      [5, 12, 21],
+    );
+    assert.equal(result.corrections[0]?.ruleId, "wrap_enum_values");
+
+    const again = fixFile(
+      { path: "enum-sep.xs", text: result.text },
+      config({ only_rules: ["wrap_enum_values"] }),
+    );
+    assert.equal(again.changed, false);
+  });
+
+  it("inserts, removes, and reduces wrapped enum separators", () => {
+    const missing = wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V64, false, "lane"));
+    const expectedMissing = wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V64, true, "lane"));
+    const inserted = fixFile(
+      { path: "need-sep.xs", text: missing },
+      config({ only_rules: ["wrap_enum_values"] }),
+    );
+    assert.equal(inserted.changed, true);
+    assert.equal(inserted.text, expectedMissing);
+    assert.equal(inserted.corrections.length, 1);
+    assert.equal(inserted.corrections[0]?.line, 5);
+
+    const extra = wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V64, true));
+    const expectedExtra = wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V64));
+    const removed = fixFile(
+      { path: "drop-sep.xs", text: extra },
+      config({ only_rules: ["wrap_enum_values"] }),
+    );
+    assert.equal(removed.changed, true);
+    assert.equal(removed.text, expectedExtra);
+    assert.equal(removed.corrections.length, 1);
+    assert.equal(removed.corrections[0]?.line, 4);
+
+    const withOne = wrappedEnumDecl("enum lane", ENUM_V64, true, "lane");
+    const withTwo = withOne.replace("      ]\n    \n    }", "      ]\n    \n    \n    }");
+    const reduced = fixFile(
+      { path: "two-sep.xs", text: wrapInputDecls(withTwo) },
+      config({ only_rules: ["wrap_enum_values"] }),
+    );
+    assert.equal(reduced.changed, true);
+    assert.equal(reduced.text, wrapInputDecls(withOne));
   });
 
   it("removes every blank in a forbidden gap and keeps CRLF endings", () => {
