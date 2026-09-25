@@ -83,7 +83,7 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 | `align_object_colons` | ⚪️ | ⚠️ | ✅ | Object entry colons must align to the longest name (Xano rewrites this on push) |
 | `collapse_assignment_values` | ⚪️ | ⚠️ | ✅ | Wrapped assignment object or array whose one-line form is under 64 UTF-8 bytes (Xano collapses it on push) |
 | `empty_function_run` | 🟢 | ❌ | — | `function.run ""` / `function.run ''` |
-| `fence_multiline_values` | ⚪️ | ⚠️ | ✅ | Multiline mock or input value not wrapped in a triple-backtick fence (Xano fences it on push); `function.run` mocks stay compact |
+| `fence_multiline_values` | ⚪️ | ⚠️ | ✅ | Multiline mock or input value not wrapped in a triple-backtick fence (Xano fences it on push); a one-line fence body is unfenced onto the key line; `function.run` mocks stay compact except when unfencing |
 | `guid_placement` | ⚪️ | ⚠️ | ✅ | `guid` with a blank line after a single-line value, or without one after a `}` / `]` closer |
 | `indentation` | ⚪️ | ⚠️ | ✅ | Code indented other than two spaces per nesting level, or a wrapped filter pipeline not at its opener's indent plus two (Xano rewrites this on push) |
 | `no_null_response` | ⚪️ | ⚠️ | ✅ | `response = null` (use `response = {}`) |

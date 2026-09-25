@@ -1059,6 +1059,65 @@ ${UNFENCED_MULTILINE_OBJECT_ENTRIES}
     assert.equal(sameLineHits[0]?.column, 11);
   });
 
+  it("fence_multiline_values flags a one-line fence body on mock and input entries", () => {
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+    const before = readFileSync(path.join(fixtures, "violations/fence_single_line.xs"), "utf8");
+    const hits = lintFile({ path: "one-line.xs", text: before }, config()).filter(
+      (v) => v.ruleId === "fence_multiline_values",
+    );
+    assert.equal(hits.length, 4);
+    assert.deepEqual(
+      hits.map((v) => v.line),
+      [10, 22, 25, 39],
+    );
+    assert.deepEqual(
+      hits.map((v) => v.column),
+      [32, 22, 22, 22],
+    );
+    assert.equal(hits[0]?.severity, "warning");
+    assert.equal(
+      hits[0]?.message,
+      "single-line mock value must not be wrapped in a ``` fence",
+    );
+    assert.equal(
+      hits[1]?.message,
+      "single-line input value must not be wrapped in a ``` fence",
+    );
+    assert.equal(hits[2]?.message, hits[1]?.message);
+    assert.equal(hits[3]?.message, hits[1]?.message);
+
+    const kept = readFileSync(path.join(fixtures, "clean/fence_single_line_kept.xs"), "utf8");
+    assert.equal(
+      lintFile({ path: "kept.xs", text: kept }, config()).some(
+        (v) => v.ruleId === "fence_multiline_values",
+      ),
+      false,
+    );
+
+    const commented = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query item {
+      mock = {
+        // xanoscriptlint:disable:next fence_multiline_values
+        "checkout empty": \`\`\`
+          []
+          \`\`\`
+      }
+    }
+  }
+
+  response = $item
+}`;
+    const suppressed = lintFile({ path: "suppressed.xs", text: commented }, config());
+    assert.equal(
+      suppressed.some((v) => v.ruleId === "fence_multiline_values"),
+      false,
+    );
+  });
+
   it("no_zero_numeric_default flags explicit zero defaults", () => {
     const hits = lintFile({ path: "zero.xs", text: ZERO_DEFAULT_XS }, config()).filter(
       (v) => v.ruleId === "no_zero_numeric_default",

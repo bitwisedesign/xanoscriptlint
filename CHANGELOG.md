@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - `wrap_enum_values` inserts the whitespace line before a wrapped enum's closing `}` only when a `//` comment sits directly above the enum. Already-wrapped enums with a missing or extra separator are reported and auto-fixed.
+- `fence_multiline_values` flags a `mock` or `input` fence whose body is exactly one nonblank line and auto-fixes it onto the key line. Multi-line bodies stay fenced even when short. `function.run` mocks are unfenced when they have a one-line body; assignment and filter-argument fences are left alone.
 
 ## [0.6.1] - 2026-09-23
 
