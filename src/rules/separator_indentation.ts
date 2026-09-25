@@ -41,7 +41,8 @@ function violationsFor(
 
 export const separatorIndentation: Rule = {
   id: "separator_indentation",
-  description: "Whitespace-only lines use the enclosing block opener's indent",
+  description:
+    'Whitespace-only lines use the enclosing block opener\'s indent; empty lines in """ strings use the opener\'s indent plus 2',
   defaultEnabled: false,
   defaultSeverity: "warning",
   lint(file: SourceFile, options: RuleOptions): Violation[] {

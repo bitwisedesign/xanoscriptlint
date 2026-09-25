@@ -15,7 +15,7 @@
 | [`no_zero_numeric_default`](#no_zero_numeric_default) | opt-in | warning | yes | Numeric defaults of `0` must be omitted |
 | [`no_zero_set_filter`](#no_zero_set_filter) | opt-in | error | yes | A `set:` filter of numeric `0` does not write the field |
 | [`quote_negative_numeric_default`](#quote_negative_numeric_default) | opt-in | warning | yes | Negative numeric defaults must be quoted |
-| [`separator_indentation`](#separator_indentation) | opt-in | warning | yes | Whitespace-only lines use the enclosing block opener's indent |
+| [`separator_indentation`](#separator_indentation) | opt-in | warning | yes | Whitespace-only lines use the enclosing block opener's indent; empty lines in `"""` strings use the opener's indent plus 2 |
 | [`statement_spacing`](#statement_spacing) | opt-in | warning | yes | Blank lines between sibling statements only after a multi-line statement or next to a comment |
 | [`tags_placement`](#tags_placement) | opt-in | warning | yes | `tags` sits immediately before the first of `llm`, `tools`, `test`, `cache`, `external_access`, or `guid`, with Xano blank-line rules |
 | [`unquote_bare_test_names`](#unquote_bare_test_names) | opt-in | warning | yes | Quoted `test` names and top-level `mock` keys with no spaces must be unquoted |
@@ -365,7 +365,19 @@ Xano does not leave a truly empty line between statements inside a block. A whit
 
 The line between the two `var` blocks is two spaces, the same indent as `stack`. A line between top-level members such as `input` and `stack` is empty. Inside a nested object that stays at its parent's indent, the whitespace line matches that object's opener line, not the dedented `}`.
 
-This rule only rewrites lines that are already whitespace-only. Inserting and removing blank lines stays with [`guid_placement`](#guid_placement), [`tags_placement`](#tags_placement), [`statement_spacing`](#statement_spacing), and [`wrap_enum_values`](#wrap_enum_values). Lines inside a triple-backtick fence or a `"""` string are left alone; [`indentation`](#indentation) shifts those with the opener.
+This rule only rewrites lines that are already whitespace-only. Inserting and removing blank lines stays with [`guid_placement`](#guid_placement), [`tags_placement`](#tags_placement), [`statement_spacing`](#statement_spacing), and [`wrap_enum_values`](#wrap_enum_values).
+
+An empty line inside a `"""` string is set to the opener line's indent plus 2, which is how Xano writes the body. Existing whitespace-only lines inside `"""` strings keep their width, because JavaScript `code` bodies keep wider ones. Backtick fence bodies are left alone.
+
+```xs
+    system_prompt: """
+      Translate the field.
+      
+      Return only the text.
+      """
+```
+
+The blank between those sentences is six spaces when the opener is at indent 4. [`indentation`](#indentation) still shifts a `"""` or fence body with its opener.
 
 The same bail conditions as [`indentation`](#indentation) apply: an unbalanced file, an unterminated fence or `"""` string, or a tab in any line's indentation is not rewritten.
 
