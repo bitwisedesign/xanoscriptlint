@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Opt-in `statement_spacing` flags a blank line between sibling statements in `input`, `schema`, and `stack` when the previous statement is single-line and no comment is adjacent (warning). Auto-fix removes that blank. It does not insert a missing blank after a multi-line statement.
+- Opt-in `wrap_assignment_arrays` flags a string-only `name = [...]` array (except `tags` and `values`) that is inline at compact JSON length 64 or longer (warning). Auto-fix writes one quoted item per line with no commas and inserts a separator after `]` when a sibling follows. Already-wrapped arrays are left to `collapse_assignment_values`. The cutoff is configurable with `wrap_at`.
 
 ### Changed
 

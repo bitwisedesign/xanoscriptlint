@@ -20,6 +20,7 @@
 | [`tags_placement`](#tags_placement) | opt-in | warning | yes | `tags` sits immediately before the first of `llm`, `tools`, `test`, `cache`, `external_access`, or `guid`, with Xano blank-line rules |
 | [`unquote_bare_test_names`](#unquote_bare_test_names) | opt-in | warning | yes | Quoted `test` names and top-level `mock` keys with no spaces must be unquoted |
 | [`unquote_enum_defaults`](#unquote_enum_defaults) | opt-in | warning | yes | Quoted enum defaults that are bare identifiers must be unquoted |
+| [`wrap_assignment_arrays`](#wrap_assignment_arrays) | opt-in | warning | yes | Assignment string arrays wrap when compact JSON length reaches 64 |
 | [`wrap_enum_values`](#wrap_enum_values) | opt-in | warning | yes | Enum `values` arrays wrap when compact JSON length reaches 64 |
 | [`wrap_piped_values`](#wrap_piped_values) | opt-in | warning | yes | Assignment filter pipelines wrap at pipe length 34 or 3+ filters; a grouped base stays inline |
 | [`wrap_tags_values`](#wrap_tags_values) | opt-in | warning | yes | Declaration `tags` arrays wrap when compact JSON length reaches 64 |
@@ -56,9 +57,9 @@ Auto-fixable with `--fix`: spaces before the colon are inserted or removed until
 
 Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
 
-Xano collapses an assignment's object or array onto one line when that line — indent, the `name =` or `return` prefix, and the inline value — would be shorter than 64 UTF-8 bytes. A wrapped value that already fills 64 or more bytes stays wrapped. Long one-liners are left as-is; Xano does not wrap those.
+Xano collapses an assignment's object or array onto one line when that line — indent, the `name =` or `return` prefix, and the inline value — would be shorter than 64 UTF-8 bytes. A wrapped value that already fills 64 or more bytes stays wrapped. Long one-liners are left as-is, except string-only assignment arrays, which [`wrap_assignment_arrays`](#wrap_assignment_arrays) expands at compact JSON length 64.
 
-The threshold is the reconstructed line's UTF-8 byte length, not visible columns and not the number of entries. Multi-byte characters count as more than one: `{Authorization: "••••••••••••"}` is 31 characters and 55 bytes, while the reconstructed line — six spaces of indent plus `value = {Authorization: "••••••••••••"}` — is 45 characters and 69 bytes, so a wrapped form of that value stays wrapped. In the same pull Xano left a 69-byte sibling inline (`value = {"X-Signature": "••••••••••••"}`), so this rule only flags wrapped → inline; it does not expand long one-liners. Nested containers are left as-is: only the outermost `name = { ... }` / `name = [ ... ]` / `return { ... }` is checked. Enum `values` arrays are owned by [`wrap_enum_values`](#wrap_enum_values). Declaration `tags` arrays are owned by [`wrap_tags_values`](#wrap_tags_values). A container followed by a filter pipe (`value = [...]|join:"/"`) is skipped, because Xano does not reformat those.
+The threshold is the reconstructed line's UTF-8 byte length, not visible columns and not the number of entries. Multi-byte characters count as more than one: `{Authorization: "••••••••••••"}` is 31 characters and 55 bytes, while the reconstructed line — six spaces of indent plus `value = {Authorization: "••••••••••••"}` — is 45 characters and 69 bytes, so a wrapped form of that value stays wrapped. In the same pull Xano left a 69-byte sibling inline (`value = {"X-Signature": "••••••••••••"}`), so this rule only flags wrapped → inline; it does not expand long one-liners. Nested containers are left as-is: only the outermost `name = { ... }` / `name = [ ... ]` / `return { ... }` is checked. Enum `values` arrays are owned by [`wrap_enum_values`](#wrap_enum_values). Declaration `tags` arrays are owned by [`wrap_tags_values`](#wrap_tags_values). String-only assignment arrays such as `output` and `value` are expanded by [`wrap_assignment_arrays`](#wrap_assignment_arrays). A container followed by a filter pipe (`value = [...]|join:"/"`) is skipped, because Xano does not reformat those.
 
 ```xs
 input = {event_type: "manual", unit: "sets", delta: 3}
@@ -515,6 +516,39 @@ A value that is not a bare identifier stays quoted. Unquoting `"application/json
 The declaration's opening `{` must be on the same line. Comment lines and the bodies of `"""` strings and triple-backtick fences are ignored.
 
 Auto-fixable with `--fix`: the quotes are dropped. Spacing around `=` is preserved.
+
+## wrap_assignment_arrays
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
+
+Xano wraps a string-only `name = [...]` array when the compact JSON form — `["a","b"]`, quotes and commas, no spaces — is 64 characters or longer. Shorter arrays stay on one line. Already-wrapped arrays are left as-is; collapsing belongs to [`collapse_assignment_values`](#collapse_assignment_values). The pulled file is canonical; a locally inline long array is push/pull churn.
+
+The rule covers any assignment name except `tags` and `values`, which belong to [`wrap_tags_values`](#wrap_tags_values) and [`wrap_enum_values`](#wrap_enum_values). Typical owners are `output` and `value`. Arrays that are not exclusively quoted strings, arrays followed by a filter pipe, arrays that contain comments, and tab-indented arrays are left alone.
+
+```xs
+          output = ["id", "status"]
+
+          output = [
+            "itemsReceived"
+            "curPage"
+            "nextPage"
+            "items.id"
+            "items.content_uuid"
+          ]
+
+          mock = {empty: {id: 1}}
+```
+
+The wrapped form has no commas between items. Auto-fix writes items two spaces deeper than the key and puts `]` at the key's indent. When the next line is a sibling statement — not blank and not a closer (`}` or `} as $x`) — a whitespace-only separator is inserted after `]`, at the key's indent minus 2, matching [`separator_indentation`](#separator_indentation).
+
+Keep `wrap_at` in sync with [`collapse_assignment_values`](#collapse_assignment_values). If this rule's cutoff is lower, that rule can fold the wrapped form back onto one line.
+
+Override the cutoff with `wrap_at` (a positive integer, default 64):
+
+```yaml
+wrap_assignment_arrays:
+  wrap_at: 64
+```
 
 ## wrap_enum_values
 

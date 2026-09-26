@@ -2,6 +2,7 @@ export const DEFAULT_WRAP_AT = 64;
 
 export const TAGS_OPENER = /^(\s*)tags\s*=\s*\[/;
 export const VALUES_OPENER = /^(\s*)values\s*=\s*\[/;
+export const ASSIGNMENT_ARRAY_OPENER = /^(\s*)([A-Za-z_][A-Za-z0-9_]*)\s*=\s*\[/;
 
 export interface StringArraySite {
   kind: "inline" | "wrapped";

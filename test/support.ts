@@ -175,6 +175,33 @@ export function wrappedTagsBlock(tags: string[]): string {
   return `  tags = [\n${items}\n  ]`;
 }
 
+export const OUTPUT_V63 = ["itemsReceived", "curPage", "nextPage", "x".repeat(22)];
+export const OUTPUT_V64 = ["itemsReceived", "curPage", "nextPage", "x".repeat(23)];
+
+export function inlineOutputLine(tokens: string[]): string {
+  return `      output = [${tokens.map((token) => JSON.stringify(token)).join(", ")}]`;
+}
+
+export function wrappedOutputBlock(tokens: string[]): string {
+  const items = tokens.map((token) => `        ${JSON.stringify(token)}`).join("\n");
+  return `      output = [\n${items}\n      ]`;
+}
+
+export function wrapDbQuery(body: string): string {
+  return `function "example" {
+  input {
+  }
+
+  stack {
+    db.query item {
+${body}
+    } as $item
+  }
+
+  response = $item
+}`;
+}
+
 export const ASSIGN_LINE_62 = "x".repeat(41);
 export const ASSIGN_LINE_63 = "x".repeat(42);
 export const ASSIGN_LINE_64 = "x".repeat(43);
