@@ -486,6 +486,11 @@ export function planIndent(lines: string[]): IndentPlan {
         separator[i] =
           openerIndent === null ? Math.max(0, 2 * depth - 2 + chainOffset + nest) : Math.max(0, openerIndent);
       }
+    } else if (startMode === "triple" && line.length === 0 && opaqueOpen !== null) {
+      const base = expected[opaqueOpen];
+      if (base !== null && base !== undefined) {
+        separator[i] = base + 2;
+      }
     }
     if (startMode === "code" && scanned.mode === "triple") {
       opaqueOpen = i;

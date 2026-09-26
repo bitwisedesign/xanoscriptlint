@@ -3632,6 +3632,71 @@ input {
     );
   });
 
+  it("separator_indentation flags empty lines inside a \"\"\" body", () => {
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+    const before = readFileSync(
+      path.join(fixtures, "violations/separator_triple_empty.xs"),
+      "utf8",
+    );
+    const opted = { opt_in_rules: ["separator_indentation"] };
+    assert.deepEqual(separatorHits(before), []);
+    const hits = separatorHits(before, opted);
+    assert.deepEqual(
+      hits.map((v) => v.line),
+      [6, 11, 25],
+    );
+    assert.equal(hits[0]?.message, "expected separator width 6, found 0");
+    assert.equal(hits[1]?.message, "expected separator width 6, found 0");
+    assert.equal(hits[2]?.message, "expected separator width 8, found 0");
+    assert.equal(hits[0]?.severity, "warning");
+
+    const kept = readFileSync(
+      path.join(fixtures, "clean/separator_triple_whitespace_kept.xs"),
+      "utf8",
+    );
+    assert.deepEqual(separatorHits(kept, opted), []);
+  });
+
+  it("separator_indentation skips an unterminated \"\"\" string and honors a disable around an empty body line", () => {
+    const opted = { opt_in_rules: ["separator_indentation"] };
+    const unterminated = `function "example" {
+  input {
+  }
+
+  stack {
+    var $prompt {
+      value = """
+        Translate.
+
+        Keep this gap.
+    }
+  }
+
+  response = $ok
+}`;
+    assert.deepEqual(separatorHits(unterminated, opted), []);
+
+    const suppressed = `function "example" {
+  input {
+  }
+
+  stack {
+    // xanoscriptlint:disable separator_indentation
+    var $prompt {
+      value = """
+        Translate.
+
+        Keep this gap.
+        """
+    }
+    // xanoscriptlint:enable separator_indentation
+  }
+
+  response = $ok
+}`;
+    assert.deepEqual(separatorHits(suppressed, opted), []);
+  });
+
   it("statement_spacing is opt-in and flags a blank after a single-line sibling", () => {
     const before = readFileSync(
       path.join(spacingFixtures, "violations/statement_spacing.xs"),

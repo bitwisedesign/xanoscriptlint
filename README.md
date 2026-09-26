@@ -93,7 +93,7 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 | `no_zero_numeric_default` | ⚪️ | ⚠️ | ✅ | Explicit numeric default of `0` (Xano strips it on push) |
 | `no_zero_set_filter` | ⚪️ | ❌ | ✅ | `set:` of numeric `0` (does not write the field; seed it on the object literal) |
 | `quote_negative_numeric_default` | ⚪️ | ⚠️ | ✅ | Unquoted negative numeric default (Xano quotes it on push) |
-| `separator_indentation` | ⚪️ | ⚠️ | ✅ | Whitespace-only line whose width is not the enclosing block opener's indent (Xano rewrites this on push) |
+| `separator_indentation` | ⚪️ | ⚠️ | ✅ | Whitespace-only line whose width is not the enclosing block opener's indent, or an empty line inside a `"""` string that is not the opener's indent plus 2 (Xano rewrites this on push) |
 | `statement_spacing` | ⚪️ | ⚠️ | ✅ | Blank line between sibling statements when the previous one is single-line and no comment is adjacent (Xano removes it on push) |
 | `tags_placement` | ⚪️ | ⚠️ | ✅ | `tags` not immediately before the first of `llm`, `tools`, `test`, `cache`, `external_access`, or `guid`, or with the wrong blank lines around it (Xano rewrites this on push) |
 | `unquote_bare_test_names` | ⚪️ | ⚠️ | ✅ | Quoted `test "name"` or top-level `mock` key `"name"` when `name` has no spaces (Xano strips those quotes on push) |

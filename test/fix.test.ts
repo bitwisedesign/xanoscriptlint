@@ -2439,6 +2439,65 @@ ${inlineTagsLine(TAGS_V64)}
     assert.equal(again.changed, false);
   });
 
+  it("fills empty lines inside a \"\"\" body to the opener indent plus two", () => {
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+    const before = readFileSync(
+      path.join(fixtures, "violations/separator_triple_empty.xs"),
+      "utf8",
+    );
+    const after = readFileSync(path.join(fixtures, "fixed/separator_triple_empty.xs"), "utf8");
+    const opted = { only_rules: ["separator_indentation"] };
+    const result = fixFile({ path: "triple-empty.xs", text: before }, config(opted));
+    assert.equal(result.changed, true);
+    assert.equal(result.text, after);
+    assert.deepEqual(
+      result.corrections.map((correction) => correction.line),
+      [6, 11, 25],
+    );
+    assert.equal(result.corrections[0]?.ruleId, "separator_indentation");
+    const again = fixFile({ path: "triple-empty.xs", text: result.text }, config(opted));
+    assert.equal(again.changed, false);
+  });
+
+  it("reindents a \"\"\" opener and then fills empty body lines in one pass", () => {
+    const text = `agent example {
+  llm = {
+    type         : "openai"
+  system_prompt: """
+    Translate.
+
+          
+    Return only the text.
+    """
+  }
+}`;
+    const expected = `agent example {
+  llm = {
+    type         : "openai"
+    system_prompt: """
+      Translate.
+      
+          
+      Return only the text.
+      """
+  }
+}`;
+    const result = fixFile(
+      { path: "triple-both.xs", text },
+      config({ only_rules: ["indentation", "separator_indentation"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.equal(
+      result.corrections.some((c) => c.ruleId === "indentation"),
+      true,
+    );
+    assert.equal(
+      result.corrections.some((c) => c.ruleId === "separator_indentation"),
+      true,
+    );
+  });
+
   it("reindents code and then rewidths separators in one pass", () => {
     const text = `function "example" {
   input {
