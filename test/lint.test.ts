@@ -127,6 +127,15 @@ describe("fixture linting", () => {
       true,
     );
 
+    const wrapAssignArrays = {
+      path: path.join(fixtures, "violations/wrap_assignment_arrays.xs"),
+      text: readFileSync(path.join(fixtures, "violations/wrap_assignment_arrays.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([wrapAssignArrays], config).some((v) => v.ruleId === "wrap_assignment_arrays"),
+      true,
+    );
+
     const tagsPlacement = {
       path: path.join(fixtures, "violations/tags_placement.xs"),
       text: readFileSync(path.join(fixtures, "violations/tags_placement.xs"), "utf8"),

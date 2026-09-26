@@ -20,8 +20,10 @@ import {
   TAGS_AGENT,
   TAGS_ADVISOR,
   TAGS_LEDGER,
+  OUTPUT_V64,
   inlineTagsLine,
   wrappedTagsBlock,
+  inlineOutputLine,
   inlineEnumDecl,
   wrappedEnumDecl,
   FENCED_INPUT_ARRAY_XS,
@@ -2610,6 +2612,59 @@ ${inlineTagsLine(TAGS_V64)}
       config({ only_rules: ["wrap_enum_values"] }),
     );
     assert.equal(again.changed, false);
+  });
+
+  it("wraps over-threshold assignment arrays and inserts a sibling separator", () => {
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+    const before = readFileSync(
+      path.join(fixtures, "violations/wrap_assignment_arrays.xs"),
+      "utf8",
+    );
+    const after = readFileSync(path.join(fixtures, "fixed/wrap_assignment_arrays.xs"), "utf8");
+    const result = fixFile(
+      { path: "wrap-assign.xs", text: before },
+      config({ only_rules: ["wrap_assignment_arrays"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, after);
+    assert.deepEqual(
+      result.corrections.map((correction) => correction.line),
+      [9, 14, 20, 25],
+    );
+    assert.equal(result.corrections[0]?.ruleId, "wrap_assignment_arrays");
+
+    const again = fixFile(
+      { path: "wrap-assign.xs", text: result.text },
+      config({ only_rules: ["wrap_assignment_arrays"] }),
+    );
+    assert.equal(again.changed, false);
+
+    const allRules = builtinRules.filter((rule) => !rule.defaultEnabled).map((rule) => rule.id);
+    const withAll = fixFile(
+      { path: "wrap-assign.xs", text: after },
+      config({ opt_in_rules: allRules }),
+    );
+    assert.equal(withAll.changed, false);
+    assert.equal(withAll.text, after);
+  });
+
+  it("does not rewrite a suppressed wrap_assignment_arrays violation", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query item {
+      // xanoscriptlint:disable:next wrap_assignment_arrays
+${inlineOutputLine(OUTPUT_V64)}
+    } as $item
+  }
+
+  response = $item
+}`;
+    const result = fixFile({ path: "suppressed-assign.xs", text }, config());
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
   });
 
   it("inserts, removes, and reduces wrapped enum separators", () => {

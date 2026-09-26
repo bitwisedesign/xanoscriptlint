@@ -18,6 +18,7 @@ import { unquoteBareTestNames } from "./unquote_bare_test_names.js";
 import { unquoteEnumDefaults } from "./unquote_enum_defaults.js";
 import { wrapEnumValues } from "./wrap_enum_values.js";
 import { wrapPipedValues } from "./wrap_piped_values.js";
+import { wrapAssignmentArrays } from "./wrap_assignment_arrays.js";
 import { wrapTagsValues } from "./wrap_tags_values.js";
 import type { Rule } from "./types.js";
 
@@ -31,6 +32,7 @@ export const builtinRules: Rule[] = [
   wrapEnumValues,
   wrapPipedValues,
   wrapTagsValues,
+  wrapAssignmentArrays,
   tagsPlacement,
   emptyFunctionRun,
   guidPlacement,

@@ -81,6 +81,9 @@ no_trailing_newline:
 collapse_assignment_values:
   wrap_at: 64
 
+wrap_assignment_arrays:
+  wrap_at: 64
+
 wrap_enum_values:
   wrap_at: 64
 
@@ -92,7 +95,7 @@ wrap_piped_values:
   filter_limit: 3
 ```
 
-Severity is `error` or `warning`. `wrap_enum_values` and `wrap_tags_values` also accept `wrap_at`, a positive integer (default 64) for the compact JSON length at which an enum `values` array or declaration `tags` array must wrap. `collapse_assignment_values` accepts `wrap_at` as the line length below which a wrapped assignment is collapsed. `wrap_piped_values` accepts `wrap_at` (default 34) for the pipe-portion byte length at which a filter chain wraps, and `filter_limit` (default 3) for the filter count that wraps even when the pipe portion is shorter.
+Severity is `error` or `warning`. `wrap_assignment_arrays`, `wrap_enum_values`, and `wrap_tags_values` also accept `wrap_at`, a positive integer (default 64) for the compact JSON length at which a string array must wrap. Keep `wrap_assignment_arrays.wrap_at` equal to `collapse_assignment_values.wrap_at`; a lower cutoff can fight that collapse rule. `collapse_assignment_values` accepts `wrap_at` as the line length below which a wrapped assignment is collapsed. `wrap_piped_values` accepts `wrap_at` (default 34) for the pipe-portion byte length at which a filter chain wraps, and `filter_limit` (default 3) for the filter count that wraps even when the pipe portion is shorter.
 
 ## Custom rules
 

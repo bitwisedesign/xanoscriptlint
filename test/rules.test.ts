@@ -16,8 +16,13 @@ import {
   TAGS_V64,
   TAGS_SHORT,
   TAGS_AGENT,
+  OUTPUT_V63,
+  OUTPUT_V64,
   inlineTagsLine,
   wrappedTagsBlock,
+  inlineOutputLine,
+  wrappedOutputBlock,
+  wrapDbQuery,
   inlineEnumDecl,
   wrappedEnumDecl,
   EMPTY_RUN_XS,
@@ -124,6 +129,15 @@ function tagsHits(text: string, overrides: Parameters<typeof resolveConfig>[0] =
 function wrapTagsHits(text: string, overrides: Parameters<typeof resolveConfig>[0] = {}) {
   return lintFile({ path: "a.xs", text }, config(overrides)).filter(
     (v) => v.ruleId === "wrap_tags_values",
+  );
+}
+
+function wrapAssignArrayHits(
+  text: string,
+  overrides: Parameters<typeof resolveConfig>[0] = {},
+) {
+  return lintFile({ path: "a.xs", text }, config(overrides)).filter(
+    (v) => v.ruleId === "wrap_assignment_arrays",
   );
 }
 
@@ -1950,6 +1964,133 @@ ${inlineTagsLine(TAGS_SHORT)}
 }`,
       { wrap_tags_values: { wrap_at: 1 } },
     );
+    assert.equal(raised.length, 1);
+  });
+
+  it("wrap_assignment_arrays uses compact JSON length and only expands", () => {
+    assert.equal(JSON.stringify(OUTPUT_V63).length, 63);
+    assert.equal(JSON.stringify(OUTPUT_V64).length, 64);
+
+    const inline63 = wrapAssignArrayHits(wrapDbQuery(inlineOutputLine(OUTPUT_V63)));
+    assert.equal(inline63.length, 0);
+
+    const inline64 = wrapAssignArrayHits(wrapDbQuery(inlineOutputLine(OUTPUT_V64)));
+    assert.equal(inline64.length, 1);
+    assert.equal(inline64[0]?.line, 7);
+    assert.equal(inline64[0]?.column, 7);
+    assert.equal(inline64[0]?.severity, "warning");
+    assert.equal(
+      inline64[0]?.message,
+      "output array of compact length 64 must be wrapped (threshold 64)",
+    );
+
+    const value64 = wrapAssignArrayHits(
+      wrapVarValue(`[${OUTPUT_V64.map((token) => JSON.stringify(token)).join(", ")}]`),
+    );
+    assert.equal(value64.length, 1);
+    assert.equal(value64[0]?.line, 7);
+    assert.equal(
+      value64[0]?.message,
+      "value array of compact length 64 must be wrapped (threshold 64)",
+    );
+
+    const wrapped63 = wrapAssignArrayHits(wrapDbQuery(wrappedOutputBlock(OUTPUT_V63)));
+    assert.equal(wrapped63.length, 0);
+
+    const wrapped64 = wrapAssignArrayHits(wrapDbQuery(wrappedOutputBlock(OUTPUT_V64)));
+    assert.equal(wrapped64.length, 0);
+
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+    const before = readFileSync(path.join(fixtures, "violations/wrap_assignment_arrays.xs"), "utf8");
+    assert.deepEqual(
+      wrapAssignArrayHits(before).map((v) => v.line),
+      [9, 14, 20, 25],
+    );
+    const kept = readFileSync(
+      path.join(fixtures, "clean/wrap_assignment_arrays_kept.xs"),
+      "utf8",
+    );
+    assert.equal(wrapAssignArrayHits(kept).length, 0);
+  });
+
+  it("wrap_assignment_arrays skips owned, piped, non-string, fenced, tabbed, and escaped arrays", () => {
+    const tags = `function "example" {
+  response = $ok
+${inlineTagsLine(TAGS_V64)}
+  guid = "g1"
+}`;
+    assert.equal(wrapAssignArrayHits(tags).length, 0);
+
+    const values = wrapInputDecls(inlineEnumDecl("enum lane", ENUM_V64));
+    assert.equal(wrapAssignArrayHits(values).length, 0);
+
+    const piped = wrapVarValue(
+      `[${OUTPUT_V64.map((token) => JSON.stringify(token)).join(", ")}]|join:","`,
+    );
+    assert.equal(wrapAssignArrayHits(piped).length, 0);
+
+    const numeric = wrapVarValue("[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]");
+    assert.equal(wrapAssignArrayHits(numeric, { wrap_assignment_arrays: { wrap_at: 1 } }).length, 0);
+
+    const mixed = wrapDbQuery('      output = ["itemsReceived", 1, "curPage"]');
+    assert.equal(wrapAssignArrayHits(mixed, { wrap_assignment_arrays: { wrap_at: 1 } }).length, 0);
+
+    const objectItems = wrapVarValue("[{id: 1}, {id: 2}, {id: 3}]");
+    assert.equal(
+      wrapAssignArrayHits(objectItems, { wrap_assignment_arrays: { wrap_at: 1 } }).length,
+      0,
+    );
+
+    const commented = wrapDbQuery(`      output = [
+        "itemsReceived"
+        // not a value
+        "curPage"
+      ]`);
+    assert.equal(wrapAssignArrayHits(commented, { wrap_assignment_arrays: { wrap_at: 1 } }).length, 0);
+
+    const fenced = `function "example" {
+  input {
+  }
+
+  stack {
+    var $ok {
+      value = {
+        system_prompt: """
+          output = [${OUTPUT_V64.map((token) => JSON.stringify(token)).join(", ")}]
+          """
+      }
+    }
+  }
+
+  response = $ok
+}`;
+    assert.equal(wrapAssignArrayHits(fenced).length, 0);
+
+    const tabbed = wrapDbQuery(
+      `\toutput = [${OUTPUT_V64.map((token) => JSON.stringify(token)).join(", ")}]`,
+    );
+    assert.equal(wrapAssignArrayHits(tabbed).length, 0);
+
+    const escaped = wrapDbQuery(
+      '      output = ["alpha\\n", "bravo\\t", "x\\u0041", "cr\\r", "bs\\b", "ff\\f"]',
+    );
+    assert.equal(wrapAssignArrayHits(escaped, { wrap_assignment_arrays: { wrap_at: 1 } }).length, 0);
+  });
+
+  it("wrap_assignment_arrays honors disabled_rules, severity, and wrap_at", () => {
+    const text = wrapDbQuery(inlineOutputLine(OUTPUT_V64));
+    const disabled = wrapAssignArrayHits(text, { disabled_rules: ["wrap_assignment_arrays"] });
+    assert.equal(disabled.length, 0);
+
+    const asError = wrapAssignArrayHits(text, { wrap_assignment_arrays: "error" });
+    assert.equal(asError[0]?.severity, "error");
+
+    const lowered = wrapAssignArrayHits(text, { wrap_assignment_arrays: { wrap_at: 80 } });
+    assert.equal(lowered.length, 0);
+
+    const raised = wrapAssignArrayHits(wrapDbQuery('      output = ["id"]'), {
+      wrap_assignment_arrays: { wrap_at: 1 },
+    });
     assert.equal(raised.length, 1);
   });
 
