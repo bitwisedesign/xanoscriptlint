@@ -3208,6 +3208,12 @@ ${inlineTagsLine(TAGS_SHORT)}
   external_access = false
   guid = "g1"
 }`,
+      `query "cms/page_snapshot" verb=GET {
+  response = $page
+${inlineTagsLine(TAGS_SHORT)}
+  history = false
+  guid = "g1"
+}`,
     ];
     for (const text of samples) {
       assert.deepEqual(tagsHits(text), [], text);
@@ -3235,7 +3241,7 @@ ${wrappedTagsBlock(TAGS_V64)}
     );
   });
 
-  it("tags_placement flags tags after guid, test, llm, tools, cache, or external_access", () => {
+  it("tags_placement flags tags after guid, test, llm, tools, cache, external_access, or history", () => {
     const afterGuid = `function "example" {
   response = $ok
   guid = "g1"
@@ -3306,6 +3312,17 @@ ${inlineTagsLine(TAGS_SHORT)}
     assert.equal(
       tagsHits(afterExternalAccess)[0]?.message,
       "tags must be placed immediately before `external_access`",
+    );
+
+    const afterHistory = `query "cms/page_snapshot" verb=GET {
+  response = $page
+  history = false
+${inlineTagsLine(TAGS_SHORT)}
+  guid = "g1"
+}`;
+    assert.equal(
+      tagsHits(afterHistory)[0]?.message,
+      "tags must be placed immediately before `history`",
     );
   });
 

@@ -2089,6 +2089,94 @@ ${wrappedTagsBlock(TAGS_V64)}
     assert.equal(again.text, expected);
   });
 
+  it("moves tags before history", () => {
+    const text = `query "cms/page_snapshot" verb=GET {
+  response = $page
+  history = false
+${inlineTagsLine(TAGS_SHORT)}
+  guid = "g1"
+}`;
+    const expected = `query "cms/page_snapshot" verb=GET {
+  response = $page
+${inlineTagsLine(TAGS_SHORT)}
+  history = false
+  guid = "g1"
+}`;
+    const result = fixFile(
+      { path: "history-tags.xs", text },
+      config({ only_rules: ["tags_placement"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.equal(result.corrections[0]?.ruleId, "tags_placement");
+
+    const again = fixFile(
+      { path: "history-tags.xs", text: result.text },
+      config({ only_rules: ["tags_placement"] }),
+    );
+    assert.equal(again.changed, false);
+    assert.equal(again.text, expected);
+  });
+
+  it("inserts a blank line after a wrapped tags array before history", () => {
+    const text = `query "cms/page_snapshot" verb=GET {
+  response = $page
+${wrappedTagsBlock(TAGS_V64)}
+  history = false
+  guid = "g1"
+}`;
+    const expected = `query "cms/page_snapshot" verb=GET {
+  response = $page
+${wrappedTagsBlock(TAGS_V64)}
+
+  history = false
+  guid = "g1"
+}`;
+    const result = fixFile(
+      { path: "history-wrapped-tags.xs", text },
+      config({ only_rules: ["tags_placement"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+
+    const again = fixFile(
+      { path: "history-wrapped-tags.xs", text: result.text },
+      config({ only_rules: ["tags_placement"] }),
+    );
+    assert.equal(again.changed, false);
+    assert.equal(again.text, expected);
+  });
+
+  it("moves tags before history when history precedes external_access", () => {
+    const text = `query "cms/page_snapshot" verb=GET {
+  response = $page
+  history = false
+  external_access = false
+${inlineTagsLine(TAGS_SHORT)}
+  guid = "g1"
+}`;
+    const expected = `query "cms/page_snapshot" verb=GET {
+  response = $page
+${inlineTagsLine(TAGS_SHORT)}
+  history = false
+  external_access = false
+  guid = "g1"
+}`;
+    const result = fixFile(
+      { path: "history-before-external-access-tags.xs", text },
+      config({ only_rules: ["tags_placement"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+
+    const again = fixFile(
+      { path: "history-before-external-access-tags.xs", text: result.text },
+      config({ only_rules: ["tags_placement"] }),
+    );
+    assert.equal(again.changed, false);
+    assert.equal(again.text, expected);
+  });
+
   it("moves tags before tests and leaves guid spacing intact", () => {
     const text = `function "Widgets/cascade_complete" {
   input {
