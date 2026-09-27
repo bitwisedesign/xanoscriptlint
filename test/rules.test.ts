@@ -66,6 +66,12 @@ import {
   wrapReturn,
   wrapVarValue,
   wrapTestBlocks,
+  EXPECT_EQUAL_NULL_CLEAN_XS,
+  EXPECT_EQUAL_NULL_COUNT_XS,
+  EXPECT_EQUAL_NULL_NOT_EQUAL_XS,
+  EXPECT_EQUAL_NULL_ONE_LINE_XS,
+  EXPECT_EQUAL_NULL_WORKFLOW_XS,
+  EXPECT_EQUAL_NULL_XS,
   BARE_TEST_NAME_XS,
   BARE_TEST_NAME_FIXED_XS,
   inlinePiped,
@@ -416,6 +422,163 @@ describe("built-in rules", () => {
         """`);
     const inTriple = lintFile({ path: "triple.xs", text: triple }, config(opted)).filter(
       (v) => v.ruleId === "no_zero_set_filter",
+    );
+    assert.equal(inTriple.length, 0);
+  });
+
+  it("no_expect_equal_null is opt-in, defaults to error, and flags to_equal value = null", () => {
+    const off = lintFile({ path: "e.xs", text: EXPECT_EQUAL_NULL_XS }, config());
+    assert.equal(
+      off.some((v) => v.ruleId === "no_expect_equal_null"),
+      false,
+    );
+
+    const hits = lintFile(
+      { path: "e.xs", text: EXPECT_EQUAL_NULL_XS },
+      config({ opt_in_rules: ["no_expect_equal_null"] }),
+    ).filter((v) => v.ruleId === "no_expect_equal_null");
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.severity, "error");
+    assert.equal(hits[0]?.line, 12);
+    assert.equal(hits[0]?.column, 5);
+    assert.equal(
+      hits[0]?.message,
+      "expect.to_equal with value = null is verbose; use expect.to_not_be_defined ($response.coupon_code), or expect.to_be_null ($response.coupon_code) when the key must be present",
+    );
+
+    const warned = lintFile(
+      { path: "e.xs", text: EXPECT_EQUAL_NULL_XS },
+      config({ opt_in_rules: ["no_expect_equal_null"], no_expect_equal_null: "warning" }),
+    ).filter((v) => v.ruleId === "no_expect_equal_null");
+    assert.equal(warned[0]?.severity, "warning");
+  });
+
+  it("no_expect_equal_null flags to_not_equal, one-line, and non-$response arguments", () => {
+    const opted = { opt_in_rules: ["no_expect_equal_null"] } as const;
+
+    const notEqual = lintFile(
+      { path: "ne.xs", text: EXPECT_EQUAL_NULL_NOT_EQUAL_XS },
+      config(opted),
+    ).filter((v) => v.ruleId === "no_expect_equal_null");
+    assert.equal(notEqual.length, 1);
+    assert.equal(notEqual[0]?.line, 12);
+    assert.equal(
+      notEqual[0]?.message,
+      "expect.to_not_equal with value = null is verbose; use expect.to_be_defined ($response.shipped_at), or expect.to_not_be_null ($response.shipped_at) when the key must be present",
+    );
+
+    const oneLine = lintFile(
+      { path: "one.xs", text: EXPECT_EQUAL_NULL_ONE_LINE_XS },
+      config(opted),
+    ).filter((v) => v.ruleId === "no_expect_equal_null");
+    assert.equal(oneLine.length, 1);
+    assert.equal(oneLine[0]?.line, 12);
+    assert.equal(oneLine[0]?.column, 5);
+    assert.equal(
+      oneLine[0]?.message,
+      "expect.to_equal with value = null is verbose; use expect.to_not_be_defined ($response.coupon_code), or expect.to_be_null ($response.coupon_code) when the key must be present",
+    );
+
+    const workflow = lintFile(
+      { path: "wf.xs", text: EXPECT_EQUAL_NULL_WORKFLOW_XS },
+      config(opted),
+    ).filter((v) => v.ruleId === "no_expect_equal_null");
+    assert.equal(workflow.length, 1);
+    assert.equal(workflow[0]?.line, 7);
+    assert.match(workflow[0]?.message ?? "", /\$endpoint1\.order_id/);
+
+    const count = lintFile(
+      { path: "count.xs", text: EXPECT_EQUAL_NULL_COUNT_XS },
+      config(opted),
+    ).filter((v) => v.ruleId === "no_expect_equal_null");
+    assert.equal(count.length, 1);
+    assert.match(count[0]?.message ?? "", /\$items\|count/);
+  });
+
+  it("no_expect_equal_null skips non-null values, extra body lines, comments, and dedicated assertions", () => {
+    const opted = { opt_in_rules: ["no_expect_equal_null"] } as const;
+
+    const skipped = [
+      wrapTestBlocks(`  test "keeps quoted null" {
+    expect.to_equal ($response.coupon_code) {
+      value = "null"
+    }
+  }
+`),
+      wrapTestBlocks(`  test "keeps zero" {
+    expect.to_equal ($response.retries) {
+      value = 0
+    }
+  }
+`),
+      wrapTestBlocks(`  test "keeps false" {
+    expect.to_equal ($response.done) {
+      value = false
+    }
+  }
+`),
+      wrapTestBlocks(`  test "keeps variable" {
+    expect.to_equal ($response.coupon_code) {
+      value = $x
+    }
+  }
+`),
+      wrapTestBlocks(`  test "keeps piped null" {
+    expect.to_equal ($response.coupon_code) {
+      value = null|first_notnull:0
+    }
+  }
+`),
+      wrapTestBlocks(`  test "keeps extra properties" {
+    expect.to_equal ($response.coupon_code) {
+      value = null
+      description = "omitted"
+    }
+  }
+`),
+      EXPECT_EQUAL_NULL_CLEAN_XS,
+    ];
+    for (const text of skipped) {
+      const hits = lintFile({ path: "ok.xs", text }, config(opted)).filter(
+        (v) => v.ruleId === "no_expect_equal_null",
+      );
+      assert.equal(hits.length, 0, text);
+    }
+
+    const commented = lintFile(
+      {
+        path: "c.xs",
+        text: wrapTestBlocks(`  test "commented" {
+    // expect.to_equal ($response.coupon_code) {
+    //   value = null
+    // }
+  }
+`),
+      },
+      config(opted),
+    );
+    assert.equal(
+      commented.some((v) => v.ruleId === "no_expect_equal_null"),
+      false,
+    );
+
+    const fenced = wrapMockBlock(`        "checkout scenario": \`\`\`
+          expect.to_equal ($response.coupon_code) {
+            value = null
+          }
+          \`\`\``);
+    const inFence = lintFile({ path: "fence.xs", text: fenced }, config(opted)).filter(
+      (v) => v.ruleId === "no_expect_equal_null",
+    );
+    assert.equal(inFence.length, 0);
+
+    const triple = wrapVarValue(`"""
+        expect.to_equal ($response.coupon_code) {
+          value = null
+        }
+        """`);
+    const inTriple = lintFile({ path: "triple.xs", text: triple }, config(opted)).filter(
+      (v) => v.ruleId === "no_expect_equal_null",
     );
     assert.equal(inTriple.length, 0);
   });
