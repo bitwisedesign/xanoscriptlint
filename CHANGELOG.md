@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `tags_placement` treats `history` as an anchor, so `tags` sits above `history` as Xano writes it on pull.
+
 ## [0.7.0] - 2026-09-26
 
 ### Added
