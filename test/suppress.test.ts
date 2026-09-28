@@ -132,4 +132,39 @@ custom_rules:
       [5],
     );
   });
+
+  it("disable:next suppresses no_expect_equal_null", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+
+  test "omits coupon when cart has no code" {
+    input = {id: 1}
+    // xanoscriptlint:disable:next no_expect_equal_null
+    expect.to_equal ($response.coupon_code) {
+      value = null
+    }
+    expect.to_equal ($response.gift_wrap) {
+      value = null
+    }
+  }
+}`;
+    const violations = lintFile(
+      { path: "a.xs", text },
+      resolveConfig(
+        { opt_in_rules: ["no_expect_equal_null"], disabled_rules: ["no_trailing_newline"] },
+        "/tmp",
+        null,
+      ),
+    ).filter((v) => v.ruleId === "no_expect_equal_null");
+    assert.deepEqual(
+      violations.map((v) => v.line),
+      [16],
+    );
+  });
 });

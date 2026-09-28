@@ -21,6 +21,7 @@ export function formattingOptInRules(): string[] {
       (rule) =>
         !rule.defaultEnabled &&
         rule.id !== "no_null_response" &&
+        rule.id !== "no_expect_equal_null" &&
         rule.id !== "no_zero_set_filter" &&
         rule.id !== "indentation" &&
         rule.id !== "separator_indentation" &&
@@ -436,6 +437,57 @@ export function wrapTestBlocks(tests: string): string {
 
 ${tests}}`;
 }
+
+export const EXPECT_EQUAL_NULL_XS = wrapTestBlocks(`  test "omits coupon when cart has no code" {
+    input = {id: 1}
+    expect.to_equal ($response.coupon_code) {
+      value = null
+    }
+  }
+`);
+
+export const EXPECT_EQUAL_NULL_NOT_EQUAL_XS = wrapTestBlocks(`  test "marks cart as shipped" {
+    input = {id: 1}
+    expect.to_not_equal ($response.shipped_at) {
+      value = null
+    }
+  }
+`);
+
+export const EXPECT_EQUAL_NULL_ONE_LINE_XS = wrapTestBlocks(`  test "omits coupon when cart has no code" {
+    input = {id: 1}
+    expect.to_equal ($response.coupon_code) { value = null }
+  }
+`);
+
+export const EXPECT_EQUAL_NULL_WORKFLOW_XS = `workflow_test "checkout marks cart paid" {
+  stack {
+    api.call checkout/pay verb=POST {
+      input = {id: 1}
+    } as $endpoint1
+
+    expect.to_equal ($endpoint1.order_id) {
+      value = null
+    }
+  }
+}`;
+
+export const EXPECT_EQUAL_NULL_COUNT_XS = wrapTestBlocks(`  test "omits line count when cart is empty" {
+    input = {id: 1}
+    expect.to_equal ($items|count) {
+      value = null
+    }
+  }
+`);
+
+export const EXPECT_EQUAL_NULL_CLEAN_XS = wrapTestBlocks(`  test "omits coupon when cart has no code" {
+    input = {id: 1}
+    expect.to_not_be_defined ($response.coupon_code)
+    expect.to_be_null ($response.deleted_at)
+    expect.to_be_defined ($response.shipped_at)
+    expect.to_not_be_null ($response.created_at)
+  }
+`);
 
 export const BARE_TEST_NAME_XS = `function "example" {
   input {

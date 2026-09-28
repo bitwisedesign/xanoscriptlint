@@ -8,6 +8,7 @@
 | [`fence_multiline_values`](#fence_multiline_values) | opt-in | warning | yes | Multiline mock and input values must be fenced; a one-line fence body is unfenced |
 | [`guid_placement`](#guid_placement) | opt-in | warning | yes | `guid` needs a blank line above it only when it follows a block closer |
 | [`indentation`](#indentation) | opt-in | warning | yes | Code uses two spaces per nesting level; a wrapped filter pipeline sits at its opener's indent plus two |
+| [`no_expect_equal_null`](#no_expect_equal_null) | opt-in | error | no | `expect.to_equal` / `expect.to_not_equal` with `value = null` is verbose; use a dedicated assertion |
 | [`no_null_response`](#no_null_response) | opt-in | warning | yes | Do not assign `response = null` |
 | [`no_reserved_var`](#no_reserved_var) | on | error | no | Do not declare a reserved variable name |
 | [`no_trailing_comments`](#no_trailing_comments) | on | warning | no | `//` above `guid` or after the file's closing `}` |
@@ -209,6 +210,38 @@ A fence with code on the same line as its opener or closer, and a `"""` string, 
 The rule reports nothing when the file is not safe to re-indent: braces, brackets, or parentheses do not balance, a fence or `"""` string is unterminated, or any line's indentation contains a tab.
 
 Auto-fixable with `--fix`. [`separator_indentation`](#separator_indentation) owns whitespace-only lines. This rule runs first, so later rules that derive indent from the line they rewrite see the corrected columns.
+
+## no_expect_equal_null
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is error.
+
+`expect.to_equal` / `expect.to_not_equal` with `value = null` is more verbose than a dedicated assertion and does not name the intent. Prefer `expect.to_not_be_defined` or `expect.to_be_defined`. Use `expect.to_be_null` or `expect.to_not_be_null` when the key must be present.
+
+docs.xano.com describes `to_not_be_defined` as passing when a value is null or undefined, and `to_be_defined` as passing when a value exists and is not null/undefined. `to_be_null` requires the value to be null; `to_not_be_null` requires it not to be.
+
+```xs
+expect.to_equal ($response.coupon_code) {
+  value = null
+}
+
+expect.to_not_be_defined ($response.coupon_code)
+expect.to_be_null ($response.coupon_code)
+```
+
+```xs
+expect.to_not_equal ($response.shipped_at) {
+  value = null
+}
+
+expect.to_be_defined ($response.shipped_at)
+expect.to_not_be_null ($response.shipped_at)
+```
+
+The one-line form `expect.to_equal ($response.coupon_code) { value = null }` is also flagged. Any argument is accepted, including workflow-test variables such as `$endpoint1.order_id`.
+
+There is no auto-fix: the dedicated assertion depends on whether the key must be present.
+
+Comment lines, the bodies of `"""` strings and triple-backtick fences, non-null expected values (`"null"`, `0`, `false`, `$x`, `null|...`), and a block with extra properties are ignored.
 
 ## no_null_response
 

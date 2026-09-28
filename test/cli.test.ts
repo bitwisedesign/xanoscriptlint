@@ -74,6 +74,7 @@ describe("cli", () => {
     assert.equal(code, 0);
     assert.match(stdout.text(), /empty_function_run/);
     assert.match(stdout.text(), /no_reserved_var/);
+    assert.match(stdout.text(), /no_expect_equal_null/);
     assert.match(stdout.text(), /opt-in/);
     assert.match(stdout.text(), /--opt-in <id>/);
     assert.match(stdout.text(), /--opt-in all/);

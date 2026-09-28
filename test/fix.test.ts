@@ -78,6 +78,7 @@ import {
   wrapMockBlock,
   wrapAssign,
   wrapVarValue,
+  EXPECT_EQUAL_NULL_XS,
   inlinePiped,
   wrappedPiped,
   inlineAssignObj,
@@ -323,6 +324,20 @@ describe("fixFile", () => {
     );
     assert.equal(result.changed, false);
     assert.equal(result.text, text);
+  });
+
+  it("does not rewrite no_expect_equal_null when that rule is opted in", () => {
+    const result = fixFile(
+      { path: "expect-null.xs", text: EXPECT_EQUAL_NULL_XS },
+      config({ opt_in_rules: ["no_expect_equal_null"] }),
+    );
+    assert.equal(result.changed, false);
+    assert.equal(result.text, EXPECT_EQUAL_NULL_XS);
+    assert.equal(
+      result.corrections.filter((correction) => correction.ruleId === "no_expect_equal_null")
+        .length,
+      0,
+    );
   });
 
   it("aligns object colons and normalizes the space after the colon", () => {

@@ -87,6 +87,7 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 | `guid_placement` | ⚪️ | ⚠️ | ✅ | `guid` with a blank line after a single-line value, or without one after a `}` / `]` closer |
 | `indentation` | ⚪️ | ⚠️ | ✅ | Code indented other than two spaces per nesting level, or a wrapped filter pipeline not at its opener's indent plus two (Xano rewrites this on push) |
 | `no_null_response` | ⚪️ | ⚠️ | ✅ | `response = null` (use `response = {}`) |
+| `no_expect_equal_null` | ⚪️ | ❌ | — | `expect.to_equal` / `expect.to_not_equal` with `value = null` (use `to_not_be_defined` / `to_be_defined`, or `to_be_null` / `to_not_be_null`) |
 | `no_reserved_var` | 🟢 | ❌ | — | reserved variable name declared via `var`, `var.update`, `as`, or `each as` |
 | `no_trailing_comments` | 🟢 | ⚠️ | — | `//` above `guid` or after the file's closing `}` (Xano moves it to the header on push) |
 | `no_trailing_newline` | 🟢 | ⚠️ | ✅ | File does not end with `}` (Xano pull strips trailing newlines) |

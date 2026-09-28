@@ -260,6 +260,18 @@ describe("fixture linting", () => {
     );
   });
 
+  it("committed no_expect_equal_null fixture matches when that rule is opted in", () => {
+    const config = resolveConfig({ opt_in_rules: ["no_expect_equal_null"] }, fixtures, null);
+    const expectNull = {
+      path: path.join(fixtures, "violations/expect_equal_null.xs"),
+      text: readFileSync(path.join(fixtures, "violations/expect_equal_null.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([expectNull], config).some((v) => v.ruleId === "no_expect_equal_null"),
+      true,
+    );
+  });
+
   it("CLI lints a violations directory and exits 2", async () => {
     await withTempDir(async (dir) => {
       await writeXs(dir, ".xanoscriptlint.yml", "included:\n  - \"**/*.xs\"\n");

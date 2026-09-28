@@ -4,6 +4,7 @@ import { emptyFunctionRun } from "./empty_function_run.js";
 import { fenceMultilineValues } from "./fence_multiline_values.js";
 import { guidPlacement } from "./guid_placement.js";
 import { indentation } from "./indentation.js";
+import { noExpectEqualNull } from "./no_expect_equal_null.js";
 import { noNullResponse } from "./no_null_response.js";
 import { noTrailingComments } from "./no_trailing_comments.js";
 import { noTrailingNewline } from "./no_trailing_newline.js";
@@ -39,6 +40,7 @@ export const builtinRules: Rule[] = [
   noTrailingComments,
   noTrailingNewline,
   noReservedVar,
+  noExpectEqualNull,
   noNullResponse,
   noZeroNumericDefault,
   quoteNegativeNumericDefault,
