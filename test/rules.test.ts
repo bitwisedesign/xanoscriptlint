@@ -93,6 +93,13 @@ import {
   INDENT_FLAT_SEPARATOR_XS,
   INDENT_FLAT_SEPARATOR_SHALLOW_XS,
   INDENT_FOREACH_XS,
+  INDENT_FOREACH_ARRAY_XS,
+  INDENT_FOREACH_ARRAY_DEEP_XS,
+  INDENT_GROUPED_OBJECT_XS,
+  INDENT_GROUPED_OBJECT_DEEP_XS,
+  INDENT_GROUPED_OBJECT_SHALLOW_SEP_XS,
+  INDENT_NESTED_PARENS_XS,
+  INDENT_NESTED_PARENS_SHALLOW_XS,
   INDENT_PIPE_BLANK_XS,
   INDENT_PIPE_BLANK_DEEP_XS,
   INDENT_CHAIN_GROUPS_XS,
@@ -3872,6 +3879,38 @@ ${inlineTagsLine(TAGS_SHORT)}
     );
   });
 
+  it("indentation treats adjacent ([ and ({ as one level", () => {
+    const opted = { opt_in_rules: ["indentation"] };
+    assert.deepEqual(indentHits(INDENT_FOREACH_ARRAY_XS, opted), []);
+    const array = indentHits(INDENT_FOREACH_ARRAY_DEEP_XS, opted);
+    assert.deepEqual(
+      array.map((v) => [v.line, v.message]),
+      [
+        [7, "expected indent 6, found 8"],
+        [8, "expected indent 6, found 8"],
+        [9, "expected indent 4, found 6"],
+      ],
+    );
+
+    assert.deepEqual(indentHits(INDENT_GROUPED_OBJECT_XS, opted), []);
+    const grouped = indentHits(INDENT_GROUPED_OBJECT_DEEP_XS, opted);
+    assert.deepEqual(
+      grouped.map((v) => [v.line, v.message]),
+      [
+        [8, "expected indent 8, found 10"],
+        [10, "expected indent 8, found 10"],
+        [11, "expected indent 6, found 8"],
+      ],
+    );
+
+    assert.deepEqual(indentHits(INDENT_NESTED_PARENS_XS, opted), []);
+    const nested = indentHits(INDENT_NESTED_PARENS_SHALLOW_XS, opted);
+    assert.deepEqual(
+      nested.map((v) => [v.line, v.message]),
+      [[8, "expected indent 10, found 8"]],
+    );
+  });
+
   it("indentation reports nothing for an unbalanced file or a tab indent", () => {
     const opted = { only_rules: ["indentation", "separator_indentation"] };
     assert.deepEqual(indentHits(INDENT_UNBALANCED_XS, opted), []);
@@ -3917,6 +3956,13 @@ input {
     const opted = { opt_in_rules: ["separator_indentation"] };
     assert.deepEqual(separatorHits(CLEAN_XS, opted), []);
     assert.deepEqual(separatorHits(INDENT_FLAT_SEPARATOR_XS, opted), []);
+    assert.deepEqual(separatorHits(INDENT_GROUPED_OBJECT_XS, opted), []);
+    const groupedSep = separatorHits(INDENT_GROUPED_OBJECT_SHALLOW_SEP_XS, opted);
+    assert.deepEqual(
+      groupedSep.map((v) => v.line),
+      [9],
+    );
+    assert.equal(groupedSep[0]?.message, "expected separator width 6, found 4");
     const flatSep = separatorHits(INDENT_FLAT_SEPARATOR_SHALLOW_XS, opted);
     assert.deepEqual(
       flatSep.map((v) => v.line),

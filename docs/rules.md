@@ -164,7 +164,7 @@ Auto-fixable with `--fix`: a missing blank line is inserted, a forbidden blank l
 
 Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
 
-Xano rewrites indentation on push. Two spaces per unclosed `{`, `[`, or `(`. A line that starts with `}`, `]`, or `)` dedents one level. The pulled file is canonical; a local indent that does not match is push/pull churn. Wrapping a stack into `db.transaction` without indenting the body is the usual miss.
+Xano rewrites indentation on push. Two spaces per unclosed `{`, `[`, or `(`. A run of openers on the same line, separated only by spaces or tabs, counts as one level, so `foreach ([` and `value = ({` indent their contents two spaces, and `]) {` / `})` sit with the opener. Code between openers still stacks. A line that starts with `}`, `]`, or `)` dedents once per non-neutral closer in that leading run. The pulled file is canonical; a local indent that does not match is push/pull churn. Wrapping a stack into `db.transaction` without indenting the body is the usual miss.
 
 ```xs
     db.transaction {
@@ -174,6 +174,14 @@ Xano rewrites indentation on push. Two spaces per unclosed `{`, `[`, or `(`. A l
         }
       }
     }
+```
+
+```xs
+    foreach ([
+      "direction"
+      "classification"
+    ]) {
+      each as $key {
 ```
 
 A wrapped filter pipeline is the exception. Continuation lines whose first token is `|` (not `||`) sit at the chain opener's indent plus two, not at the brace depth of the line. The opener may itself open a parenthesis, so the continuation is not "one level deeper than the current depth":
