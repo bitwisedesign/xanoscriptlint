@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-22
+
 ### Added
 
 - Opt-in `no_expect_equal_null` flags `expect.to_equal` / `expect.to_not_equal` whose only property is `value = null` (error). Prefer `to_not_be_defined` / `to_be_defined`, or `to_be_null` / `to_not_be_null` when the key must be present. There is no auto-fix.
