@@ -15,7 +15,7 @@ export interface IndentPlan {
 
 interface Scan {
   delta: number;
-  startsCloser: boolean;
+  closerDedent: number;
   mode: LineMode;
   mismatch: boolean;
 }
@@ -57,6 +57,7 @@ interface ObjectFrame {
   maxKey: number;
   flatten: boolean;
   openerIndent: number;
+  indentNeutral: boolean;
 }
 
 function nestOffset(stack: ObjectFrame[]): number {
@@ -241,6 +242,7 @@ function objectFrame(
   brace: number,
   stack: ObjectFrame[],
   openerIndent: number,
+  indentNeutral: boolean,
 ): ObjectFrame {
   const colon = isColonBrace(line, brace);
   const keyed = colon || isAssignBrace(line, brace) || isReturnBrace(line, brace);
@@ -251,6 +253,7 @@ function objectFrame(
     maxKey,
     flatten: colon && maxKey >= 0 && parent >= 0 && maxKey > parent,
     openerIndent,
+    indentNeutral,
   };
 }
 
@@ -311,24 +314,34 @@ function enclosingOpenerIndent(stack: ObjectFrame[]): number | null {
   return null;
 }
 
-function lineStartsWithCloser(line: string, mode: LineMode): boolean {
+function leadingCloserDedent(line: string, mode: LineMode, stack: ObjectFrame[]): number {
   if (mode !== "code") {
-    return false;
+    return 0;
   }
-  for (let i = 0; i < line.length; i += 1) {
+  let i = 0;
+  let dedent = 0;
+  let depth = stack.length;
+  while (i < line.length) {
     const ch = line[i];
     if (ch === " " || ch === "\t") {
+      i += 1;
       continue;
     }
-    if (line.startsWith("//", i) || line.startsWith(FENCE, i) || line.startsWith(TRIPLE, i)) {
-      return false;
+    if (ch !== "}" && ch !== "]" && ch !== ")") {
+      break;
     }
-    if (ch === '"' || ch === "'") {
-      return false;
+    const top = depth > 0 ? stack[depth - 1] : undefined;
+    if (top !== undefined && top.kind === CLOSER_TO_OPENER[ch]) {
+      depth -= 1;
+      if (!top.indentNeutral) {
+        dedent += 1;
+      }
+    } else {
+      dedent += 1;
     }
-    return ch === "}" || ch === "]" || ch === ")";
+    i += 1;
   }
-  return false;
+  return dedent;
 }
 
 function scan(
@@ -341,20 +354,21 @@ function scan(
 ): Scan {
   let i = 0;
   let delta = 0;
-  let startsCloser = false;
-  let seenCode = false;
+  let closerDedent = 0;
+  let inLeadingCloserRun = true;
+  let inOpenerRun = false;
   let openersOnLine = 0;
   let mismatch = false;
   if (mode === "fence") {
     const closer = line.indexOf(FENCE);
     if (closer < 0) {
-      return { delta: 0, startsCloser: false, mode: "fence", mismatch };
+      return { delta: 0, closerDedent: 0, mode: "fence", mismatch };
     }
     i = closer + FENCE.length;
   } else if (mode === "triple") {
     const closer = line.indexOf(TRIPLE);
     if (closer < 0) {
-      return { delta: 0, startsCloser: false, mode: "triple", mismatch };
+      return { delta: 0, closerDedent: 0, mode: "triple", mismatch };
     }
     i = closer + TRIPLE.length;
   }
@@ -365,16 +379,20 @@ function scan(
     if (line.startsWith(FENCE, i)) {
       const closer = line.indexOf(FENCE, i + FENCE.length);
       if (closer < 0) {
-        return { delta, startsCloser, mode: "fence", mismatch };
+        return { delta, closerDedent, mode: "fence", mismatch };
       }
+      inLeadingCloserRun = false;
+      inOpenerRun = false;
       i = closer + FENCE.length;
       continue;
     }
     if (line.startsWith(TRIPLE, i)) {
       const closer = line.indexOf(TRIPLE, i + TRIPLE.length);
       if (closer < 0) {
-        return { delta, startsCloser, mode: "triple", mismatch };
+        return { delta, closerDedent, mode: "triple", mismatch };
       }
+      inLeadingCloserRun = false;
+      inOpenerRun = false;
       i = closer + TRIPLE.length;
       continue;
     }
@@ -384,7 +402,8 @@ function scan(
       if (end === null) {
         break;
       }
-      seenCode = true;
+      inLeadingCloserRun = false;
+      inOpenerRun = false;
       i = end;
       continue;
     }
@@ -393,40 +412,51 @@ function scan(
       continue;
     }
     if (ch === "{" || ch === "[" || ch === "(") {
-      const openerIndent = lineIndent + 2 * openersOnLine;
+      const indentNeutral = inOpenerRun;
+      const openerIndent = indentNeutral
+        ? (stack[stack.length - 1]?.openerIndent ?? lineIndent)
+        : lineIndent + 2 * openersOnLine;
       if (ch === "{") {
-        stack.push(objectFrame(lines, lineIndex, line, i, stack, openerIndent));
+        stack.push(objectFrame(lines, lineIndex, line, i, stack, openerIndent, indentNeutral));
       } else {
-        stack.push({ kind: ch, maxKey: -1, flatten: false, openerIndent });
+        stack.push({ kind: ch, maxKey: -1, flatten: false, openerIndent, indentNeutral });
       }
-      openersOnLine += 1;
-      delta += 1;
-      seenCode = true;
+      if (!indentNeutral) {
+        openersOnLine += 1;
+        delta += 1;
+      }
+      inLeadingCloserRun = false;
+      inOpenerRun = true;
       i += 1;
       continue;
     }
     if (ch === "}" || ch === "]" || ch === ")") {
-      if (!seenCode) {
-        startsCloser = true;
-      }
       const top = stack[stack.length - 1];
-      if (top === undefined || top.kind !== CLOSER_TO_OPENER[ch]) {
+      const matched = top !== undefined && top.kind === CLOSER_TO_OPENER[ch];
+      const indentNeutral = matched && top.indentNeutral;
+      if (!matched) {
         mismatch = true;
       } else {
         stack.pop();
+      }
+      if (!indentNeutral) {
         if (openersOnLine > 0) {
           openersOnLine -= 1;
         }
+        delta -= 1;
+        if (inLeadingCloserRun) {
+          closerDedent += 1;
+        }
       }
-      delta -= 1;
-      seenCode = true;
+      inOpenerRun = false;
       i += 1;
       continue;
     }
-    seenCode = true;
+    inLeadingCloserRun = false;
+    inOpenerRun = false;
     i += 1;
   }
-  return { delta, startsCloser, mode: "code", mismatch };
+  return { delta, closerDedent, mode: "code", mismatch };
 }
 
 export function planIndent(lines: string[]): IndentPlan {
@@ -469,13 +499,13 @@ export function planIndent(lines: string[]): IndentPlan {
       }
     }
     const nest = inChain ? 0 : nestOffset(objects);
-    const lineIndent =
-      2 * (depth - (lineStartsWithCloser(line, startMode) ? 1 : 0)) + chainOffset + nest;
+    const closerDedent = leadingCloserDedent(line, startMode, objects);
+    const lineIndent = 2 * (depth - closerDedent) + chainOffset + nest;
     const scanned = scan(line, startMode, objects, lines, i, lineIndent);
     if (startMode === "code") {
       const blank = line.trim().length === 0;
       if (!blank) {
-        const value = 2 * (depth - (scanned.startsCloser ? 1 : 0)) + chainOffset + nest;
+        const value = 2 * (depth - scanned.closerDedent) + chainOffset + nest;
         expected[i] = value;
         if (value < 0) {
           reliable = false;

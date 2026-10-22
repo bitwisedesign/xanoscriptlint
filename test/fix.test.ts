@@ -103,6 +103,13 @@ import {
   INDENT_CHAIN_GROUPS_XS,
   INDENT_CHAIN_GROUPS_BROKEN_XS,
   INDENT_FOREACH_FIXED_XS,
+  INDENT_FOREACH_ARRAY_XS,
+  INDENT_FOREACH_ARRAY_DEEP_XS,
+  INDENT_GROUPED_OBJECT_XS,
+  INDENT_GROUPED_OBJECT_DEEP_XS,
+  INDENT_GROUPED_OBJECT_SHALLOW_SEP_XS,
+  INDENT_NESTED_PARENS_XS,
+  INDENT_NESTED_PARENS_SHALLOW_XS,
   INDENT_FENCE_XS,
   INDENT_FENCE_FIXED_XS,
   INDENT_FENCE_OUTDENTED_XS,
@@ -2341,6 +2348,48 @@ ${inlineTagsLine(TAGS_V64)}
     assert.equal(result.text, INDENT_FOREACH_FIXED_XS);
   });
 
+  it("reindents foreach ([ items to one level and is idempotent", () => {
+    const opted = { only_rules: ["indentation"] };
+    const clean = fixFile({ path: "foreach-array.xs", text: INDENT_FOREACH_ARRAY_XS }, config(opted));
+    assert.equal(clean.changed, false);
+    const result = fixFile(
+      { path: "foreach-array-deep.xs", text: INDENT_FOREACH_ARRAY_DEEP_XS },
+      config(opted),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, INDENT_FOREACH_ARRAY_XS);
+    const again = fixFile({ path: "foreach-array.xs", text: result.text }, config(opted));
+    assert.equal(again.changed, false);
+    assert.equal(again.text, INDENT_FOREACH_ARRAY_XS);
+  });
+
+  it("reindents a grouped ({ object to one level", () => {
+    const opted = { only_rules: ["indentation"] };
+    const clean = fixFile(
+      { path: "grouped-object.xs", text: INDENT_GROUPED_OBJECT_XS },
+      config(opted),
+    );
+    assert.equal(clean.changed, false);
+    const result = fixFile(
+      { path: "grouped-object-deep.xs", text: INDENT_GROUPED_OBJECT_DEEP_XS },
+      config(opted),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, INDENT_GROUPED_OBJECT_XS);
+  });
+
+  it("keeps stacked parens when code sits between same-line openers", () => {
+    const opted = { only_rules: ["indentation"] };
+    const clean = fixFile({ path: "nested-parens.xs", text: INDENT_NESTED_PARENS_XS }, config(opted));
+    assert.equal(clean.changed, false);
+    const result = fixFile(
+      { path: "nested-parens-shallow.xs", text: INDENT_NESTED_PARENS_SHALLOW_XS },
+      config(opted),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, INDENT_NESTED_PARENS_XS);
+  });
+
   it("leaves blank lines inside a shifted fence or triple-quoted body", () => {
     const result = fixFile(
       { path: "opaque-blank.xs", text: INDENT_OPAQUE_BLANK_XS },
@@ -2533,6 +2582,18 @@ ${inlineTagsLine(TAGS_V64)}
     );
     assert.equal(result.changed, true);
     assert.equal(result.text, INDENT_FLAT_SEPARATOR_XS);
+
+    const groupedClean = fixFile(
+      { path: "grouped-sep.xs", text: INDENT_GROUPED_OBJECT_XS },
+      config(opted),
+    );
+    assert.equal(groupedClean.changed, false);
+    const grouped = fixFile(
+      { path: "grouped-sep-shallow.xs", text: INDENT_GROUPED_OBJECT_SHALLOW_SEP_XS },
+      config(opted),
+    );
+    assert.equal(grouped.changed, true);
+    assert.equal(grouped.text, INDENT_GROUPED_OBJECT_XS);
   });
 
   it("rewrites whitespace-only lines to the enclosing opener indent", () => {

@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Opt-in `no_expect_equal_null` flags `expect.to_equal` / `expect.to_not_equal` whose only property is `value = null` (error). Prefer `to_not_be_defined` / `to_be_defined`, or `to_be_null` / `to_not_be_null` when the key must be present. There is no auto-fix.
 
+### Fixed
+
+- `indentation` counts a same-line `([` or `({` as one nesting level, matching Xano's push form. Adjacent openers separated only by whitespace share a level; code between them still stacks. `]) {` and `})` sit with the opener.
+
 ## [0.7.1] - 2026-09-27
 
 ### Fixed
