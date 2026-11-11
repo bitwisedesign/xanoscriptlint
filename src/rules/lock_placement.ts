@@ -4,6 +4,7 @@ import { lineStartDepths } from "./block_depths.js";
 import { joinLineRecords, splitLineRecords } from "./line_records.js";
 import type { LineRecord } from "./line_records.js";
 import { literalLines } from "./numeric_declarations.js";
+import { skipQuoted } from "./pipe_chains.js";
 import type { Rule, RuleOptions, SourceFile, Violation } from "./types.js";
 
 const DB_OPENER = /^\s*db\.(get|query)\b/;
@@ -67,21 +68,48 @@ function memberEndLine(
   return end;
 }
 
-const DISABLE_PREVIOUS = /^\/\/\s*xanoscriptlint:disable:previous(?:\s|$)/;
+const STATIONARY_DIRECTIVE =
+  /^\/\/\s*xanoscriptlint:(?:disable:previous|(?:disable|enable)(?:\s|$))/;
 
-function isDisablePrevious(line: string): boolean {
-  return DISABLE_PREVIOUS.test(line.trim());
+function isStationaryDirective(line: string): boolean {
+  return STATIONARY_DIRECTIVE.test(line.trim());
 }
 
 function attachedCommentStart(lines: string[], lockLine: number, openLine: number): number {
   let start = lockLine;
   while (start - 1 > openLine && isCommentLine(lines[start - 1])) {
-    if (isDisablePrevious(lines[start - 1])) {
+    if (isStationaryDirective(lines[start - 1])) {
       break;
     }
     start -= 1;
   }
   return start;
+}
+
+function arrayDepthAfter(line: string, startDepth: number): number {
+  let depth = startDepth;
+  let col = 0;
+  while (col < line.length) {
+    const ch = line[col];
+    if (ch === "/" && line[col + 1] === "/") {
+      break;
+    }
+    if (ch === '"' || ch === "'") {
+      const end = skipQuoted(line, col, ch);
+      if (end === null) {
+        break;
+      }
+      col = end;
+      continue;
+    }
+    if (ch === "[") {
+      depth += 1;
+    } else if (ch === "]") {
+      depth = Math.max(0, depth - 1);
+    }
+    col += 1;
+  }
+  return depth;
 }
 
 function collectMembers(
@@ -93,18 +121,20 @@ function collectMembers(
   bodyDepth: number,
 ): Member[] {
   const members: Member[] = [];
+  let arrayDepth = 0;
   for (let line = openLine + 1; line < closeLine; line += 1) {
-    if (literals.has(line) || isCommentLine(lines[line]) || isBlankLine(lines[line])) {
-      continue;
+    const inArray = arrayDepth > 0;
+    if (!literals.has(line) && !isCommentLine(lines[line]) && !isBlankLine(lines[line])) {
+      if (!inArray && depths.starts[line] === bodyDepth) {
+        const kind = memberKind(lines[line]);
+        if (kind !== null) {
+          members.push({ line, kind });
+        }
+      }
     }
-    if (depths.starts[line] !== bodyDepth) {
-      continue;
+    if (!literals.has(line) && !isCommentLine(lines[line])) {
+      arrayDepth = arrayDepthAfter(lines[line], arrayDepth);
     }
-    const kind = memberKind(lines[line]);
-    if (kind === null) {
-      continue;
-    }
-    members.push({ line, kind });
   }
   return members;
 }

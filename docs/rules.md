@@ -247,7 +247,7 @@ Xano places `lock` in a canonical slot on push. In `db.get`, it sits immediately
 
 A `db.get` with no `field_value`, a multi-line `lock` value, or two `lock` members in the same statement is left alone.
 
-Auto-fixable with `--fix`: `lock` is moved to that slot. Comment lines attached directly above it (no blank line between) move with it, except a `disable:previous` directive, which stays so it still targets the preceding statement. Sibling members, including wrapped `where`, `output`, and `mock`, stay in place.
+Auto-fixable with `--fix`: `lock` is moved to that slot. Comment lines attached directly above it (no blank line between) move with it, except region `disable` / `enable` and `disable:previous`, which stay so they still apply to the original span. Sibling members, including wrapped `where`, `output`, and `mock`, stay in place.
 
 ## no_expect_equal_null
 

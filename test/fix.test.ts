@@ -1926,6 +1926,51 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
     assert.equal(again.text, expected);
   });
 
+  it("keeps lock outside a multiline field_value array of bare values", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    db.get seat_reservation {
+      field_name = "seat_code"
+      field_value = [
+        true
+        false
+      ]
+      output = ["id"]
+      lock = true
+    } as $missing
+  }
+
+  response = $ok
+}`;
+    const expected = `function "example" {
+  input {
+  }
+
+  stack {
+    db.get seat_reservation {
+      field_name = "seat_code"
+      field_value = [
+        true
+        false
+      ]
+      lock = true
+      output = ["id"]
+    } as $missing
+  }
+
+  response = $ok
+}`;
+    const result = fixFile(
+      { path: "lock-field-value-array.xs", text },
+      config({ only_rules: ["lock_placement"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+  });
+
   it("moves lock first in db.query", () => {
     const text = `function "example" {
   input {
@@ -1973,6 +2018,43 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
       config({ only_rules: ["lock_placement"] }),
     );
     assert.equal(again.changed, false);
+  });
+
+  it("still moves a db.query lock after a quoted fence delimiter", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query ticket_batch {
+      where = $db.ticket_batch.note == "mark with \`\`\`"
+      return = {type: "list"}
+      lock = true
+    } as $locked_rows
+  }
+
+  response = $ok
+}`;
+    const expected = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query ticket_batch {
+      lock = true
+      where = $db.ticket_batch.note == "mark with \`\`\`"
+      return = {type: "list"}
+    } as $locked_rows
+  }
+
+  response = $ok
+}`;
+    const result = fixFile(
+      { path: "lock-quoted-fence.xs", text },
+      config({ only_rules: ["lock_placement"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
   });
 
   it("keeps wrapped where, output, and mock siblings intact when moving lock", () => {
@@ -2097,7 +2179,7 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
     assert.equal(result.text, expected);
   });
 
-  it("leaves disable:previous in place and moves disable:next with lock", () => {
+  it("leaves region and disable:previous directives in place and moves disable:next with lock", () => {
     const text = `function "example" {
   input {
   }
@@ -2108,6 +2190,8 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
       field_value = "absent"
       output = ["id"]
       // xanoscriptlint:disable:previous wrap_assignment_arrays
+      // xanoscriptlint:disable wrap_assignment_arrays
+      // xanoscriptlint:enable wrap_assignment_arrays
       // xanoscriptlint:disable:next wrap_assignment_arrays
       lock = true
     } as $missing
@@ -2127,6 +2211,8 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
       lock = true
       output = ["id"]
       // xanoscriptlint:disable:previous wrap_assignment_arrays
+      // xanoscriptlint:disable wrap_assignment_arrays
+      // xanoscriptlint:enable wrap_assignment_arrays
     } as $missing
   }
 

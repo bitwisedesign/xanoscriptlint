@@ -3372,8 +3372,27 @@ ${wrappedTagsBlock(TAGS_V63)}
 
   response = $ok
 }`;
+    const wrappedFieldValue = `function "example" {
+  input {
+  }
+
+  stack {
+    db.get seat_reservation {
+      field_name = "seat_code"
+      field_value = [
+        true
+        false
+      ]
+      lock = true
+      output = ["id"]
+    } as $missing
+  }
+
+  response = $ok
+}`;
     assert.deepEqual(lockHits(getText), []);
     assert.deepEqual(lockHits(queryText), []);
+    assert.deepEqual(lockHits(wrappedFieldValue), []);
   });
 
   it("lock_placement flags lock after output in db.get", () => {
@@ -3398,6 +3417,29 @@ ${wrappedTagsBlock(TAGS_V63)}
     assert.equal(hits[0]?.column, 7);
     assert.equal(hits[0]?.severity, "warning");
     assert.equal(hits[0]?.message, "lock must immediately follow `field_value`");
+
+    const wrapped = `function "example" {
+  input {
+  }
+
+  stack {
+    db.get seat_reservation {
+      field_name = "seat_code"
+      field_value = [
+        true
+        false
+      ]
+      output = ["id"]
+      lock = true
+    } as $missing
+  }
+
+  response = $ok
+}`;
+    const wrappedHits = lockHits(wrapped);
+    assert.equal(wrappedHits.length, 1);
+    assert.equal(wrappedHits[0]?.line, 13);
+    assert.equal(wrappedHits[0]?.message, "lock must immediately follow `field_value`");
   });
 
   it("lock_placement flags lock last in db.query", () => {
@@ -3423,6 +3465,25 @@ ${wrappedTagsBlock(TAGS_V63)}
     assert.equal(hits[0]?.column, 7);
     assert.equal(hits[0]?.severity, "warning");
     assert.equal(hits[0]?.message, "lock must be the first member of `db.query`");
+
+    const quotedFence = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query ticket_batch {
+      where = $db.ticket_batch.note == "mark with \`\`\`"
+      return = {type: "list"}
+      lock = true
+    } as $locked_rows
+  }
+
+  response = $ok
+}`;
+    const quotedHits = lockHits(quotedFence);
+    assert.equal(quotedHits.length, 1);
+    assert.equal(quotedHits[0]?.line, 9);
+    assert.equal(quotedHits[0]?.message, "lock must be the first member of `db.query`");
   });
 
   it("lock_placement ignores lock inside an object literal or another statement", () => {
