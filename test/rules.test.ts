@@ -273,6 +273,52 @@ describe("built-in rules", () => {
     );
   });
 
+  it("no_reserved_var still scans code after a triple quote whose body has comments or apostrophes", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    var $note {
+      value = """
+        don't stop // here
+        """
+    }
+    var $auth {
+      value = 1
+    }
+  }
+
+  response = $ok
+}`;
+    const hits = lintFile({ path: "r.xs", text }, config()).filter(
+      (v) => v.ruleId === "no_reserved_var",
+    );
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.line, 11);
+
+    const sameLine = `function "example" {
+  input {
+  }
+
+  stack {
+    var $note {
+      value = """don't // hide """
+    }
+    var $auth {
+      value = 1
+    }
+  }
+
+  response = $ok
+}`;
+    const sameLineHits = lintFile({ path: "r2.xs", text: sameLine }, config()).filter(
+      (v) => v.ruleId === "no_reserved_var",
+    );
+    assert.equal(sameLineHits.length, 1);
+    assert.equal(sameLineHits[0]?.line, 9);
+  });
+
   it("no_reserved_var skips comments and non-reserved names", () => {
     const commented = {
       path: "c.xs",

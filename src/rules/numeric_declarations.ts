@@ -77,12 +77,12 @@ function openerOnCodeLine(line: string): "fence" | "triple" | null {
     return null;
   }
   if (tripleAt !== -1 && (fenceAt === -1 || tripleAt < fenceAt)) {
-    if (unquotedIndex(line, '"""', tripleAt + 3) !== -1) {
+    if (line.indexOf('"""', tripleAt + 3) !== -1) {
       return null;
     }
     return "triple";
   }
-  if (unquotedIndex(line, "```", fenceAt + 3) !== -1) {
+  if (line.indexOf("```", fenceAt + 3) !== -1) {
     return null;
   }
   return "fence";
@@ -96,7 +96,7 @@ export function literalLines(lines: string[]): Set<number> {
     const line = lines[i];
     if (mode !== "code") {
       const closer = mode === "fence" ? "```" : '"""';
-      if (unquotedIndex(line, closer) !== -1) {
+      if (line.includes(closer)) {
         mode = "code";
       } else {
         literal.add(i);
