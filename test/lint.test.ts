@@ -154,6 +154,15 @@ describe("fixture linting", () => {
       true,
     );
 
+    const lockPlacement = {
+      path: path.join(fixtures, "violations/lock_placement.xs"),
+      text: readFileSync(path.join(fixtures, "violations/lock_placement.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([lockPlacement], config).some((v) => v.ruleId === "lock_placement"),
+      true,
+    );
+
     const unquoteEnum = {
       path: path.join(fixtures, "violations/unquote_enum_defaults.xs"),
       text: readFileSync(path.join(fixtures, "violations/unquote_enum_defaults.xs"), "utf8"),
