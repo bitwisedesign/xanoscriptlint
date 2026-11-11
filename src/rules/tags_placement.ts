@@ -1,5 +1,6 @@
 import { isSuppressed, parseSuppressions } from "../suppress.js";
 import { isBlankLine, isCommentLine } from "../util.js";
+import { lineStartDepths } from "./block_depths.js";
 import { joinLineRecords, splitLineRecords } from "./line_records.js";
 import type { LineRecord } from "./line_records.js";
 import { literalLines } from "./numeric_declarations.js";
@@ -65,72 +66,6 @@ function memberKind(line: string): string | null {
   }
   const match = /^([A-Za-z_][A-Za-z0-9_]*)\b/.exec(trimmed);
   return match?.[1] ?? null;
-}
-
-function lineStartDepths(lines: string[], literals: Set<number>): {
-  starts: number[];
-  after: number[];
-} {
-  const starts: number[] = [];
-  const after: number[] = [];
-  let depth = 0;
-  let mode: "code" | "double" | "single" = "code";
-  let escape = false;
-  for (let i = 0; i < lines.length; i += 1) {
-    starts.push(depth);
-    if (literals.has(i) || isCommentLine(lines[i])) {
-      after.push(depth);
-      continue;
-    }
-    const text = lines[i];
-    let col = 0;
-    while (col < text.length) {
-      const ch = text[col];
-      if (mode === "double" || mode === "single") {
-        if (escape) {
-          escape = false;
-          col += 1;
-          continue;
-        }
-        if (ch === "\\") {
-          escape = true;
-          col += 1;
-          continue;
-        }
-        if ((mode === "double" && ch === '"') || (mode === "single" && ch === "'")) {
-          mode = "code";
-        }
-        col += 1;
-        continue;
-      }
-      if (ch === "/" && text[col + 1] === "/") {
-        break;
-      }
-      if (ch === '"') {
-        mode = "double";
-        col += 1;
-        continue;
-      }
-      if (ch === "'") {
-        mode = "single";
-        col += 1;
-        continue;
-      }
-      if (ch === "{") {
-        depth += 1;
-        col += 1;
-        continue;
-      }
-      if (ch === "}") {
-        depth = Math.max(0, depth - 1);
-        col += 1;
-        continue;
-      }
-      col += 1;
-    }
-    after.push(depth);
-  }
-  return { starts, after };
 }
 
 function skipBackward(lines: string[], start: number): { blanks: number[]; prev: number } {

@@ -18,6 +18,7 @@ describe("config enablement", () => {
     assert.equal(config.enabledRuleIds.has("collapse_assignment_values"), false);
     assert.equal(config.enabledRuleIds.has("fence_multiline_values"), false);
     assert.equal(config.enabledRuleIds.has("guid_placement"), false);
+    assert.equal(config.enabledRuleIds.has("lock_placement"), false);
     assert.equal(config.enabledRuleIds.has("no_null_response"), false);
     assert.equal(config.enabledRuleIds.has("no_expect_equal_null"), false);
     assert.equal(config.enabledRuleIds.has("no_zero_numeric_default"), false);

@@ -8,6 +8,7 @@
 | [`fence_multiline_values`](#fence_multiline_values) | opt-in | warning | yes | Multiline mock and input values must be fenced; a one-line fence body is unfenced |
 | [`guid_placement`](#guid_placement) | opt-in | warning | yes | `guid` needs a blank line above it only when it follows a block closer |
 | [`indentation`](#indentation) | opt-in | warning | yes | Code uses two spaces per nesting level; a wrapped filter pipeline sits at its opener's indent plus two |
+| [`lock_placement`](#lock_placement) | opt-in | warning | yes | `lock` sits immediately after `field_value` in `db.get`, or first in `db.query` |
 | [`no_expect_equal_null`](#no_expect_equal_null) | opt-in | error | no | `expect.to_equal` / `expect.to_not_equal` with `value = null` is verbose; use a dedicated assertion |
 | [`no_null_response`](#no_null_response) | opt-in | warning | yes | Do not assign `response = null` |
 | [`no_reserved_var`](#no_reserved_var) | on | error | no | Do not declare a reserved variable name |
@@ -218,6 +219,35 @@ A fence with code on the same line as its opener or closer, and a `"""` string, 
 The rule reports nothing when the file is not safe to re-indent: braces, brackets, or parentheses do not balance, a fence or `"""` string is unterminated, or any line's indentation contains a tab.
 
 Auto-fixable with `--fix`. [`separator_indentation`](#separator_indentation) owns whitespace-only lines. This rule runs first, so later rules that derive indent from the line they rewrite see the corrected columns.
+
+## lock_placement
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
+
+Xano places `lock` in a canonical slot on push. In `db.get`, it sits immediately after `field_value`. In `db.query`, it is the first member. A missing `lock` is allowed. `lock` inside an object literal, or on any other statement, is ignored.
+
+```xs
+    db.get seat_reservation {
+      field_name = "seat_code"
+      field_value = "absent"
+      lock = true
+      output = ["id", "seat_code", "hold_count"]
+    } as $missing
+```
+
+```xs
+    db.query ticket_batch {
+      lock = true
+      where = $db.ticket_batch.batch_ref in $list_refs
+      sort = {id: "asc"}
+      return = {type: "list"}
+      output = ["id", "batch_ref", "hold_count"]
+    } as $locked_rows
+```
+
+A `db.get` with no `field_value`, a multi-line `lock` value, or two `lock` members in the same statement is left alone.
+
+Auto-fixable with `--fix`: `lock` is moved to that slot. Comment lines attached directly above it (no blank line between) move with it, except region `disable` / `enable` and `disable:previous`, which stay so they still apply to the original span. Sibling members, including wrapped `where`, `output`, and `mock`, stay in place.
 
 ## no_expect_equal_null
 

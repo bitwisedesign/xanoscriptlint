@@ -86,6 +86,7 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 | `fence_multiline_values` | ⚪️ | ⚠️ | ✅ | Multiline mock or input value not wrapped in a triple-backtick fence (Xano fences it on push); a one-line fence body is unfenced onto the key line; `function.run` mocks stay compact except when unfencing |
 | `guid_placement` | ⚪️ | ⚠️ | ✅ | `guid` with a blank line after a single-line value, or without one after a `}` / `]` closer |
 | `indentation` | ⚪️ | ⚠️ | ✅ | Code indented other than two spaces per nesting level, or a wrapped filter pipeline not at its opener's indent plus two (Xano rewrites this on push) |
+| `lock_placement` | ⚪️ | ⚠️ | ✅ | `lock` not immediately after `field_value` in `db.get`, or not first in `db.query` (Xano rewrites this on push) |
 | `no_null_response` | ⚪️ | ⚠️ | ✅ | `response = null` (use `response = {}`) |
 | `no_expect_equal_null` | ⚪️ | ❌ | — | `expect.to_equal` / `expect.to_not_equal` with `value = null` (use `to_not_be_defined` / `to_be_defined`, or `to_be_null` / `to_not_be_null`) |
 | `no_reserved_var` | 🟢 | ❌ | — | reserved variable name declared via `var`, `var.update`, `as`, or `each as` |

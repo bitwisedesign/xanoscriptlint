@@ -1877,6 +1877,401 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
     assert.equal(off.changed, false);
   });
 
+  it("moves lock after field_value in db.get", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    db.get seat_reservation {
+      field_name = "seat_code"
+      field_value = "absent"
+      output = ["id", "seat_code", "hold_count"]
+      lock = true
+    } as $missing
+  }
+
+  response = $ok
+}`;
+    const expected = `function "example" {
+  input {
+  }
+
+  stack {
+    db.get seat_reservation {
+      field_name = "seat_code"
+      field_value = "absent"
+      lock = true
+      output = ["id", "seat_code", "hold_count"]
+    } as $missing
+  }
+
+  response = $ok
+}`;
+    const result = fixFile(
+      { path: "lock-get.xs", text },
+      config({ only_rules: ["lock_placement"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.equal(result.corrections.length, 1);
+    assert.equal(result.corrections[0]?.ruleId, "lock_placement");
+    assert.equal(result.corrections[0]?.line, 10);
+
+    const again = fixFile(
+      { path: "lock-get.xs", text: result.text },
+      config({ only_rules: ["lock_placement"] }),
+    );
+    assert.equal(again.changed, false);
+    assert.equal(again.text, expected);
+  });
+
+  it("keeps lock outside a multiline field_value array of bare values", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    db.get seat_reservation {
+      field_name = "seat_code"
+      field_value = [
+        true
+        false
+      ]
+      output = ["id"]
+      lock = true
+    } as $missing
+  }
+
+  response = $ok
+}`;
+    const expected = `function "example" {
+  input {
+  }
+
+  stack {
+    db.get seat_reservation {
+      field_name = "seat_code"
+      field_value = [
+        true
+        false
+      ]
+      lock = true
+      output = ["id"]
+    } as $missing
+  }
+
+  response = $ok
+}`;
+    const result = fixFile(
+      { path: "lock-field-value-array.xs", text },
+      config({ only_rules: ["lock_placement"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+  });
+
+  it("moves lock first in db.query", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query ticket_batch {
+      where = $db.ticket_batch.batch_ref in $list_refs
+      sort = {id: "asc"}
+      return = {type: "list"}
+      output = ["id", "batch_ref", "hold_count"]
+      lock = true
+    } as $locked_rows
+  }
+
+  response = $ok
+}`;
+    const expected = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query ticket_batch {
+      lock = true
+      where = $db.ticket_batch.batch_ref in $list_refs
+      sort = {id: "asc"}
+      return = {type: "list"}
+      output = ["id", "batch_ref", "hold_count"]
+    } as $locked_rows
+  }
+
+  response = $ok
+}`;
+    const result = fixFile(
+      { path: "lock-query.xs", text },
+      config({ only_rules: ["lock_placement"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+    assert.equal(result.corrections[0]?.ruleId, "lock_placement");
+    assert.equal(result.corrections[0]?.line, 11);
+
+    const again = fixFile(
+      { path: "lock-query.xs", text: result.text },
+      config({ only_rules: ["lock_placement"] }),
+    );
+    assert.equal(again.changed, false);
+  });
+
+  it("still moves a db.query lock after a quoted fence delimiter", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query ticket_batch {
+      where = $db.ticket_batch.note == "mark with \`\`\`"
+      return = {type: "list"}
+      lock = true
+    } as $locked_rows
+  }
+
+  response = $ok
+}`;
+    const expected = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query ticket_batch {
+      lock = true
+      where = $db.ticket_batch.note == "mark with \`\`\`"
+      return = {type: "list"}
+    } as $locked_rows
+  }
+
+  response = $ok
+}`;
+    const result = fixFile(
+      { path: "lock-quoted-fence.xs", text },
+      config({ only_rules: ["lock_placement"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+  });
+
+  it("keeps wrapped where, output, and mock siblings intact when moving lock", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query ticket_batch {
+      where = $db.ticket_batch.batch_ref in $list_refs &&
+        $db.ticket_batch.hold_count > 0
+      sort = {id: "asc"}
+      return = {type: "list"}
+      output = [
+        "id"
+        "batch_ref"
+        "hold_count"
+      ]
+      mock = {
+        id: 1
+      }
+      lock = true
+    } as $locked_rows
+    db.get seat_reservation {
+      field_name = "seat_code"
+      field_value = "absent"
+      output = [
+        "id"
+        "seat_code"
+      ]
+      mock = {
+        id: 9
+      }
+      lock = true
+    } as $missing
+  }
+
+  response = $ok
+}`;
+    const expected = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query ticket_batch {
+      lock = true
+      where = $db.ticket_batch.batch_ref in $list_refs &&
+        $db.ticket_batch.hold_count > 0
+      sort = {id: "asc"}
+      return = {type: "list"}
+      output = [
+        "id"
+        "batch_ref"
+        "hold_count"
+      ]
+      mock = {
+        id: 1
+      }
+    } as $locked_rows
+    db.get seat_reservation {
+      field_name = "seat_code"
+      field_value = "absent"
+      lock = true
+      output = [
+        "id"
+        "seat_code"
+      ]
+      mock = {
+        id: 9
+      }
+    } as $missing
+  }
+
+  response = $ok
+}`;
+    const result = fixFile(
+      { path: "lock-wrapped.xs", text },
+      config({ only_rules: ["lock_placement"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+  });
+
+  it("moves an attached comment with lock", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    db.get seat_reservation {
+      field_name = "seat_code"
+      field_value = "absent"
+      output = ["id"]
+      // keep the row held
+      lock = true
+    } as $missing
+  }
+
+  response = $ok
+}`;
+    const expected = `function "example" {
+  input {
+  }
+
+  stack {
+    db.get seat_reservation {
+      field_name = "seat_code"
+      field_value = "absent"
+      // keep the row held
+      lock = true
+      output = ["id"]
+    } as $missing
+  }
+
+  response = $ok
+}`;
+    const result = fixFile(
+      { path: "lock-comment.xs", text },
+      config({ only_rules: ["lock_placement"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+  });
+
+  it("leaves region and disable:previous directives in place and moves disable:next with lock", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    db.get seat_reservation {
+      field_name = "seat_code"
+      field_value = "absent"
+      output = ["id"]
+      // xanoscriptlint:disable:previous wrap_assignment_arrays
+      // xanoscriptlint:disable wrap_assignment_arrays
+      // xanoscriptlint:enable wrap_assignment_arrays
+      // xanoscriptlint:disable:next wrap_assignment_arrays
+      lock = true
+    } as $missing
+  }
+
+  response = $ok
+}`;
+    const expected = `function "example" {
+  input {
+  }
+
+  stack {
+    db.get seat_reservation {
+      field_name = "seat_code"
+      field_value = "absent"
+      // xanoscriptlint:disable:next wrap_assignment_arrays
+      lock = true
+      output = ["id"]
+      // xanoscriptlint:disable:previous wrap_assignment_arrays
+      // xanoscriptlint:disable wrap_assignment_arrays
+      // xanoscriptlint:enable wrap_assignment_arrays
+    } as $missing
+  }
+
+  response = $ok
+}`;
+    const result = fixFile(
+      { path: "lock-suppress-directives.xs", text },
+      config({ only_rules: ["lock_placement"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, expected);
+  });
+
+  it("does not fix a suppressed lock_placement violation", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query ticket_batch {
+      where = $db.ticket_batch.batch_ref in $list_refs
+      // xanoscriptlint:disable:next lock_placement
+      lock = true
+    } as $locked_rows
+  }
+
+  response = $ok
+}`;
+    const result = fixFile(
+      { path: "lock-suppressed.xs", text },
+      config({ only_rules: ["lock_placement"] }),
+    );
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
+
+    const off = fixFile(
+      {
+        path: "lock-off.xs",
+        text: `function "example" {
+  input {
+  }
+
+  stack {
+    db.get seat_reservation {
+      field_name = "seat_code"
+      field_value = "absent"
+      output = ["id"]
+      lock = true
+    } as $missing
+  }
+
+  response = $ok
+}`,
+      },
+      config({ disabled_rules: ["lock_placement"] }),
+    );
+    assert.equal(off.changed, false);
+  });
+
   it("wraps an over-threshold tags array without inserting blanks", () => {
     const text = `function "example" {
   response = $ok

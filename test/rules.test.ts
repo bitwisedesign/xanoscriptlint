@@ -133,6 +133,12 @@ function guidHits(text: string, overrides: Parameters<typeof resolveConfig>[0] =
   );
 }
 
+function lockHits(text: string, overrides: Parameters<typeof resolveConfig>[0] = {}) {
+  return lintFile({ path: "a.xs", text }, config(overrides)).filter(
+    (v) => v.ruleId === "lock_placement",
+  );
+}
+
 function tagsHits(text: string, overrides: Parameters<typeof resolveConfig>[0] = {}) {
   return lintFile({ path: "a.xs", text }, config(overrides)).filter(
     (v) => v.ruleId === "tags_placement",
@@ -265,6 +271,52 @@ describe("built-in rules", () => {
       hits.some((v) => v.line === 28),
       false,
     );
+  });
+
+  it("no_reserved_var still scans code after a triple quote whose body has comments or apostrophes", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    var $note {
+      value = """
+        don't stop // here
+        """
+    }
+    var $auth {
+      value = 1
+    }
+  }
+
+  response = $ok
+}`;
+    const hits = lintFile({ path: "r.xs", text }, config()).filter(
+      (v) => v.ruleId === "no_reserved_var",
+    );
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.line, 11);
+
+    const sameLine = `function "example" {
+  input {
+  }
+
+  stack {
+    var $note {
+      value = """don't // hide """
+    }
+    var $auth {
+      value = 1
+    }
+  }
+
+  response = $ok
+}`;
+    const sameLineHits = lintFile({ path: "r2.xs", text: sameLine }, config()).filter(
+      (v) => v.ruleId === "no_reserved_var",
+    );
+    assert.equal(sameLineHits.length, 1);
+    assert.equal(sameLineHits[0]?.line, 9);
   });
 
   it("no_reserved_var skips comments and non-reserved names", () => {
@@ -3332,6 +3384,244 @@ ${wrappedTagsBlock(TAGS_V63)}
   guid = "g1"
 }`;
     assert.equal(guidHits(suppressed).length, 0);
+  });
+
+  it("lock_placement accepts canonical db.get and db.query", () => {
+    const getText = `function "example" {
+  input {
+  }
+
+  stack {
+    db.get seat_reservation {
+      field_name = "seat_code"
+      field_value = "absent"
+      lock = true
+      output = ["id", "seat_code", "hold_count"]
+    } as $missing
+  }
+
+  response = $ok
+}`;
+    const queryText = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query ticket_batch {
+      lock = true
+      where = $db.ticket_batch.batch_ref in $list_refs
+      sort = {id: "asc"}
+      return = {type: "list"}
+      output = ["id", "batch_ref", "hold_count"]
+    } as $locked_rows
+  }
+
+  response = $ok
+}`;
+    const wrappedFieldValue = `function "example" {
+  input {
+  }
+
+  stack {
+    db.get seat_reservation {
+      field_name = "seat_code"
+      field_value = [
+        true
+        false
+      ]
+      lock = true
+      output = ["id"]
+    } as $missing
+  }
+
+  response = $ok
+}`;
+    assert.deepEqual(lockHits(getText), []);
+    assert.deepEqual(lockHits(queryText), []);
+    assert.deepEqual(lockHits(wrappedFieldValue), []);
+  });
+
+  it("lock_placement flags lock after output in db.get", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    db.get seat_reservation {
+      field_name = "seat_code"
+      field_value = "absent"
+      output = ["id", "seat_code", "hold_count"]
+      lock = true
+    } as $missing
+  }
+
+  response = $ok
+}`;
+    const hits = lockHits(text);
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.line, 10);
+    assert.equal(hits[0]?.column, 7);
+    assert.equal(hits[0]?.severity, "warning");
+    assert.equal(hits[0]?.message, "lock must immediately follow `field_value`");
+
+    const wrapped = `function "example" {
+  input {
+  }
+
+  stack {
+    db.get seat_reservation {
+      field_name = "seat_code"
+      field_value = [
+        true
+        false
+      ]
+      output = ["id"]
+      lock = true
+    } as $missing
+  }
+
+  response = $ok
+}`;
+    const wrappedHits = lockHits(wrapped);
+    assert.equal(wrappedHits.length, 1);
+    assert.equal(wrappedHits[0]?.line, 13);
+    assert.equal(wrappedHits[0]?.message, "lock must immediately follow `field_value`");
+  });
+
+  it("lock_placement flags lock last in db.query", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query ticket_batch {
+      where = $db.ticket_batch.batch_ref in $list_refs
+      sort = {id: "asc"}
+      return = {type: "list"}
+      output = ["id", "batch_ref", "hold_count"]
+      lock = true
+    } as $locked_rows
+  }
+
+  response = $ok
+}`;
+    const hits = lockHits(text);
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.line, 11);
+    assert.equal(hits[0]?.column, 7);
+    assert.equal(hits[0]?.severity, "warning");
+    assert.equal(hits[0]?.message, "lock must be the first member of `db.query`");
+
+    const quotedFence = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query ticket_batch {
+      where = $db.ticket_batch.note == "mark with \`\`\`"
+      return = {type: "list"}
+      lock = true
+    } as $locked_rows
+  }
+
+  response = $ok
+}`;
+    const quotedHits = lockHits(quotedFence);
+    assert.equal(quotedHits.length, 1);
+    assert.equal(quotedHits[0]?.line, 9);
+    assert.equal(quotedHits[0]?.message, "lock must be the first member of `db.query`");
+  });
+
+  it("lock_placement ignores lock inside an object literal or another statement", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    var $hold {
+      value = {
+        lock: true
+      }
+    }
+    db.edit seat_reservation {
+      field_name = "seat_code"
+      field_value = "A1"
+      data = {hold_count: 1}
+      lock = true
+    } as $row
+    db.add ticket_batch {
+      data = {
+        batch_ref: "T-1"
+        lock: false
+      }
+    } as $created
+  }
+
+  response = $created
+}`;
+    assert.deepEqual(lockHits(text), []);
+  });
+
+  it("lock_placement is off by default", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    db.get seat_reservation {
+      field_name = "seat_code"
+      field_value = "absent"
+      output = ["id"]
+      lock = true
+    } as $missing
+  }
+
+  response = $ok
+}`;
+    const off = lintFile({ path: "a.xs", text }, resolveConfig({}, "/tmp", null));
+    assert.equal(
+      off.some((v) => v.ruleId === "lock_placement"),
+      false,
+    );
+    assert.equal(lockHits(text).length, 1);
+  });
+
+  it("lock_placement honors disabled_rules and disable:next", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query ticket_batch {
+      where = $db.ticket_batch.batch_ref in $list_refs
+      lock = true
+    } as $locked_rows
+  }
+
+  response = $ok
+}`;
+    const hits = lockHits(text);
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.severity, "warning");
+
+    const disabled = lockHits(text, { disabled_rules: ["lock_placement"] });
+    assert.equal(disabled.length, 0);
+
+    const suppressed = `function "example" {
+  input {
+  }
+
+  stack {
+    db.query ticket_batch {
+      where = $db.ticket_batch.batch_ref in $list_refs
+      // xanoscriptlint:disable:next lock_placement
+      lock = true
+    } as $locked_rows
+  }
+
+  response = $ok
+}`;
+    assert.equal(lockHits(suppressed).length, 0);
   });
 
   it("tags_placement accepts tags immediately before each anchor", () => {
