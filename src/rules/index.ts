@@ -19,6 +19,7 @@ import { tagsPlacement } from "./tags_placement.js";
 import { transactionBoundaries } from "./transaction_boundaries.js";
 import { transactionLocks } from "./transaction_locks.js";
 import { transactionStaleReads } from "./transaction_stale_reads.js";
+import { unfenceAssignmentValues } from "./unfence_assignment_values.js";
 import { unquoteBareTestNames } from "./unquote_bare_test_names.js";
 import { unquoteEnumDefaults } from "./unquote_enum_defaults.js";
 import { wrapEnumValues } from "./wrap_enum_values.js";
@@ -31,6 +32,7 @@ export const builtinRules: Rule[] = [
   indentation,
   noZeroSetFilter,
   collapseAssignmentValues,
+  unfenceAssignmentValues,
   fenceMultilineValues,
   unquoteBareTestNames,
   alignObjectColons,

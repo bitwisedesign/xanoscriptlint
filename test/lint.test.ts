@@ -109,6 +109,15 @@ describe("fixture linting", () => {
       true,
     );
 
+    const unfenceAssign = {
+      path: path.join(fixtures, "violations/unfence_assignment_values.xs"),
+      text: readFileSync(path.join(fixtures, "violations/unfence_assignment_values.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([unfenceAssign], config).some((v) => v.ruleId === "unfence_assignment_values"),
+      true,
+    );
+
     const wrapPiped = {
       path: path.join(fixtures, "violations/wrap_piped_values.xs"),
       text: readFileSync(path.join(fixtures, "violations/wrap_piped_values.xs"), "utf8"),

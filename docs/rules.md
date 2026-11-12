@@ -23,6 +23,7 @@
 | [`transaction_boundaries`](#transaction_boundaries) | opt-in | error | no | `lock = true` and `db.transaction` sit at the right boundary; caller-transaction callees are not run outside one |
 | [`transaction_locks`](#transaction_locks) | opt-in | error | no | An unlocked `db.get` or single `db.query` whose variable feeds a later write of that table needs `lock = true` |
 | [`transaction_stale_reads`](#transaction_stale_reads) | opt-in | warning | no | A write inside `db.transaction` must not rely on a read of that table from outside it |
+| [`unfence_assignment_values`](#unfence_assignment_values) | opt-in | warning | yes | Fenced assignment whose one-line form is under 64 UTF-8 bytes, except a `0` followed by another key |
 | [`unquote_bare_test_names`](#unquote_bare_test_names) | opt-in | warning | yes | Quoted `test` names and top-level `mock` keys with no spaces must be unquoted |
 | [`unquote_enum_defaults`](#unquote_enum_defaults) | opt-in | warning | yes | Quoted enum defaults that are bare identifiers must be unquoted |
 | [`wrap_assignment_arrays`](#wrap_assignment_arrays) | opt-in | warning | yes | Assignment string arrays wrap when compact JSON length reaches 64 |
@@ -129,7 +130,7 @@ mock = {
 }
 ````
 
-Only top-level entries of `mock = { ... }` and `input = { ... }` are checked, including `function.run` mocks when unfencing. Nested properties inside an already-fenced value, and multiline objects in other contexts (`data`, `join`, `value`), are ignored because Xano does not fence those. Assignment fences (`value =`) and filter-argument fences (`|push:`) are left alone.
+Only top-level entries of `mock = { ... }` and `input = { ... }` are checked, including `function.run` mocks when unfencing. Nested properties inside an already-fenced value, and multiline objects in other contexts (`data`, `join`, `value`), are ignored because Xano does not fence those. Filter-argument fences (`|push:`) are left alone. Assignment fences whose body is an object or array are owned by [`unfence_assignment_values`](#unfence_assignment_values).
 
 A fence whose body is exactly one nonblank line is unfenced onto the key line. Multi-line bodies stay fenced even when they would be short if flattened; Xano unfences but does not collapse. An empty body, or a body that is only a comment, is left fenced.
 
@@ -636,6 +637,37 @@ A `db.edit` / `db.patch` / `db.del` / `db.add_or_edit` on table T inside `db.tra
         } as $updated
       }
     }
+```
+
+## unfence_assignment_values
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
+
+Xano unwraps a fenced assignment when the fence body is exactly one object or array and the one-line form — indent, the `name =` or `return` prefix, and the inline value — would be shorter than 64 UTF-8 bytes. A fenced value that already fills 64 or more bytes stays fenced. The pulled file is canonical; a locally fenced short literal is push/pull churn.
+
+The threshold is the reconstructed line's UTF-8 byte length, not visible columns and not the number of entries. Key order is preserved. Per-line commas in the fence body are dropped. Nested containers inside the literal are inlined with the rest of the value. Wrapped (unfenced) assignment objects and arrays are owned by [`collapse_assignment_values`](#collapse_assignment_values). Mock and input *key* fences (`key:` followed by a fence) stay with [`fence_multiline_values`](#fence_multiline_values). Filter-argument fences (`|push:`, `|set:"k":`) are left alone.
+
+````xs
+value = {lead: false, next: 30, tail: "end"}
+
+value = ```
+  {
+    lead: false
+    next: 30
+    tail: "end"
+  }
+  ```
+````
+
+Auto-fixable with `--fix`: the fence is rewritten as `name = {k: v, k2: v2}` (or `[a, b]`).
+
+Bodies that do not parse as exactly one colon-object or array (ternaries, two literals, comments, scalars, nested fences, `"""` strings, tabs) are skipped. A fenced object with a literal `0` followed by another key is also left alone: that is the layout pull writes, and inlining it is push/pull churn. A `0` that is the last key is unfenced. The opener must end its line, and the closer must sit alone on its own line; a closer followed by a pipe is left alone.
+
+Override the cutoff with `wrap_at` (a positive integer, default 64). Keep it equal to `collapse_assignment_values.wrap_at`:
+
+```yaml
+unfence_assignment_values:
+  wrap_at: 64
 ```
 
 ## unquote_bare_test_names

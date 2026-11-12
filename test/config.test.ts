@@ -16,6 +16,7 @@ describe("config enablement", () => {
     assert.equal(config.enabledRuleIds.has("no_reserved_var"), true);
     assert.equal(config.enabledRuleIds.has("align_object_colons"), false);
     assert.equal(config.enabledRuleIds.has("collapse_assignment_values"), false);
+    assert.equal(config.enabledRuleIds.has("unfence_assignment_values"), false);
     assert.equal(config.enabledRuleIds.has("fence_multiline_values"), false);
     assert.equal(config.enabledRuleIds.has("guid_placement"), false);
     assert.equal(config.enabledRuleIds.has("lock_placement"), false);
@@ -332,6 +333,15 @@ custom_rules:
       null,
     );
     assert.equal(config.ruleOptions.get("collapse_assignment_values")?.wrapAt, 32);
+  });
+
+  it("parses unfence_assignment_values wrap_at", () => {
+    const config = resolveConfig(
+      { unfence_assignment_values: { wrap_at: 32 } },
+      "/tmp",
+      null,
+    );
+    assert.equal(config.ruleOptions.get("unfence_assignment_values")?.wrapAt, 32);
   });
 
   it("rejects a non-integer or non-positive wrap_at", () => {

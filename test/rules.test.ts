@@ -65,6 +65,7 @@ import {
   wrapAssign,
   wrapReturn,
   wrapVarValue,
+  fencedAssignObj,
   wrapTestBlocks,
   EXPECT_EQUAL_NULL_CLEAN_XS,
   EXPECT_EQUAL_NULL_COUNT_XS,
@@ -157,6 +158,12 @@ function wrapAssignArrayHits(
 ) {
   return lintFile({ path: "a.xs", text }, config(overrides)).filter(
     (v) => v.ruleId === "wrap_assignment_arrays",
+  );
+}
+
+function unfenceHits(text: string, overrides: Parameters<typeof resolveConfig>[0] = {}) {
+  return lintFile({ path: "a.xs", text }, config(overrides)).filter(
+    (v) => v.ruleId === "unfence_assignment_values",
   );
 }
 
@@ -2966,6 +2973,220 @@ ${wrappedTagsBlock(TAGS_V63)}
       lowered.some((v) => v.ruleId === "collapse_assignment_values"),
       false,
     );
+  });
+
+  it("unfence_assignment_values uses collapsed line length, not entry count", () => {
+    const inlineLine = (pad: string) => wrapVarValue(inlineAssignObj(pad)).split("\n")[6] ?? "";
+    assert.equal(inlineLine(ASSIGN_LINE_62).length, 62);
+    assert.equal(inlineLine(ASSIGN_LINE_63).length, 63);
+    assert.equal(inlineLine(ASSIGN_LINE_64).length, 64);
+
+    const fenced63 = unfenceHits(wrapVarValue(fencedAssignObj(ASSIGN_LINE_63)));
+    assert.equal(fenced63.length, 1);
+    assert.equal(fenced63[0]?.line, 7);
+    assert.equal(fenced63[0]?.column, 15);
+    assert.equal(fenced63[0]?.severity, "warning");
+    assert.equal(
+      fenced63[0]?.message,
+      "fenced value value of line length 63 must be inline (threshold 64)",
+    );
+
+    const fenced64 = unfenceHits(wrapVarValue(fencedAssignObj(ASSIGN_LINE_64)));
+    assert.equal(fenced64.length, 0);
+
+    const fenced62 = unfenceHits(wrapVarValue(fencedAssignObj(ASSIGN_LINE_62)));
+    assert.equal(fenced62.length, 1);
+    assert.equal(
+      fenced62[0]?.message,
+      "fenced value value of line length 62 must be inline (threshold 64)",
+    );
+
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+    const before = readFileSync(
+      path.join(fixtures, "violations/unfence_assignment_values.xs"),
+      "utf8",
+    );
+    assert.deepEqual(
+      unfenceHits(before).map((v) => v.line),
+      [7, 16, 25, 34, 43, 52, 63, 74, 82, 90],
+    );
+    const kept = readFileSync(
+      path.join(fixtures, "clean/unfence_assignment_values_kept.xs"),
+      "utf8",
+    );
+    assert.equal(unfenceHits(kept).length, 0);
+  });
+
+  it("unfence_assignment_values uses UTF-8 byte length, not character count", () => {
+    const inlineLine = (pad: string) => wrapVarValue(inlineAssignObj(pad)).split("\n")[6] ?? "";
+    const bytes63 = "•".repeat(14);
+    const bytes64 = `${bytes63}x`;
+    assert.equal(Buffer.byteLength(inlineLine(bytes63), "utf8"), 63);
+    assert.equal(Buffer.byteLength(inlineLine(bytes64), "utf8"), 64);
+    assert.equal(inlineLine(bytes63).length < 63, true);
+    assert.equal(inlineLine(bytes64).length < 64, true);
+
+    const fenced63 = unfenceHits(wrapVarValue(fencedAssignObj(bytes63)));
+    assert.equal(fenced63.length, 1);
+    assert.equal(
+      fenced63[0]?.message,
+      "fenced value value of line length 63 must be inline (threshold 64)",
+    );
+
+    const fenced64 = unfenceHits(wrapVarValue(fencedAssignObj(bytes64)));
+    assert.equal(fenced64.length, 0);
+  });
+
+  it("unfence_assignment_values flags assignment owners including return", () => {
+    for (const owner of ["input", "data", "mock", "response", "output", "sort"]) {
+      const hits = unfenceHits(wrapAssign(owner, fencedAssignObj("x")));
+      assert.equal(hits.length, 1, owner);
+      assert.match(
+        hits[0]?.message ?? "",
+        new RegExp(`^fenced ${owner} value of line length \\d+ must be inline`),
+      );
+    }
+
+    const returned = unfenceHits(wrapReturn(fencedAssignObj("x")));
+    assert.equal(returned.length, 1);
+    assert.match(
+      returned[0]?.message ?? "",
+      /^fenced return value of line length \d+ must be inline/,
+    );
+  });
+
+  it("unfence_assignment_values skips pipes, comments, key fences, ternaries, scalars, tabs, a 0 followed by another key, and over-threshold fences", () => {
+    const force = { unfence_assignment_values: { wrap_at: 1000 } };
+    const piped = `function "example" {
+  input {
+  }
+
+  stack {
+    var.update $failures {
+      value = $failures
+        |push:\`\`\`
+          {errors: []}
+          \`\`\`
+    }
+  }
+
+  response = $failures
+}`;
+    assert.equal(unfenceHits(piped, force).length, 0);
+
+    const keyFence = wrapMockBlock(`        "checkout applies gift wrap": \`\`\`
+          {
+            id: 12
+          }
+          \`\`\``);
+    assert.equal(unfenceHits(keyFence, force).length, 0);
+
+    const commented = wrapVarValue(`\`\`\`
+        {
+          // keep this fenced
+          k: 1
+        }
+        \`\`\``);
+    assert.equal(unfenceHits(commented, force).length, 0);
+
+    const closerPiped = wrapVarValue(`\`\`\`
+        {
+          k: 1
+        }
+        \`\`\`|first`);
+    assert.equal(unfenceHits(closerPiped, force).length, 0);
+
+    const ternary = wrapVarValue(`\`\`\`
+        $job == null ? null : {ok: true}
+        \`\`\``);
+    assert.equal(unfenceHits(ternary, force).length, 0);
+
+    const twoLiterals = wrapVarValue(`\`\`\`
+        {id: 1}
+
+        {id: 2}
+        \`\`\``);
+    assert.equal(unfenceHits(twoLiterals, force).length, 0);
+
+    const scalar = wrapVarValue(`\`\`\`
+        42
+        \`\`\``);
+    assert.equal(unfenceHits(scalar, force).length, 0);
+
+    const tabs = wrapVarValue(`\`\`\`
+\t  {
+          k: "x"
+        }
+        \`\`\``);
+    assert.equal(unfenceHits(tabs, force).length, 0);
+
+    const inlineOpener = wrapVarValue("``` {k: 1} ```");
+    assert.equal(unfenceHits(inlineOpener, force).length, 0);
+
+    const itemPipe = wrapVarValue(`\`\`\`
+        [
+          $a
+            |first
+        ]
+        \`\`\``);
+    assert.equal(unfenceHits(itemPipe, force).length, 0);
+
+    const zeroLead = wrapVarValue(`\`\`\`
+        {
+          lead: 0
+          next: 30
+          tail: "end"
+        }
+        \`\`\``);
+    assert.equal(unfenceHits(zeroLead, force).length, 0);
+
+    const zeroLast = wrapVarValue(`\`\`\`
+        {
+          next: 30
+          tail: "end"
+          lead: 0
+        }
+        \`\`\``);
+    assert.equal(unfenceHits(zeroLast, force).length, 1);
+  });
+
+  it("unfence_assignment_values honors disabled_rules, severity, wrap_at, and suppressions", () => {
+    const fenced = wrapVarValue(fencedAssignObj(ASSIGN_LINE_62));
+    const disabled = unfenceHits(fenced, { disabled_rules: ["unfence_assignment_values"] });
+    assert.equal(disabled.length, 0);
+
+    const warned = unfenceHits(fenced, { unfence_assignment_values: "warning" });
+    assert.equal(warned[0]?.severity, "warning");
+
+    const asError = unfenceHits(fenced, { unfence_assignment_values: "error" });
+    assert.equal(asError[0]?.severity, "error");
+
+    const raised = unfenceHits(wrapVarValue(fencedAssignObj(ASSIGN_LINE_64)), {
+      unfence_assignment_values: { wrap_at: 80 },
+    });
+    assert.equal(raised.length, 1);
+
+    const lowered = unfenceHits(fenced, { unfence_assignment_values: { wrap_at: 10 } });
+    assert.equal(lowered.length, 0);
+
+    const suppressed = `function "example" {
+  input {
+  }
+
+  stack {
+    var $row {
+      // xanoscriptlint:disable:next unfence_assignment_values
+      value = \`\`\`
+        {
+          k: "x"
+        }
+        \`\`\`
+    }
+  }
+
+  response = $row
+}`;
+    assert.equal(unfenceHits(suppressed).length, 0);
   });
 
   it("guid_placement accepts a flush guid after a single-line value", () => {
