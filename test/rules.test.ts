@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 import { resolveConfig } from "../src/config.js";
-import { lintFile } from "../src/lint.js";
+import { lintFile, lintFiles } from "../src/lint.js";
 import {
   ALIGNED_MOCK_ENTRIES,
   ALIGNED_MOCK_XS,
@@ -4444,6 +4444,891 @@ function "example" {
         disabled_rules: ["statement_spacing"],
       }),
       [],
+    );
+  });
+});
+
+function txConfig(overrides: Parameters<typeof resolveConfig>[0] = {}) {
+  const extraOnly = Array.isArray(overrides.only_rules)
+    ? overrides.only_rules.filter((id): id is string => typeof id === "string")
+    : [];
+  const only =
+    extraOnly.length > 0
+      ? extraOnly
+      : ["transaction_boundaries", "transaction_locks", "transaction_stale_reads"];
+  const rest = { ...overrides };
+  delete rest.only_rules;
+  return resolveConfig(
+    {
+      only_rules: only,
+      caller_transaction: ["helpers/**"],
+      ...rest,
+    },
+    "/tmp",
+    null,
+  );
+}
+
+function fnXs(name: string, stack: string, extra = ""): string {
+  return `function "${name}" {
+  input {
+  }
+
+  stack {
+${stack}
+  }
+${extra}
+  response = $ok
+}`;
+}
+
+function boundaryHits(text: string, filePath = "a.xs") {
+  return lintFile({ path: filePath, text }, txConfig()).filter(
+    (v) => v.ruleId === "transaction_boundaries",
+  );
+}
+
+function staleHits(text: string, filePath = "a.xs") {
+  return lintFile({ path: filePath, text }, txConfig()).filter(
+    (v) => v.ruleId === "transaction_stale_reads",
+  );
+}
+
+function lockHitsTx(text: string, filePath = "a.xs") {
+  return lintFile({ path: filePath, text }, txConfig()).filter(
+    (v) => v.ruleId === "transaction_locks",
+  );
+}
+
+describe("transaction_boundaries", () => {
+  it("flags lock = true outside db.transaction", () => {
+    const text = fnXs(
+      "Wallet/read_row",
+      `    db.get wallet {
+      field_name = "id"
+      field_value = $input.id
+      lock = true
+    } as $row`,
+    );
+    const hits = boundaryHits(text);
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.message, "`lock = true` must be inside `db.transaction`");
+    assert.equal(hits[0]?.severity, "error");
+    assert.equal(hits[0]?.line, 6);
+  });
+
+  it("flags lock = true on a compact single-line block outside db.transaction", () => {
+    const hits = boundaryHits(fnXs("Wallet/read_rows", "    db.query wallet {lock = true} as $rows"));
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.message, "`lock = true` must be inside `db.transaction`");
+    assert.equal(hits[0]?.line, 6);
+
+    const commented = fnXs("Wallet/read_rows", "    db.query wallet {} as $rows // {lock = true}");
+    assert.deepEqual(boundaryHits(commented), []);
+
+    const quoted = fnXs("Wallet/read_rows", '    db.query wallet {where = "{lock = true}"} as $rows');
+    assert.deepEqual(boundaryHits(quoted), []);
+  });
+
+  it("accepts lock = true inside db.transaction", () => {
+    const text = fnXs(
+      "Wallet/read_row",
+      `    db.transaction {
+      stack {
+        db.get wallet {
+          field_name = "id"
+          field_value = $input.id
+          lock = true
+        } as $row
+      }
+    }`,
+    );
+    assert.deepEqual(boundaryHits(text), []);
+  });
+
+  it("skips lock = true outside a transaction in a caller-transaction file", () => {
+    const text = fnXs(
+      "Wallet/apply_debit",
+      `    db.get wallet {
+      field_name = "id"
+      field_value = $input.id
+      lock = true
+    } as $row`,
+    );
+    assert.deepEqual(boundaryHits(text, "helpers/apply_debit.xs"), []);
+  });
+
+  it("flags a nested db.transaction", () => {
+    const text = fnXs(
+      "Inventory/reserve_stock",
+      `    db.transaction {
+      stack {
+        db.transaction {
+          stack {
+            db.get inventory_item {
+              field_name = "id"
+              field_value = $input.id
+            } as $item
+          }
+        }
+      }
+    }`,
+    );
+    const hits = boundaryHits(text);
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.message, "`db.transaction` must not nest inside another `db.transaction`");
+  });
+
+  it("flags a caller-transaction file that opens db.transaction", () => {
+    const text = fnXs(
+      "Wallet/apply_debit",
+      `    db.transaction {
+      stack {
+        db.get wallet {
+          field_name = "id"
+          field_value = $input.id
+          lock = true
+        } as $row
+      }
+    }`,
+    );
+    const hits = boundaryHits(text, "helpers/apply_debit.xs");
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.message, "caller-transaction file must not open db.transaction");
+  });
+
+  it("flags function.run of a callee that opens db.transaction", () => {
+    const callee = fnXs(
+      "Wallet/settle",
+      `    db.transaction {
+      stack {
+        db.get wallet {
+          field_name = "id"
+          field_value = $input.id
+        } as $row
+      }
+    }`,
+    );
+    const caller = fnXs(
+      "Inventory/reserve_stock",
+      `    db.transaction {
+      stack {
+        function.run "Wallet/settle" {
+          input = {id: $input.wallet_id}
+        } as $settled
+      }
+    }`,
+    );
+    const hits = lintFiles(
+      [
+        { path: "wallet/settle.xs", text: callee },
+        { path: "inventory/reserve.xs", text: caller },
+      ],
+      txConfig(),
+    ).filter((v) => v.ruleId === "transaction_boundaries");
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.file, "inventory/reserve.xs");
+    assert.equal(hits[0]?.message, 'function.run "Wallet/settle" opens its own db.transaction');
+  });
+
+  it("flags function.run of a caller-transaction callee outside db.transaction", () => {
+    const helper = fnXs(
+      "Wallet/apply_debit",
+      `    db.get wallet {
+      field_name = "id"
+      field_value = $input.id
+      lock = true
+    } as $row`,
+    );
+    const caller = fnXs(
+      "Inventory/reserve_stock",
+      `    function.run "Wallet/apply_debit" {
+      input = {id: $input.wallet_id}
+    } as $debited`,
+    );
+    const hits = lintFiles(
+      [
+        { path: "helpers/apply_debit.xs", text: helper },
+        { path: "inventory/reserve.xs", text: caller },
+      ],
+      txConfig(),
+    ).filter((v) => v.ruleId === "transaction_boundaries");
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.file, "inventory/reserve.xs");
+    assert.equal(
+      hits[0]?.message,
+      'function.run "Wallet/apply_debit" must run inside db.transaction',
+    );
+  });
+
+  it("accepts function.run of a caller-transaction callee inside db.transaction", () => {
+    const helper = fnXs(
+      "Wallet/apply_debit",
+      `    db.get wallet {
+      field_name = "id"
+      field_value = $input.id
+      lock = true
+    } as $row`,
+    );
+    const caller = fnXs(
+      "Inventory/reserve_stock",
+      `    db.transaction {
+      stack {
+        function.run "Wallet/apply_debit" {
+          input = {id: $input.wallet_id}
+        } as $debited
+      }
+    }`,
+    );
+    const hits = lintFiles(
+      [
+        { path: "helpers/apply_debit.xs", text: helper },
+        { path: "inventory/reserve.xs", text: caller },
+      ],
+      txConfig(),
+    ).filter((v) => v.ruleId === "transaction_boundaries");
+    assert.deepEqual(hits, []);
+  });
+
+  it("flags a duplicate function name and skips callee checks for it", () => {
+    const first = fnXs(
+      "Wallet/settle",
+      `    db.get wallet {
+      field_name = "id"
+      field_value = $input.id
+    } as $row`,
+    );
+    const second = fnXs(
+      "Wallet/settle",
+      `    db.transaction {
+      stack {
+        db.get wallet {
+          field_name = "id"
+          field_value = $input.id
+        } as $row
+      }
+    }`,
+    );
+    const caller = fnXs(
+      "Inventory/reserve_stock",
+      `    db.transaction {
+      stack {
+        function.run "Wallet/settle" {
+          input = {id: $input.wallet_id}
+        } as $settled
+      }
+    }`,
+    );
+    const hits = lintFiles(
+      [
+        { path: "wallet/settle_a.xs", text: first },
+        { path: "wallet/settle_b.xs", text: second },
+        { path: "inventory/reserve.xs", text: caller },
+      ],
+      txConfig(),
+    ).filter((v) => v.ruleId === "transaction_boundaries");
+    assert.deepEqual(
+      hits.map((v) => ({ file: v.file, message: v.message })),
+      [
+        {
+          file: "wallet/settle_a.xs",
+          message: 'function "Wallet/settle" is defined more than once',
+        },
+        {
+          file: "wallet/settle_b.xs",
+          message: 'function "Wallet/settle" is defined more than once',
+        },
+      ],
+    );
+  });
+
+  it("ignores lock = true in comments, strings, fences, and test blocks", () => {
+    const text = `function "Wallet/read_row" {
+  input {
+  }
+
+  stack {
+    // db.transaction {
+    var $note {
+      value = "lock = true"
+    }
+    db.get wallet {
+      field_name = "id"
+      field_value = $input.id
+      mock = {
+        "ignored": \`\`\`
+          lock = true
+          db.transaction {
+          }
+          \`\`\`
+      }
+    } as $row
+  }
+
+  test "fixture lock" {
+    db.get wallet {
+      field_name = "id"
+      field_value = 1
+      lock = true
+    } as $row
+  }
+
+  response = $ok
+}`;
+    assert.deepEqual(boundaryHits(text), []);
+  });
+
+  it("honors disable:next", () => {
+    const text = fnXs(
+      "Wallet/read_row",
+      `    // xanoscriptlint:disable:next transaction_boundaries
+    db.get wallet {
+      field_name = "id"
+      field_value = $input.id
+      lock = true
+    } as $row`,
+    );
+    assert.deepEqual(boundaryHits(text), []);
+  });
+
+  it("is off by default", () => {
+    const text = fnXs(
+      "Wallet/read_row",
+      `    db.get wallet {
+      field_name = "id"
+      field_value = $input.id
+      lock = true
+    } as $row`,
+    );
+    const off = lintFile({ path: "a.xs", text }, resolveConfig({}, "/tmp", null));
+    assert.equal(
+      off.some((v) => v.ruleId === "transaction_boundaries"),
+      false,
+    );
+  });
+});
+
+describe("transaction_stale_reads", () => {
+  it("flags a write inside db.transaction after an outside read of the same table", () => {
+    const text = fnXs(
+      "Inventory/rename_item",
+      `    db.get inventory_item {
+      field_name = "id"
+      field_value = $input.id
+    } as $item
+
+    db.transaction {
+      stack {
+        db.edit inventory_item {
+          field_name = "id"
+          field_value = $input.id
+          data = {
+            name: $input.name
+          }
+        } as $updated
+      }
+    }`,
+    );
+    const hits = staleHits(text);
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.severity, "warning");
+    assert.match(hits[0]?.message ?? "", /db\.edit inventory_item/);
+  });
+
+  it("accepts a re-read of the table inside the transaction", () => {
+    const text = fnXs(
+      "Inventory/rename_item",
+      `    db.get inventory_item {
+      field_name = "id"
+      field_value = $input.id
+    } as $item
+
+    db.transaction {
+      stack {
+        db.get inventory_item {
+          field_name = "id"
+          field_value = $input.id
+        } as $fresh
+
+        db.edit inventory_item {
+          field_name = "id"
+          field_value = $input.id
+          data = {
+            name: $input.name
+          }
+        } as $updated
+      }
+    }`,
+    );
+    assert.deepEqual(staleHits(text), []);
+  });
+
+  it("handles a quoted table name", () => {
+    const text = fnXs(
+      "Inventory/rename_item",
+      `    db.get "inventory_item" {
+      field_name = "id"
+      field_value = $input.id
+    } as $item
+
+    db.transaction {
+      stack {
+        db.patch "inventory_item" {
+          field_name = "id"
+          field_value = $input.id
+          data = {
+            name: $input.name
+          }
+        } as $updated
+      }
+    }`,
+    );
+    assert.equal(staleHits(text).length, 1);
+  });
+
+  it("still flags when a later outside read follows the transaction", () => {
+    const text = fnXs(
+      "Inventory/rename_item",
+      `    db.get inventory_item {
+      field_name = "id"
+      field_value = $input.id
+    } as $item
+
+    db.transaction {
+      stack {
+        db.edit inventory_item {
+          field_name = "id"
+          field_value = $input.id
+          data = {
+            name: $input.name
+          }
+        } as $updated
+      }
+    }
+
+    db.get inventory_item {
+      field_name = "id"
+      field_value = $input.id
+    } as $after`,
+    );
+    assert.equal(staleHits(text).length, 1);
+  });
+
+  it("skips caller-transaction files", () => {
+    const text = fnXs(
+      "Wallet/apply_debit",
+      `    db.get wallet {
+      field_name = "id"
+      field_value = $input.id
+    } as $row
+
+    db.transaction {
+      stack {
+        db.edit wallet {
+          field_name = "id"
+          field_value = $input.id
+          data = {
+            balance: $input.balance
+          }
+        } as $updated
+      }
+    }`,
+    );
+    assert.equal(staleHits(text, "a.xs").length, 1);
+    assert.deepEqual(staleHits(text, "helpers/apply_debit.xs"), []);
+  });
+
+  it("ignores writes inside test blocks", () => {
+    const text = `function "Inventory/rename_item" {
+  input {
+  }
+
+  stack {
+    db.get inventory_item {
+      field_name = "id"
+      field_value = $input.id
+    } as $item
+  }
+
+  test "edits a fixture row" {
+    db.transaction {
+      stack {
+        db.edit inventory_item {
+          field_name = "id"
+          field_value = 1
+          data = {
+            name: "sample"
+          }
+        } as $updated
+      }
+    }
+  }
+
+  response = $ok
+}`;
+    assert.deepEqual(staleHits(text), []);
+  });
+
+  it("is off by default", () => {
+    const text = fnXs(
+      "Inventory/rename_item",
+      `    db.get inventory_item {
+      field_name = "id"
+      field_value = $input.id
+    } as $item
+
+    db.transaction {
+      stack {
+        db.del inventory_item {
+          field_name = "id"
+          field_value = $input.id
+        }
+      }
+    }`,
+    );
+    const off = lintFile({ path: "a.xs", text }, resolveConfig({}, "/tmp", null));
+    assert.equal(
+      off.some((v) => v.ruleId === "transaction_stale_reads"),
+      false,
+    );
+  });
+});
+
+describe("transaction_locks", () => {
+  it("flags an unlocked read whose variable feeds a later write data block", () => {
+    const text = fnXs(
+      "Wallet/apply_debit",
+      `    db.transaction {
+      stack {
+        db.get wallet {
+          field_name = "id"
+          field_value = $input.id
+        } as $fresh
+
+        db.edit wallet {
+          field_name = "id"
+          field_value = $fresh.id
+          data = {
+            balance: $fresh.balance
+          }
+        } as $updated
+      }
+    }`,
+    );
+    const hits = lockHitsTx(text);
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.severity, "error");
+    assert.equal(hits[0]?.line, 8);
+    assert.match(hits[0]?.message ?? "", /unlocked read of wallet as \$fresh/);
+  });
+
+  it("accepts lock = true on that read", () => {
+    const text = fnXs(
+      "Wallet/apply_debit",
+      `    db.transaction {
+      stack {
+        db.get wallet {
+          field_name = "id"
+          field_value = $input.id
+          lock = true
+        } as $fresh
+
+        db.edit wallet {
+          field_name = "id"
+          field_value = $fresh.id
+          data = {
+            balance: $fresh.balance
+          }
+        } as $updated
+      }
+    }`,
+    );
+    assert.deepEqual(lockHitsTx(text), []);
+  });
+
+  it("does not treat field_value or } as $var as a data reference", () => {
+    const text = fnXs(
+      "Wallet/apply_debit",
+      `    db.transaction {
+      stack {
+        db.get wallet {
+          field_name = "id"
+          field_value = $input.id
+        } as $fresh
+
+        db.edit wallet {
+          field_name = "id"
+          field_value = $fresh.id
+          data = {
+            name: $input.name
+          }
+        } as $fresh
+      }
+    }`,
+    );
+    assert.deepEqual(lockHitsTx(text), []);
+  });
+
+  it("flags an unlocked single db.query", () => {
+    const text = fnXs(
+      "Wallet/apply_debit",
+      `    db.query wallet {
+      where = $db.wallet.id == $input.id
+      return = {type: "single"}
+    } as $fresh
+
+    db.patch wallet {
+      field_name = "id"
+      field_value = $input.id
+      data = {
+        balance: $fresh.balance
+      }
+    } as $updated`,
+    );
+    assert.equal(lockHitsTx(text).length, 1);
+  });
+
+  it("ignores a list db.query", () => {
+    const text = fnXs(
+      "Wallet/list_rows",
+      `    db.query wallet {
+      where = $db.wallet.user_id == $input.user_id
+      return = {type: "list"}
+    } as $rows
+
+    db.edit wallet {
+      field_name = "id"
+      field_value = $input.id
+      data = {
+        note: $rows
+      }
+    } as $updated`,
+    );
+    assert.deepEqual(lockHitsTx(text), []);
+  });
+
+  it("does not treat a commented type: \"single\" as a single db.query", () => {
+    const text = fnXs(
+      "Wallet/list_rows",
+      `    db.query wallet {
+      where = $db.wallet.user_id == $input.user_id
+      return = {
+        type: "list"
+        // type: "single"
+      }
+    } as $rows
+
+    db.edit wallet {
+      field_name = "id"
+      field_value = $input.id
+      data = {
+        note: $rows
+      }
+    } as $updated`,
+    );
+    assert.deepEqual(lockHitsTx(text), []);
+  });
+
+  it("still flags a single db.query when a comment sits in the return object", () => {
+    const text = fnXs(
+      "Wallet/apply_debit",
+      `    db.query wallet {
+      where = $db.wallet.id == $input.id
+      return = {
+        type: "single"
+        // type: "list"
+      }
+    } as $fresh
+
+    db.patch wallet {
+      field_name = "id"
+      field_value = $input.id
+      data = {
+        balance: $fresh.balance
+      }
+    } as $updated`,
+    );
+    assert.equal(lockHitsTx(text).length, 1);
+  });
+
+  it("runs in caller-transaction files", () => {
+    const text = fnXs(
+      "Wallet/apply_debit",
+      `    db.get wallet {
+      field_name = "id"
+      field_value = $input.id
+    } as $fresh
+
+    db.edit wallet {
+      field_name = "id"
+      field_value = $input.id
+      data = {
+        balance: $fresh.balance
+      }
+    } as $updated`,
+    );
+    assert.equal(lockHitsTx(text, "helpers/apply_debit.xs").length, 1);
+  });
+
+  it("ignores $var inside comments, strings, and test blocks", () => {
+    const text = `function "Wallet/apply_debit" {
+  input {
+  }
+
+  stack {
+    db.get wallet {
+      field_name = "id"
+      field_value = $input.id
+    } as $fresh
+
+    db.edit wallet {
+      field_name = "id"
+      field_value = $input.id
+      data = {
+        // copied from $fresh.balance
+        note: "held $fresh.balance"
+        name: $input.name
+      }
+    } as $updated
+  }
+
+  test "uses a fixture row" {
+    db.get wallet {
+      field_name = "id"
+      field_value = 1
+    } as $fresh
+
+    db.edit wallet {
+      field_name = "id"
+      field_value = 1
+      data = {
+        balance: $fresh.balance
+      }
+    } as $updated
+  }
+
+  response = $ok
+}`;
+    assert.deepEqual(lockHitsTx(text), []);
+  });
+
+  it("does not treat $row inside a triple-quoted data note as a reference", () => {
+    const text = fnXs(
+      "Wallet/apply_debit",
+      `    db.get wallet {
+      field_name = "id"
+      field_value = $input.id
+    } as $row
+
+    db.edit wallet {
+      field_name = "id"
+      field_value = $input.id
+      data = {
+        note: """
+          copied from $row
+          """
+        name: $input.name
+      }
+    } as $updated`,
+    );
+    assert.deepEqual(lockHitsTx(text), []);
+  });
+
+  it("treats a compact single-line return of type single as a single read", () => {
+    const write = `
+
+    db.edit wallet {
+      field_name = "id"
+      field_value = $input.id
+      data = {
+        balance: $row.balance
+      }
+    } as $updated`;
+    const compact = fnXs(
+      "Wallet/apply_debit",
+      `    db.query wallet {return = {type: "single"}} as $row${write}`,
+    );
+    const hits = lockHitsTx(compact);
+    assert.equal(hits.length, 1);
+    assert.match(hits[0]?.message ?? "", /unlocked read of wallet as \$row/);
+
+    const commented = fnXs(
+      "Wallet/apply_debit",
+      `    db.query wallet {} as $row // {return = {type: "single"}}${write}`,
+    );
+    assert.deepEqual(lockHitsTx(commented), []);
+
+    const quoted = fnXs(
+      "Wallet/apply_debit",
+      `    db.query wallet {where = "{return = {type: 'single'}}"} as $row${write}`,
+    );
+    assert.deepEqual(lockHitsTx(quoted), []);
+  });
+
+  it("keeps data after a triple-quoted note containing a quote and closing brace", () => {
+    const text = fnXs(
+      "Wallet/apply_debit",
+      `    db.get wallet {
+      field_name = "id"
+      field_value = $input.id
+    } as $row
+
+    db.edit wallet {
+      field_name = "id"
+      field_value = $input.id
+      data = {
+        note: """
+          said " }
+          """
+        balance: $row.balance
+      }
+    } as $updated`,
+    );
+    const hits = lockHitsTx(text);
+    assert.equal(hits.length, 1);
+    assert.match(hits[0]?.message ?? "", /unlocked read of wallet as \$row/);
+  });
+
+  it("honors disable:next on the read", () => {
+    const text = fnXs(
+      "Wallet/apply_debit",
+      `    // xanoscriptlint:disable:next transaction_locks
+    db.get wallet {
+      field_name = "id"
+      field_value = $input.id
+    } as $fresh
+
+    db.edit wallet {
+      field_name = "id"
+      field_value = $input.id
+      data = {
+        balance: $fresh.balance
+      }
+    } as $updated`,
+    );
+    assert.deepEqual(lockHitsTx(text), []);
+  });
+
+  it("is off by default", () => {
+    const text = fnXs(
+      "Wallet/apply_debit",
+      `    db.get wallet {
+      field_name = "id"
+      field_value = $input.id
+    } as $fresh
+
+    db.edit wallet {
+      field_name = "id"
+      field_value = $input.id
+      data = {
+        balance: $fresh.balance
+      }
+    } as $updated`,
+    );
+    const off = lintFile({ path: "a.xs", text }, resolveConfig({}, "/tmp", null));
+    assert.equal(
+      off.some((v) => v.ruleId === "transaction_locks"),
+      false,
     );
   });
 });

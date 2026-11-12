@@ -7,6 +7,8 @@ import { Command, CommanderError } from "commander";
 import { applyRuleOverrides, ConfigError, loadConfig } from "./config.js";
 import { discoverXsFiles } from "./discover.js";
 import { fixFile, lintFiles, readSourceFile } from "./lint.js";
+import { buildProjectIndex, needsProjectIndex } from "./project.js";
+import type { LintContext } from "./rules/types.js";
 import { builtinRules } from "./rules/index.js";
 import {
   applyStrict,
@@ -134,7 +136,8 @@ async function runLint(
       only: opts.only ?? [],
     });
     const strict = opts.strict ?? config.strict;
-    const files = await discoverXsFiles({ config, cwd, cliPaths: paths });
+    const discovered = await discoverXsFiles({ config, cwd, cliPaths: paths });
+    const files = discovered.files;
     let sources = files.map((filePath) => readSourceFile(filePath));
     if (opts.fix) {
       const corrections: Correction[] = [];
@@ -155,7 +158,15 @@ async function runLint(
         stream.write(text);
       }
     }
-    const violations = applyStrict(lintFiles(sources, config), strict);
+    let context: LintContext | undefined;
+    if (needsProjectIndex(config)) {
+      const byPath = new Map(sources.map((source) => [source.path, source]));
+      const indexSources = discovered.allFiles.map(
+        (filePath) => byPath.get(filePath) ?? readSourceFile(filePath),
+      );
+      context = buildProjectIndex(indexSources, config);
+    }
+    const violations = applyStrict(lintFiles(sources, config, context), strict);
     const report = formatReport(violations, reporter, cwd);
     if (report.length > 0) {
       io.stdout.write(report.endsWith("\n") ? report : `${report}\n`);

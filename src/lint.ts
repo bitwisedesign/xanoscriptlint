@@ -1,8 +1,15 @@
 import { readFileSync } from "node:fs";
 import { runCustomRules } from "./customRules.js";
 import type { ResolvedConfig } from "./config.js";
+import { buildProjectIndex, needsProjectIndex } from "./project.js";
 import { builtinRules } from "./rules/index.js";
-import type { Correction, FixResult, SourceFile, Violation } from "./rules/types.js";
+import type {
+  Correction,
+  FixResult,
+  LintContext,
+  SourceFile,
+  Violation,
+} from "./rules/types.js";
 import { isSuppressed, parseSuppressions } from "./suppress.js";
 
 export function readSourceFile(filePath: string): SourceFile {
@@ -12,22 +19,31 @@ export function readSourceFile(filePath: string): SourceFile {
 export function lintFiles(
   files: SourceFile[],
   config: ResolvedConfig,
+  context?: LintContext,
 ): Violation[] {
+  const ctx =
+    context ?? (needsProjectIndex(config) ? buildProjectIndex(files, config) : undefined);
   const violations: Violation[] = [];
   for (const file of files) {
-    violations.push(...lintFile(file, config));
+    violations.push(...lintFile(file, config, ctx));
   }
   return violations;
 }
 
-export function lintFile(file: SourceFile, config: ResolvedConfig): Violation[] {
+export function lintFile(
+  file: SourceFile,
+  config: ResolvedConfig,
+  context?: LintContext,
+): Violation[] {
+  const ctx =
+    context ?? (needsProjectIndex(config) ? buildProjectIndex([file], config) : undefined);
   const found: Violation[] = [];
   for (const rule of builtinRules) {
     if (!config.enabledRuleIds.has(rule.id)) {
       continue;
     }
     const options = config.ruleOptions.get(rule.id) ?? {};
-    found.push(...rule.lint(file, options));
+    found.push(...rule.lint(file, options, ctx));
   }
   found.push(...runCustomRules(file, config.customRules));
   const customIds = new Set(config.customRules.map((custom) => custom.id));
@@ -93,6 +109,7 @@ function normalizeFix(
   };
 }
 
-export type { Correction, SourceFile, Violation } from "./rules/types.js";
+export type { Correction, LintContext, SourceFile, Violation } from "./rules/types.js";
 export { builtinRules } from "./rules/index.js";
 export { loadConfig, ConfigError } from "./config.js";
+export { buildProjectIndex, needsProjectIndex } from "./project.js";

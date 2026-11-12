@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Opt-in `transaction_boundaries` flags `lock = true` outside `db.transaction`, a nested `db.transaction`, a `function.run` of a callee that opens its own transaction, a caller-transaction file that opens `db.transaction`, and a caller-transaction callee run outside one (error). There is no auto-fix.
+- Opt-in `transaction_locks` flags an unlocked `db.get` or single `db.query` whose variable feeds a later `db.edit` / `db.patch` / `db.add_or_edit` of that table (error). There is no auto-fix.
+- Opt-in `transaction_stale_reads` flags a write inside `db.transaction` after a read of that table from outside it, when the transaction does not re-read the table (warning). There is no auto-fix.
+- Top-level `caller_transaction` lists globs for files that already run inside the caller's `db.transaction`.
 - Opt-in `lock_placement` flags a `lock` that is not immediately after `field_value` in `db.get`, or not the first member of `db.query` (warning). Auto-fix moves it to Xano's push form.
 
 ## [0.8.0] - 2026-10-22
