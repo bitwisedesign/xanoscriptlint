@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Opt-in `lock_placement` flags a `lock` that is not immediately after `field_value` in `db.get`, or not the first member of `db.query` (warning). Auto-fix moves it to Xano's push form.
 - Opt-in `unfence_assignment_values` flags a fenced assignment or `return` whose body is one object or array and whose one-line form is under 64 UTF-8 bytes (warning). A fenced object with a literal `0` followed by another key is left alone. Auto-fix rewrites the rest to the inline form Xano produces on push.
 
+### Removed
+
+- `no_zero_set_filter`. `|set:` of a literal `0` does write the field, as verified on Xano. A config that still lists it in `opt_in_rules` or `only_rules` now fails with `unknown rule id`.
+
 ## [0.8.0] - 2026-10-22
 
 ### Added
