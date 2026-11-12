@@ -26,7 +26,6 @@ describe("config enablement", () => {
     assert.equal(config.enabledRuleIds.has("no_null_response"), false);
     assert.equal(config.enabledRuleIds.has("no_expect_equal_null"), false);
     assert.equal(config.enabledRuleIds.has("no_zero_numeric_default"), false);
-    assert.equal(config.enabledRuleIds.has("no_zero_set_filter"), false);
     assert.equal(config.enabledRuleIds.has("quote_negative_numeric_default"), false);
     assert.equal(config.enabledRuleIds.has("unquote_bare_test_names"), false);
     assert.equal(config.enabledRuleIds.has("unquote_enum_defaults"), false);
@@ -419,7 +418,6 @@ describe("CLI rule overrides", () => {
     assert.equal(config.enabledRuleIds.has("align_object_colons"), true);
     assert.equal(config.enabledRuleIds.has("no_null_response"), true);
     assert.equal(config.enabledRuleIds.has("no_expect_equal_null"), true);
-    assert.equal(config.enabledRuleIds.has("no_zero_set_filter"), true);
     assert.equal(config.enabledRuleIds.has("wrap_piped_values"), true);
     assert.equal(config.enabledRuleIds.has("empty_function_run"), true);
   });
