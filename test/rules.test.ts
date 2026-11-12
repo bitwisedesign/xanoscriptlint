@@ -3123,6 +3123,14 @@ ${wrappedTagsBlock(TAGS_V63)}
     const inlineOpener = wrapVarValue("``` {k: 1} ```");
     assert.equal(unfenceHits(inlineOpener, force).length, 0);
 
+    const itemPipe = wrapVarValue(`\`\`\`
+        [
+          $a
+            |first
+        ]
+        \`\`\``);
+    assert.equal(unfenceHits(itemPipe, force).length, 0);
+
     const zeroLead = wrapVarValue(`\`\`\`
         {
           lead: 0

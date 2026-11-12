@@ -67,6 +67,9 @@ function lineHasTab(lines: string[], startLine: number, endLine: number): boolea
 }
 
 function parseFenceBody(body: string): ContainerNode | null {
+  if (body.split("\n").some((line) => line.trimStart().startsWith("|"))) {
+    return null;
+  }
   const cursor = { text: body.trim(), i: 0 };
   const node = parseValue(cursor);
   if (node === null || (node.kind !== "object" && node.kind !== "array")) {
