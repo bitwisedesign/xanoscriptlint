@@ -4517,6 +4517,19 @@ describe("transaction_boundaries", () => {
     assert.equal(hits[0]?.line, 6);
   });
 
+  it("flags lock = true on a compact single-line block outside db.transaction", () => {
+    const hits = boundaryHits(fnXs("Wallet/read_rows", "    db.query wallet {lock = true} as $rows"));
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.message, "`lock = true` must be inside `db.transaction`");
+    assert.equal(hits[0]?.line, 6);
+
+    const commented = fnXs("Wallet/read_rows", "    db.query wallet {} as $rows // {lock = true}");
+    assert.deepEqual(boundaryHits(commented), []);
+
+    const quoted = fnXs("Wallet/read_rows", '    db.query wallet {where = "{lock = true}"} as $rows');
+    assert.deepEqual(boundaryHits(quoted), []);
+  });
+
   it("accepts lock = true inside db.transaction", () => {
     const text = fnXs(
       "Wallet/read_row",
@@ -5219,6 +5232,61 @@ describe("transaction_locks", () => {
     } as $updated`,
     );
     assert.deepEqual(lockHitsTx(text), []);
+  });
+
+  it("treats a compact single-line return of type single as a single read", () => {
+    const write = `
+
+    db.edit wallet {
+      field_name = "id"
+      field_value = $input.id
+      data = {
+        balance: $row.balance
+      }
+    } as $updated`;
+    const compact = fnXs(
+      "Wallet/apply_debit",
+      `    db.query wallet {return = {type: "single"}} as $row${write}`,
+    );
+    const hits = lockHitsTx(compact);
+    assert.equal(hits.length, 1);
+    assert.match(hits[0]?.message ?? "", /unlocked read of wallet as \$row/);
+
+    const commented = fnXs(
+      "Wallet/apply_debit",
+      `    db.query wallet {} as $row // {return = {type: "single"}}${write}`,
+    );
+    assert.deepEqual(lockHitsTx(commented), []);
+
+    const quoted = fnXs(
+      "Wallet/apply_debit",
+      `    db.query wallet {where = "{return = {type: 'single'}}"} as $row${write}`,
+    );
+    assert.deepEqual(lockHitsTx(quoted), []);
+  });
+
+  it("keeps data after a triple-quoted note containing a quote and closing brace", () => {
+    const text = fnXs(
+      "Wallet/apply_debit",
+      `    db.get wallet {
+      field_name = "id"
+      field_value = $input.id
+    } as $row
+
+    db.edit wallet {
+      field_name = "id"
+      field_value = $input.id
+      data = {
+        note: """
+          said " }
+          """
+        balance: $row.balance
+      }
+    } as $updated`,
+    );
+    const hits = lockHitsTx(text);
+    assert.equal(hits.length, 1);
+    assert.match(hits[0]?.message ?? "", /unlocked read of wallet as \$row/);
   });
 
   it("honors disable:next on the read", () => {

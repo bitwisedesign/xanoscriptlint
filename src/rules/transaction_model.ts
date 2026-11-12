@@ -20,10 +20,12 @@ const FUNCTION_RUN_ARG =
   /^\s*function\.run\s+(?:"([^"]*)"|'([^']*)')/;
 
 const LOCK_TRUE = /^\s*lock\s*=\s*true\b/;
+const INLINE_LOCK_TRUE = /\{\s*lock\s*=\s*true\s*\}/;
 const DATA_MEMBER = /^\s*data\s*=/;
 const RETURN_MEMBER = /^\s*return\s*=/;
 const AS_VAR = /(?:^|})\s*as\s+\$([A-Za-z_][A-Za-z0-9_]*)\s*$/;
 const TYPE_SINGLE = /type\s*:\s*["']single["']/;
+const INLINE_RETURN = /\{\s*return\s*=\s*\{/;
 
 interface Region {
   kind: "unit" | "tx" | "test" | "stmt";
@@ -289,9 +291,19 @@ function hasLock(
   region: Region,
   bodyDepth: number,
 ): boolean {
+  if (
+    region.line === region.endLine &&
+    INLINE_LOCK_TRUE.test(maskQuoted(stripLineComment(lines[region.line])))
+  ) {
+    return true;
+  }
   return memberLines(lines, literals, depths, region, bodyDepth).some((line) =>
     LOCK_TRUE.test(lines[line]),
   );
+}
+
+function maskQuoted(line: string): string {
+  return line.replace(/"(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'/g, (m) => " ".repeat(m.length));
 }
 
 function hasSingleReturn(
@@ -301,6 +313,9 @@ function hasSingleReturn(
   region: Region,
   bodyDepth: number,
 ): boolean {
+  if (region.line === region.endLine && hasInlineSingleReturn(lines[region.line])) {
+    return true;
+  }
   for (const start of memberLines(lines, literals, depths, region, bodyDepth)) {
     if (!RETURN_MEMBER.test(lines[start])) {
       continue;
@@ -318,6 +333,19 @@ function hasSingleReturn(
     }
   }
   return false;
+}
+
+function hasInlineSingleReturn(line: string): boolean {
+  const code = stripLineComment(line);
+  const masked = maskQuoted(code);
+  const opener = INLINE_RETURN.exec(masked);
+  if (opener === null) {
+    return false;
+  }
+  const open = opener.index + opener[0].length - 1;
+  const close = matchingBrace(masked, open);
+  const body = code.slice(open, close < 0 ? code.length : close + 1);
+  return TYPE_SINGLE.test(body);
 }
 
 function dataRange(
@@ -489,14 +517,28 @@ function indexOfCode(text: string, token: string, from: number): number {
 function matchingBrace(text: string, open: number): number {
   let depth = 0;
   let i = open;
-  let mode: "code" | "double" | "single" = "code";
+  let mode: "code" | "double" | "single" | "triple" = "code";
   let escape = false;
   while (i < text.length) {
     const ch = text[i];
+    if (mode === "triple") {
+      if (text.startsWith('"""', i)) {
+        mode = "code";
+        i += 3;
+        continue;
+      }
+      i += 1;
+      continue;
+    }
     if (mode === "code") {
       if (ch === "/" && text[i + 1] === "/") {
         const nl = text.indexOf("\n", i);
         i = nl < 0 ? text.length : nl + 1;
+        continue;
+      }
+      if (text.startsWith('"""', i)) {
+        mode = "triple";
+        i += 3;
         continue;
       }
       if (ch === '"') {
