@@ -70,6 +70,18 @@ excluded:
 
 Paths are relative to the directory that contains the config file. If `included` is omitted, it defaults to `**/*.xs` (including `.xs` files in that directory). **Exclude wins.** CLI path arguments further restrict the included set; they do not override excludes.
 
+## Caller-transaction files
+
+```yaml
+caller_transaction:
+  - "helpers/**"
+  - "wallet/apply_debit.xs"
+```
+
+Globs are relative to the directory that contains the config file, using the same picomatch rules as `included`. Matching files are treated as already running inside the caller's `db.transaction`. [`transaction_boundaries`](rules.md#transaction_boundaries) and [`transaction_stale_reads`](rules.md#transaction_stale_reads) use this list. The linter does not infer a file-naming convention; each repo encodes its own.
+
+When a transaction rule is enabled, linting a single path still indexes every included `.xs` file so `function.run` callees in other files are visible.
+
 ## Per-rule options
 
 ```yaml

@@ -20,6 +20,7 @@ const KNOWN_KEYS = new Set([
   "only_rules",
   "included",
   "excluded",
+  "caller_transaction",
   "custom_rules",
   "strict",
 ]);
@@ -42,6 +43,7 @@ export interface ResolvedConfig {
   ruleOptions: Map<string, RuleOptions>;
   included: string[];
   excluded: string[];
+  callerTransaction: string[];
   customRules: CustomRuleConfig[];
   definedCustomRules: CustomRuleConfig[];
   strict: boolean;
@@ -68,6 +70,7 @@ interface RawConfig {
   only_rules?: unknown;
   included?: unknown;
   excluded?: unknown;
+  caller_transaction?: unknown;
   custom_rules?: unknown;
   strict?: unknown;
   [key: string]: unknown;
@@ -140,6 +143,8 @@ export function resolveConfig(
   const onlyRules = optionalStringList(raw.only_rules, "only_rules");
   const included = optionalStringList(raw.included, "included") ?? ["**/*.xs"];
   const excluded = optionalStringList(raw.excluded, "excluded") ?? [];
+  const callerTransaction =
+    optionalStringList(raw.caller_transaction, "caller_transaction") ?? [];
   const customRules = parseCustomRules(raw.custom_rules);
   const customIds = new Set(customRules.map((rule) => rule.id));
   const strict = optionalBoolean(raw.strict, "strict") ?? false;
@@ -246,6 +251,7 @@ export function resolveConfig(
     ruleOptions,
     included,
     excluded,
+    callerTransaction,
     customRules: activeCustomRules,
     definedCustomRules: customRules,
     strict,

@@ -16,6 +16,9 @@ import { quoteNegativeNumericDefault } from "./quote_negative_numeric_default.js
 import { separatorIndentation } from "./separator_indentation.js";
 import { statementSpacing } from "./statement_spacing.js";
 import { tagsPlacement } from "./tags_placement.js";
+import { transactionBoundaries } from "./transaction_boundaries.js";
+import { transactionLocks } from "./transaction_locks.js";
+import { transactionStaleReads } from "./transaction_stale_reads.js";
 import { unquoteBareTestNames } from "./unquote_bare_test_names.js";
 import { unquoteEnumDefaults } from "./unquote_enum_defaults.js";
 import { wrapEnumValues } from "./wrap_enum_values.js";
@@ -39,6 +42,9 @@ export const builtinRules: Rule[] = [
   emptyFunctionRun,
   guidPlacement,
   lockPlacement,
+  transactionBoundaries,
+  transactionLocks,
+  transactionStaleReads,
   noTrailingComments,
   noTrailingNewline,
   noReservedVar,
@@ -57,6 +63,7 @@ export function builtinRuleById(id: string): Rule | undefined {
 
 export type {
   Correction,
+  LintContext,
   Rule,
   RuleOptions,
   Severity,

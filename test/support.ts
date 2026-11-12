@@ -25,7 +25,10 @@ export function formattingOptInRules(): string[] {
         rule.id !== "no_zero_set_filter" &&
         rule.id !== "indentation" &&
         rule.id !== "separator_indentation" &&
-        rule.id !== "statement_spacing",
+        rule.id !== "statement_spacing" &&
+        rule.id !== "transaction_boundaries" &&
+        rule.id !== "transaction_locks" &&
+        rule.id !== "transaction_stale_reads",
     )
     .map((rule) => rule.id);
 }

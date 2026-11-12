@@ -75,6 +75,9 @@ describe("cli", () => {
     assert.match(stdout.text(), /empty_function_run/);
     assert.match(stdout.text(), /no_reserved_var/);
     assert.match(stdout.text(), /no_expect_equal_null/);
+    assert.match(stdout.text(), /transaction_boundaries/);
+    assert.match(stdout.text(), /transaction_locks/);
+    assert.match(stdout.text(), /transaction_stale_reads/);
     assert.match(stdout.text(), /opt-in/);
     assert.match(stdout.text(), /--opt-in <id>/);
     assert.match(stdout.text(), /--opt-in all/);
@@ -234,6 +237,65 @@ describe("cli", () => {
         );
         assert.equal(code, 0, stderr.text());
         assert.match(stdout.text(), /align_object_colons/);
+      } finally {
+        process.chdir(cwd);
+      }
+    });
+  });
+
+  it("lints a single path using callees from the rest of the project", async () => {
+    await withTempDir(async (dir) => {
+      await writeXs(
+        dir,
+        ".xanoscriptlint.yml",
+        "included:\n  - \"**/*.xs\"\ncaller_transaction:\n  - \"helpers/**\"\nopt_in_rules:\n  - transaction_boundaries\n",
+      );
+      await writeXs(
+        dir,
+        "helpers/apply_debit.xs",
+        `function "Wallet/apply_debit" {
+  input {
+  }
+
+  stack {
+    db.get wallet {
+      field_name = "id"
+      field_value = $input.id
+      lock = true
+    } as $row
+  }
+
+  response = $ok
+}`,
+      );
+      await writeXs(
+        dir,
+        "inventory/reserve.xs",
+        `function "Inventory/reserve_stock" {
+  input {
+  }
+
+  stack {
+    function.run "Wallet/apply_debit" {
+      input = {id: $input.wallet_id}
+    } as $debited
+  }
+
+  response = $ok
+}`,
+      );
+      const cwd = process.cwd();
+      process.chdir(dir);
+      try {
+        const stdout = collectStream();
+        const stderr = collectStream();
+        const code = await runCli(
+          ["node", "xanoscriptlint", "--reporter", "json", "inventory/reserve.xs"],
+          { stdout: stdout.stream, stderr: stderr.stream },
+        );
+        assert.equal(code, 2, stderr.text());
+        assert.match(stdout.text(), /transaction_boundaries/);
+        assert.match(stdout.text(), /Wallet\/apply_debit/);
       } finally {
         process.chdir(cwd);
       }

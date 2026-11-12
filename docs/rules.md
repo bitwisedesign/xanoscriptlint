@@ -20,6 +20,9 @@
 | [`separator_indentation`](#separator_indentation) | opt-in | warning | yes | Whitespace-only lines use the enclosing block opener's indent; empty lines in `"""` strings use the opener's indent plus 2 |
 | [`statement_spacing`](#statement_spacing) | opt-in | warning | yes | Blank lines between sibling statements only after a multi-line statement or next to a comment |
 | [`tags_placement`](#tags_placement) | opt-in | warning | yes | `tags` sits immediately before the first of `llm`, `tools`, `test`, `cache`, `external_access`, `history`, or `guid`, with Xano blank-line rules |
+| [`transaction_boundaries`](#transaction_boundaries) | opt-in | error | no | `lock = true` and `db.transaction` sit at the right boundary; caller-transaction callees are not run outside one |
+| [`transaction_locks`](#transaction_locks) | opt-in | error | no | An unlocked `db.get` or single `db.query` whose variable feeds a later write of that table needs `lock = true` |
+| [`transaction_stale_reads`](#transaction_stale_reads) | opt-in | warning | no | A write inside `db.transaction` must not rely on a read of that table from outside it |
 | [`unquote_bare_test_names`](#unquote_bare_test_names) | opt-in | warning | yes | Quoted `test` names and top-level `mock` keys with no spaces must be unquoted |
 | [`unquote_enum_defaults`](#unquote_enum_defaults) | opt-in | warning | yes | Quoted enum defaults that are bare identifiers must be unquoted |
 | [`wrap_assignment_arrays`](#wrap_assignment_arrays) | opt-in | warning | yes | Assignment string arrays wrap when compact JSON length reaches 64 |
@@ -547,6 +550,93 @@ Blank lines follow the predecessor and the form of the array. Exactly one blank 
 The wrapped vs inline form is owned by [`wrap_tags_values`](#wrap_tags_values). This rule only moves the block and normalizes the surrounding blanks. Comments immediately above an anchor stay with that anchor.
 
 Auto-fixable with `--fix`: `tags` is moved to the slot above the first anchor (or to the end of the declaration when there is no anchor), a missing blank is inserted, a forbidden blank is removed, and extra blanks collapse to one.
+
+## transaction_boundaries
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is error. There is no auto-fix.
+
+Flags a `lock = true` on `db.get` / `db.query` outside any `db.transaction`, a `db.transaction` nested inside another, a `function.run` of a callee that opens its own `db.transaction` while already inside one, a caller-transaction file that opens `db.transaction`, and a `function.run` of a caller-transaction callee from outside a transaction.
+
+Mark files that run inside the caller's transaction with top-level `caller_transaction` globs in `.xanoscriptlint.yml`. Those files skip the `lock = true` outside-transaction check. They must not open `db.transaction` themselves. A `function.run` of one of those files from a non-caller-transaction file must sit inside `db.transaction`.
+
+Callee checks look up the function by the `function.run "Name"` string and inspect that function's file. The lookup is one hop, not transitive. Statements inside `test` blocks are ignored. `lock = true` and `db.transaction` inside comments, strings, or fenced mocks are ignored.
+
+```xs
+    db.transaction {
+      stack {
+        db.get wallet {
+          field_name = "id"
+          field_value = $input.id
+          lock = true
+        } as $fresh
+
+        function.run "Wallet/apply_debit" {
+          input = {id: $fresh.id}
+        } as $debited
+      }
+    }
+```
+
+Intentional exceptions use `xanoscriptlint:disable` comments. The violation for a bad `function.run` sits on that line in the calling file.
+
+## transaction_locks
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is error. There is no auto-fix.
+
+An unlocked `db.get`, or `db.query` with `return = {type: "single"}`, of table T whose `as $var` is referenced inside the `data = { ... }` block of a later `db.edit` / `db.patch` / `db.add_or_edit` on T needs `lock = true` on the read. A locked read of T between the two statements clears the finding. The report sits on the read, and the message names the write's line.
+
+Only the `data` object is scanned. `field_value = $var.id` and the write's `} as $var` do not count. The rule runs in every file, including caller-transaction files. Statements inside `test` blocks are ignored, as are `$var` mentions in comments and strings.
+
+```xs
+    db.transaction {
+      stack {
+        db.get wallet {
+          field_name = "id"
+          field_value = $input.id
+          lock = true
+        } as $fresh
+
+        db.edit wallet {
+          field_name = "id"
+          field_value = $fresh.id
+          data = {
+            balance: $fresh.balance
+          }
+        } as $updated
+      }
+    }
+```
+
+## transaction_stale_reads
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning. There is no auto-fix.
+
+A `db.edit` / `db.patch` / `db.del` / `db.add_or_edit` on table T inside `db.transaction` is flagged when the same unit read T outside any transaction and the transaction does not re-read T before the write. Reported once per transaction and table, at the write. Caller-transaction files are skipped. Statements inside `test` blocks are ignored.
+
+```xs
+    db.get inventory_item {
+      field_name = "id"
+      field_value = $input.id
+    } as $item
+
+    db.transaction {
+      stack {
+        db.get inventory_item {
+          field_name = "id"
+          field_value = $input.id
+          lock = true
+        } as $fresh
+
+        db.edit inventory_item {
+          field_name = "id"
+          field_value = $input.id
+          data = {
+            name: $input.name
+          }
+        } as $updated
+      }
+    }
+```
 
 ## unquote_bare_test_names
 

@@ -269,6 +269,161 @@ describe("fixture linting", () => {
     );
   });
 
+  it("committed transaction fixtures match when those rules are opted in", () => {
+    const config = resolveConfig(
+      { opt_in_rules: ["transaction_boundaries", "transaction_stale_reads", "transaction_locks"] },
+      fixtures,
+      null,
+    );
+    const boundaries = {
+      path: path.join(fixtures, "violations/transaction_boundaries.xs"),
+      text: readFileSync(path.join(fixtures, "violations/transaction_boundaries.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([boundaries], config).some((v) => v.ruleId === "transaction_boundaries"),
+      true,
+    );
+
+    const stale = {
+      path: path.join(fixtures, "violations/transaction_stale_reads.xs"),
+      text: readFileSync(path.join(fixtures, "violations/transaction_stale_reads.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([stale], config).some((v) => v.ruleId === "transaction_stale_reads"),
+      true,
+    );
+
+    const locks = {
+      path: path.join(fixtures, "violations/transaction_locks.xs"),
+      text: readFileSync(path.join(fixtures, "violations/transaction_locks.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([locks], config).some((v) => v.ruleId === "transaction_locks"),
+      true,
+    );
+  });
+
+  it("transaction_boundaries resolves callees across files", () => {
+    const config = resolveConfig(
+      {
+        opt_in_rules: ["transaction_boundaries"],
+        caller_transaction: ["helpers/**"],
+      },
+      "/tmp",
+      null,
+    );
+    const helper = {
+      path: "helpers/apply_debit.xs",
+      text: `function "Wallet/apply_debit" {
+  input {
+  }
+
+  stack {
+    db.get wallet {
+      field_name = "id"
+      field_value = $input.id
+      lock = true
+    } as $row
+  }
+
+  response = $ok
+}`,
+    };
+    const opensTx = {
+      path: "wallet/settle.xs",
+      text: `function "Wallet/settle" {
+  input {
+  }
+
+  stack {
+    db.transaction {
+      stack {
+        db.get wallet {
+          field_name = "id"
+          field_value = $input.id
+        } as $row
+      }
+    }
+  }
+
+  response = $ok
+}`,
+    };
+    const helperOutside = {
+      path: "inventory/reserve.xs",
+      text: `function "Inventory/reserve_stock" {
+  input {
+  }
+
+  stack {
+    function.run "Wallet/apply_debit" {
+      input = {id: $input.wallet_id}
+    } as $debited
+  }
+
+  response = $ok
+}`,
+    };
+    const nestedCall = {
+      path: "inventory/settle_item.xs",
+      text: `function "Inventory/settle_item" {
+  input {
+  }
+
+  stack {
+    db.transaction {
+      stack {
+        function.run "Wallet/settle" {
+          input = {id: $input.wallet_id}
+        } as $settled
+      }
+    }
+  }
+
+  response = $ok
+}`,
+    };
+    const helperOpens = {
+      path: "helpers/open_tx.xs",
+      text: `function "Wallet/open_tx" {
+  input {
+  }
+
+  stack {
+    db.transaction {
+      stack {
+        db.get wallet {
+          field_name = "id"
+          field_value = $input.id
+        } as $row
+      }
+    }
+  }
+
+  response = $ok
+}`,
+    };
+
+    const outside = lintFiles([helper, helperOutside], config).filter(
+      (v) => v.ruleId === "transaction_boundaries",
+    );
+    assert.equal(outside.length, 1);
+    assert.equal(outside[0]?.file, "inventory/reserve.xs");
+
+    const nested = lintFiles([opensTx, nestedCall], config).filter(
+      (v) => v.ruleId === "transaction_boundaries",
+    );
+    assert.equal(nested.length, 1);
+    assert.equal(nested[0]?.file, "inventory/settle_item.xs");
+
+    const opened = lintFiles([helperOpens], config).filter(
+      (v) => v.ruleId === "transaction_boundaries",
+    );
+    assert.equal(opened.length, 1);
+    assert.equal(opened[0]?.file, "helpers/open_tx.xs");
+    assert.equal(opened[0]?.message, "caller-transaction file must not open db.transaction");
+  });
+
   it("committed no_expect_equal_null fixture matches when that rule is opted in", () => {
     const config = resolveConfig({ opt_in_rules: ["no_expect_equal_null"] }, fixtures, null);
     const expectNull = {

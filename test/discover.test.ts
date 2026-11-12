@@ -21,10 +21,9 @@ describe("discoverXsFiles", () => {
         null,
       );
       const files = await discoverXsFiles({ config, cwd: dir, cliPaths: [] });
-      assert.deepEqual(
-        files.sort(),
-        [keep, root].sort(),
-      );
+      const expected = [keep, root].sort();
+      assert.deepEqual(files.files.sort(), expected);
+      assert.deepEqual([...files.allFiles].sort(), expected);
     });
   });
 
@@ -47,7 +46,9 @@ describe("discoverXsFiles", () => {
         cwd: dir,
         cliPaths: ["api"],
       });
-      assert.deepEqual(files, [keep]);
+      assert.deepEqual(files.files, [keep]);
+      assert.equal(files.allFiles.includes(keep), true);
+      assert.equal(files.allFiles.length, 2);
     });
   });
 });

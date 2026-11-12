@@ -19,6 +19,9 @@ describe("config enablement", () => {
     assert.equal(config.enabledRuleIds.has("fence_multiline_values"), false);
     assert.equal(config.enabledRuleIds.has("guid_placement"), false);
     assert.equal(config.enabledRuleIds.has("lock_placement"), false);
+    assert.equal(config.enabledRuleIds.has("transaction_boundaries"), false);
+    assert.equal(config.enabledRuleIds.has("transaction_locks"), false);
+    assert.equal(config.enabledRuleIds.has("transaction_stale_reads"), false);
     assert.equal(config.enabledRuleIds.has("no_null_response"), false);
     assert.equal(config.enabledRuleIds.has("no_expect_equal_null"), false);
     assert.equal(config.enabledRuleIds.has("no_zero_numeric_default"), false);
@@ -32,7 +35,24 @@ describe("config enablement", () => {
     assert.equal(config.enabledRuleIds.has("wrap_assignment_arrays"), false);
     assert.equal(config.enabledRuleIds.has("tags_placement"), false);
     assert.deepEqual(config.included, ["**/*.xs"]);
+    assert.deepEqual(config.callerTransaction, []);
     assert.equal(config.strict, false);
+  });
+
+  it("parses caller_transaction as a list of globs", () => {
+    const config = resolveConfig(
+      { caller_transaction: ["helpers/**", "wallet/apply_debit.xs"] },
+      "/tmp",
+      null,
+    );
+    assert.deepEqual(config.callerTransaction, ["helpers/**", "wallet/apply_debit.xs"]);
+  });
+
+  it("rejects a non-list caller_transaction", () => {
+    assert.throws(
+      () => loadConfigText("caller_transaction: helpers/**\n", "/tmp", null),
+      /caller_transaction must be a list of strings/,
+    );
   });
 
   it("parses strict as a boolean", () => {

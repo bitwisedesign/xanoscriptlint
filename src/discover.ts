@@ -7,11 +7,16 @@ type GlobMatcher = (rel: string) => boolean;
 
 const SKIP_DIRS = new Set(["node_modules", ".git", "dist"]);
 
+export interface DiscoverResult {
+  files: string[];
+  allFiles: string[];
+}
+
 export async function discoverXsFiles(options: {
   config: ResolvedConfig;
   cwd: string;
   cliPaths: string[];
-}): Promise<string[]> {
+}): Promise<DiscoverResult> {
   const { config, cwd, cliPaths } = options;
   const root = config.configDir;
   const include = config.included.map((pattern) => compileGlob(pattern));
@@ -22,11 +27,14 @@ export async function discoverXsFiles(options: {
   discovered.sort();
 
   if (cliPaths.length === 0) {
-    return discovered;
+    return { files: discovered, allFiles: discovered };
   }
 
   const resolvedCli = cliPaths.map((p) => path.resolve(cwd, p));
-  return discovered.filter((file) => matchesCliPath(file, resolvedCli));
+  return {
+    files: discovered.filter((file) => matchesCliPath(file, resolvedCli)),
+    allFiles: discovered,
+  };
 }
 
 async function walk(
