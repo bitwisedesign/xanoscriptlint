@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- `no_zero_set_filter`. `|set:` of a literal `0` does write the field, as verified on Xano. A config that still lists it in `opt_in_rules` or `only` now fails with `unknown rule id`.
+- `no_zero_set_filter`. `|set:` of a literal `0` does write the field, as verified on Xano. A config that still lists it in `opt_in_rules` or `only_rules` now fails with `unknown rule id`.
 
 ## [0.8.0] - 2026-10-22
 
