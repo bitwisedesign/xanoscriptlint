@@ -39,6 +39,7 @@ export interface FunctionIndexEntry {
 export interface LintContext {
   isCallerTransaction(filePath: string): boolean;
   functions: ReadonlyMap<string, FunctionIndexEntry>;
+  duplicateFunctionNames: ReadonlySet<string>;
   parsed(file: SourceFile): ParsedFile;
 }
 

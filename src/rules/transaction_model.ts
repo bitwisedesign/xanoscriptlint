@@ -111,20 +111,52 @@ export function dataText(lines: string[], range: DataRange): string {
   return chunk.slice(braceAt, close + 1);
 }
 
+type VarScanMode = "code" | "double" | "single" | "triple";
+
 export function textHasVarRef(text: string, varName: string): boolean {
-  return splitLines(text).some((line) => lineHasVarRef(line, varName));
+  let mode: VarScanMode = "code";
+  for (const line of splitLines(text)) {
+    const result = scanLineForVarRef(line, varName, mode);
+    if (result.found) {
+      return true;
+    }
+    mode = result.mode === "triple" ? "triple" : "code";
+  }
+  return false;
 }
 
 export function lineHasVarRef(line: string, varName: string): boolean {
+  return scanLineForVarRef(line, varName, "code").found;
+}
+
+function scanLineForVarRef(
+  line: string,
+  varName: string,
+  startMode: VarScanMode,
+): { found: boolean; mode: VarScanMode } {
   const token = `$${varName}`;
   let i = 0;
-  let mode: "code" | "double" | "single" = "code";
+  let mode = startMode;
   let escape = false;
   while (i < line.length) {
     const ch = line[i];
+    if (mode === "triple") {
+      if (line.startsWith('"""', i)) {
+        mode = "code";
+        i += 3;
+        continue;
+      }
+      i += 1;
+      continue;
+    }
     if (mode === "code") {
       if (ch === "/" && line[i + 1] === "/") {
         break;
+      }
+      if (line.startsWith('"""', i)) {
+        mode = "triple";
+        i += 3;
+        continue;
       }
       if (ch === '"') {
         mode = "double";
@@ -139,7 +171,7 @@ export function lineHasVarRef(line: string, varName: string): boolean {
       if (line.startsWith(token, i)) {
         const next = line[i + token.length];
         if (next === undefined || !/[A-Za-z0-9_]/.test(next)) {
-          return true;
+          return { found: true, mode };
         }
       }
       i += 1;
@@ -160,7 +192,7 @@ export function lineHasVarRef(line: string, varName: string): boolean {
     }
     i += 1;
   }
-  return false;
+  return { found: false, mode };
 }
 
 function regionAt(
@@ -277,7 +309,10 @@ function hasSingleReturn(
       depths.after[start] > depths.starts[start]
         ? (findCloseLine(depths, start) ?? start)
         : start;
-    const text = lines.slice(start, end + 1).join("\n");
+    const text = lines
+      .slice(start, end + 1)
+      .map(stripLineComment)
+      .join("\n");
     if (TYPE_SINGLE.test(text)) {
       return true;
     }

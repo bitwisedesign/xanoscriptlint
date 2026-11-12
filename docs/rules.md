@@ -559,7 +559,7 @@ Flags a `lock = true` on `db.get` / `db.query` outside any `db.transaction`, a `
 
 Mark files that run inside the caller's transaction with top-level `caller_transaction` globs in `.xanoscriptlint.yml`. Those files skip the `lock = true` outside-transaction check. They must not open `db.transaction` themselves. A `function.run` of one of those files from a non-caller-transaction file must sit inside `db.transaction`.
 
-Callee checks look up the function by the `function.run "Name"` string and inspect that function's file. The lookup is one hop, not transitive. Statements inside `test` blocks are ignored. `lock = true` and `db.transaction` inside comments, strings, or fenced mocks are ignored.
+Callee checks look up the function by the `function.run "Name"` string and inspect that function's file. The lookup is one hop, not transitive. Xano resolves that name globally, so two files that declare the same function name are flagged and callee checks skip that name. Statements inside `test` blocks are ignored. `lock = true` and `db.transaction` inside comments, strings, or fenced mocks are ignored.
 
 ```xs
     db.transaction {
@@ -585,7 +585,7 @@ Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is er
 
 An unlocked `db.get`, or `db.query` with `return = {type: "single"}`, of table T whose `as $var` is referenced inside the `data = { ... }` block of a later `db.edit` / `db.patch` / `db.add_or_edit` on T needs `lock = true` on the read. A locked read of T between the two statements clears the finding. The report sits on the read, and the message names the write's line.
 
-Only the `data` object is scanned. `field_value = $var.id` and the write's `} as $var` do not count. The rule runs in every file, including caller-transaction files. Statements inside `test` blocks are ignored, as are `$var` mentions in comments and strings.
+Only the `data` object is scanned. `field_value = $var.id` and the write's `} as $var` do not count. The rule runs in every file, including caller-transaction files. Statements inside `test` blocks are ignored, as are `$var` mentions in comments, strings, and `"""` literals.
 
 ```xs
     db.transaction {

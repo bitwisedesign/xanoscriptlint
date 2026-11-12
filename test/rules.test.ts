@@ -4677,6 +4677,58 @@ describe("transaction_boundaries", () => {
     assert.deepEqual(hits, []);
   });
 
+  it("flags a duplicate function name and skips callee checks for it", () => {
+    const first = fnXs(
+      "Wallet/settle",
+      `    db.get wallet {
+      field_name = "id"
+      field_value = $input.id
+    } as $row`,
+    );
+    const second = fnXs(
+      "Wallet/settle",
+      `    db.transaction {
+      stack {
+        db.get wallet {
+          field_name = "id"
+          field_value = $input.id
+        } as $row
+      }
+    }`,
+    );
+    const caller = fnXs(
+      "Inventory/reserve_stock",
+      `    db.transaction {
+      stack {
+        function.run "Wallet/settle" {
+          input = {id: $input.wallet_id}
+        } as $settled
+      }
+    }`,
+    );
+    const hits = lintFiles(
+      [
+        { path: "wallet/settle_a.xs", text: first },
+        { path: "wallet/settle_b.xs", text: second },
+        { path: "inventory/reserve.xs", text: caller },
+      ],
+      txConfig(),
+    ).filter((v) => v.ruleId === "transaction_boundaries");
+    assert.deepEqual(
+      hits.map((v) => ({ file: v.file, message: v.message })),
+      [
+        {
+          file: "wallet/settle_a.xs",
+          message: 'function "Wallet/settle" is defined more than once',
+        },
+        {
+          file: "wallet/settle_b.xs",
+          message: 'function "Wallet/settle" is defined more than once',
+        },
+      ],
+    );
+  });
+
   it("ignores lock = true in comments, strings, fences, and test blocks", () => {
     const text = `function "Wallet/read_row" {
   input {
@@ -5042,6 +5094,50 @@ describe("transaction_locks", () => {
     assert.deepEqual(lockHitsTx(text), []);
   });
 
+  it("does not treat a commented type: \"single\" as a single db.query", () => {
+    const text = fnXs(
+      "Wallet/list_rows",
+      `    db.query wallet {
+      where = $db.wallet.user_id == $input.user_id
+      return = {
+        type: "list"
+        // type: "single"
+      }
+    } as $rows
+
+    db.edit wallet {
+      field_name = "id"
+      field_value = $input.id
+      data = {
+        note: $rows
+      }
+    } as $updated`,
+    );
+    assert.deepEqual(lockHitsTx(text), []);
+  });
+
+  it("still flags a single db.query when a comment sits in the return object", () => {
+    const text = fnXs(
+      "Wallet/apply_debit",
+      `    db.query wallet {
+      where = $db.wallet.id == $input.id
+      return = {
+        type: "single"
+        // type: "list"
+      }
+    } as $fresh
+
+    db.patch wallet {
+      field_name = "id"
+      field_value = $input.id
+      data = {
+        balance: $fresh.balance
+      }
+    } as $updated`,
+    );
+    assert.equal(lockHitsTx(text).length, 1);
+  });
+
   it("runs in caller-transaction files", () => {
     const text = fnXs(
       "Wallet/apply_debit",
@@ -5100,6 +5196,28 @@ describe("transaction_locks", () => {
 
   response = $ok
 }`;
+    assert.deepEqual(lockHitsTx(text), []);
+  });
+
+  it("does not treat $row inside a triple-quoted data note as a reference", () => {
+    const text = fnXs(
+      "Wallet/apply_debit",
+      `    db.get wallet {
+      field_name = "id"
+      field_value = $input.id
+    } as $row
+
+    db.edit wallet {
+      field_name = "id"
+      field_value = $input.id
+      data = {
+        note: """
+          copied from $row
+          """
+        name: $input.name
+      }
+    } as $updated`,
+    );
     assert.deepEqual(lockHitsTx(text), []);
   });
 

@@ -30,6 +30,7 @@ export function buildProjectIndex(
   );
   const parsedByPath = new Map<string, ParsedFile>();
   const functions = new Map<string, FunctionIndexEntry>();
+  const duplicateFunctionNames = new Set<string>();
 
   for (const file of files) {
     const parsed = parseXs(file.text);
@@ -37,6 +38,14 @@ export function buildProjectIndex(
     const callerTransaction = pathMatches(file.path, config.configDir, matchers);
     for (const unit of parsed.units) {
       if (unit.kind !== "function" || unit.name === null) {
+        continue;
+      }
+      if (duplicateFunctionNames.has(unit.name)) {
+        continue;
+      }
+      if (functions.has(unit.name)) {
+        functions.delete(unit.name);
+        duplicateFunctionNames.add(unit.name);
         continue;
       }
       functions.set(unit.name, {
@@ -53,6 +62,7 @@ export function buildProjectIndex(
       return pathMatches(filePath, config.configDir, matchers);
     },
     functions,
+    duplicateFunctionNames,
     parsed(file: SourceFile): ParsedFile {
       const existing = parsedByPath.get(file.path);
       if (existing !== undefined) {
