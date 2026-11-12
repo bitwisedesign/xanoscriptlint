@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Opt-in `transaction_stale_reads` flags a write inside `db.transaction` after a read of that table from outside it, when the transaction does not re-read the table (warning). There is no auto-fix.
 - Top-level `caller_transaction` lists globs for files that already run inside the caller's `db.transaction`.
 - Opt-in `lock_placement` flags a `lock` that is not immediately after `field_value` in `db.get`, or not the first member of `db.query` (warning). Auto-fix moves it to Xano's push form.
+- Opt-in `unfence_assignment_values` flags a fenced assignment or `return` whose body is one object or array and whose one-line form is under 64 UTF-8 bytes (warning). A fenced object with a literal `0` followed by another key is left alone. Auto-fix rewrites the rest to the inline form Xano produces on push.
 
 ## [0.8.0] - 2026-10-22
 

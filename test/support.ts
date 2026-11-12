@@ -220,6 +220,14 @@ export function wrappedAssignObj(pad: string): string {
       }`;
 }
 
+export function fencedAssignObj(pad: string): string {
+  return `\`\`\`
+        {
+          k: "${pad}"
+        }
+        \`\`\``;
+}
+
 export function inlineAssignArr(pad: string): string {
   return `["${pad}"]`;
 }

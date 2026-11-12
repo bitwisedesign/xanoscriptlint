@@ -3226,6 +3226,63 @@ ${inlineOutputLine(OUTPUT_V64)}
     assert.equal(result.text, text);
   });
 
+  it("unfences a short assignment fence and is idempotent", () => {
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+    const before = readFileSync(
+      path.join(fixtures, "violations/unfence_assignment_values.xs"),
+      "utf8",
+    );
+    const after = readFileSync(path.join(fixtures, "fixed/unfence_assignment_values.xs"), "utf8");
+    const result = fixFile(
+      { path: "unfence.xs", text: before },
+      config({ only_rules: ["unfence_assignment_values"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, after);
+    assert.deepEqual(
+      result.corrections.map((correction) => correction.line),
+      [7, 16, 25, 34, 43, 52, 63, 74, 82, 90],
+    );
+    assert.equal(result.corrections[0]?.ruleId, "unfence_assignment_values");
+
+    const again = fixFile(
+      { path: "unfence.xs", text: result.text },
+      config({ only_rules: ["unfence_assignment_values"] }),
+    );
+    assert.equal(again.changed, false);
+
+    const allRules = builtinRules.filter((rule) => !rule.defaultEnabled).map((rule) => rule.id);
+    const withAll = fixFile(
+      { path: "unfence.xs", text: after },
+      config({ opt_in_rules: allRules }),
+    );
+    assert.equal(withAll.changed, false);
+    assert.equal(withAll.text, after);
+  });
+
+  it("does not rewrite a suppressed unfence_assignment_values violation", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    var $row {
+      // xanoscriptlint:disable:next unfence_assignment_values
+      value = \`\`\`
+        {
+          k: "x"
+        }
+        \`\`\`
+    }
+  }
+
+  response = $row
+}`;
+    const result = fixFile({ path: "suppressed-unfence.xs", text }, config());
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
+  });
+
   it("inserts, removes, and reduces wrapped enum separators", () => {
     const missing = wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V64, false, "lane"));
     const expectedMissing = wrapInputDecls(wrappedEnumDecl("enum lane", ENUM_V64, true, "lane"));

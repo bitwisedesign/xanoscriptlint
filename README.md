@@ -101,6 +101,7 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 | `transaction_boundaries` | ⚪️ | ❌ | — | `lock = true` outside `db.transaction`, nested `db.transaction`, or a caller-transaction helper run on the wrong side of a transaction |
 | `transaction_locks` | ⚪️ | ❌ | — | Unlocked `db.get` / single `db.query` whose variable feeds a later write of that table |
 | `transaction_stale_reads` | ⚪️ | ⚠️ | — | Write inside `db.transaction` after a read of that table from outside it, with no re-read |
+| `unfence_assignment_values` | ⚪️ | ⚠️ | ✅ | Fenced assignment object or array whose one-line form is under 64 UTF-8 bytes (Xano unfences it on push), except a `0` followed by another key |
 | `unquote_bare_test_names` | ⚪️ | ⚠️ | ✅ | Quoted `test "name"` or top-level `mock` key `"name"` when `name` has no spaces (Xano strips those quotes on push) |
 | `unquote_enum_defaults` | ⚪️ | ⚠️ | ✅ | Quoted enum default that is a bare identifier (Xano strips the quotes on push) |
 | `wrap_assignment_arrays` | ⚪️ | ⚠️ | ✅ | Assignment string array is inline at compact JSON length 64+ (Xano rewrites this on push); `tags` and `values` stay with their own rules |

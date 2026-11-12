@@ -36,7 +36,7 @@ function wrapThreshold(options: RuleOptions): number {
   return options.wrapAt ?? DEFAULT_WRAP_AT;
 }
 
-function byteLength(text: string): number {
+export function byteLength(text: string): number {
   return Buffer.byteLength(text, "utf8");
 }
 
@@ -72,7 +72,7 @@ function skipWs(cursor: Cursor): boolean {
   return true;
 }
 
-function skipQuoted(text: string, start: number, quote: '"' | "'"): number | null {
+export function skipQuoted(text: string, start: number, quote: '"' | "'"): number | null {
   let i = start + 1;
   let escape = false;
   while (i < text.length) {
@@ -132,7 +132,7 @@ function assignmentOwner(text: string, eqIndex: number): string {
   return token === "" ? "assignment" : token;
 }
 
-function lookbehindAssignment(text: string, braceOffset: number): string | null {
+export function lookbehindAssignment(text: string, braceOffset: number): string | null {
   let i = braceOffset - 1;
   while (i >= 0 && (text[i] === " " || text[i] === "\t")) {
     i -= 1;
@@ -302,7 +302,7 @@ export function renderInline(node: Node): string {
   return node.text;
 }
 
-function offsetToLineCol(lines: string[], offset: number): { line: number; col: number } {
+export function offsetToLineCol(lines: string[], offset: number): { line: number; col: number } {
   let remaining = offset;
   for (let line = 0; line < lines.length; line += 1) {
     const length = lines[line].length;
@@ -332,7 +332,7 @@ function isPiped(text: string, end: number): boolean {
   return text[i] === "|";
 }
 
-function skipSpan(text: string, start: number, closer: string): number | null {
+export function skipSpan(text: string, start: number, closer: string): number | null {
   const end = text.indexOf(closer, start);
   return end === -1 ? null : end + closer.length;
 }
