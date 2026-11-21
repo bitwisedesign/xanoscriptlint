@@ -5653,6 +5653,18 @@ describe("zero_object_literal_layout", () => {
     assert.equal(hits[0]?.message, ZERO_LAYOUT_VAR);
   });
 
+  it("zero_object_literal_layout reports a nested field filter after a container in a filter arg", () => {
+    const text = wrapVarValue(`{
+        items: [1]|set:"nested":{inner: [2]|count}
+        used : 0
+        limit: 30
+      }`);
+    const hits = zeroLayoutHits(text);
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.line, 7);
+    assert.equal(hits[0]?.message, ZERO_LAYOUT_VAR);
+  });
+
   it("zero_object_literal_layout does not rewrite a dotted key onto |set:", () => {
     const pad = "x".repeat(20);
     const dotted = wrapVarValue(`{

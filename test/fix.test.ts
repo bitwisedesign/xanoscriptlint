@@ -3365,6 +3365,20 @@ ${inlineOutputLine(OUTPUT_V64)}
     assert.equal(result.text, text);
   });
 
+  it("does not rewrite a nested field filter in a filter arg for zero_object_literal_layout", () => {
+    const text = wrapVarValue(`{
+        items: [1]|set:"nested":{inner: [2]|count}
+        used : 0
+        limit: 30
+      }`);
+    const result = fixFile(
+      { path: "nested-filter.xs", text },
+      config({ only_rules: ["zero_object_literal_layout"] }),
+    );
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
+  });
+
   it("does not rewrite a dotted key onto |set: for zero_object_literal_layout", () => {
     const pad = "x".repeat(20);
     const text = wrapVarValue(`{

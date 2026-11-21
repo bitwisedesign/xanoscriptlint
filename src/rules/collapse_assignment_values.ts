@@ -257,7 +257,7 @@ function completeFieldExpression(cursor: Cursor, value: Node): Node | null {
         continue;
       }
       if (ch === "{" || ch === "[") {
-        if (parseValue(cursor) === null) {
+        if (parseValue(cursor, true) === null) {
           return null;
         }
         continue;
