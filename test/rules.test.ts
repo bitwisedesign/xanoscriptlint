@@ -188,6 +188,18 @@ function statementSpacingHits(text: string, overrides: Parameters<typeof resolve
   );
 }
 
+function zeroLayoutHits(text: string, overrides: Parameters<typeof resolveConfig>[0] = {}) {
+  return lintFile(
+    { path: "a.xs", text },
+    config({ only_rules: ["zero_object_literal_layout"], ...overrides }),
+  ).filter((v) => v.ruleId === "zero_object_literal_layout");
+}
+
+const ZERO_LAYOUT_VAR =
+  "value object with a `0` followed by another key: Xano fences this object, and the fenced value drops keys; rewrite as a one-line seed under 64 bytes plus |set: for the remaining fields";
+const ZERO_LAYOUT_EXPECT =
+  "value object with a `0` followed by another key: Xano fences this object, and the fenced value drops keys; an expect cannot take |set:; replace it with one scalar path expect per key";
+
 const spacingFixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
 
 describe("built-in rules", () => {
@@ -5450,6 +5462,190 @@ describe("transaction_locks", () => {
     assert.equal(
       off.some((v) => v.ruleId === "transaction_locks"),
       false,
+    );
+  });
+});
+
+describe("zero_object_literal_layout", () => {
+  it("zero_object_literal_layout is opt-in, defaults to error, and flags the committed fixture", () => {
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+    const before = readFileSync(
+      path.join(fixtures, "violations/zero_object_literal_layout.xs"),
+      "utf8",
+    );
+    const kept = readFileSync(
+      path.join(fixtures, "clean/zero_object_literal_layout_kept.xs"),
+      "utf8",
+    );
+    const off = lintFile({ path: "z.xs", text: before }, config());
+    assert.equal(
+      off.some((v) => v.ruleId === "zero_object_literal_layout"),
+      false,
+    );
+
+    const hits = zeroLayoutHits(before);
+    assert.deepEqual(
+      hits.map((v) => v.line),
+      [7, 16, 24, 33, 36, 42, 49, 56, 63, 76],
+    );
+    assert.equal(hits[0]?.severity, "error");
+    assert.equal(hits[0]?.column, 15);
+    assert.equal(hits[0]?.message, ZERO_LAYOUT_VAR);
+    assert.equal(hits[hits.length - 1]?.message, ZERO_LAYOUT_EXPECT);
+    assert.equal(zeroLayoutHits(kept).length, 0);
+  });
+
+  it("zero_object_literal_layout flags a 64-byte one-liner and skips a 63-byte one", () => {
+    const line63 = `{lead: 0, next: 30, tail: "${"x".repeat(20)}"}`;
+    const line64 = `{lead: 0, next: 30, tail: "${"x".repeat(21)}"}`;
+    const text63 = wrapVarValue(line63);
+    const text64 = wrapVarValue(line64);
+    assert.equal(Buffer.byteLength(text63.split("\n")[6] ?? "", "utf8"), 63);
+    assert.equal(Buffer.byteLength(text64.split("\n")[6] ?? "", "utf8"), 64);
+    assert.equal(zeroLayoutHits(text63).length, 0);
+    const hits = zeroLayoutHits(text64);
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.line, 7);
+    assert.equal(hits[0]?.message, ZERO_LAYOUT_VAR);
+  });
+
+  it("zero_object_literal_layout skips mocks, inputs, data, arrays, ternaries, piped values, and debug.log", () => {
+    assert.equal(
+      zeroLayoutHits(wrapAssign("data", "{\n        lead: 0\n        next: 30\n      }")).length,
+      0,
+    );
+    assert.equal(
+      zeroLayoutHits(wrapAssign("response", "{\n        lead: 0\n        next: 30\n      }"))
+        .length,
+      0,
+    );
+    assert.equal(
+      zeroLayoutHits(
+        wrapMockBlock(`        "checkout applies gift wrap": \`\`\`
+          {
+            lead: 0
+            next: 30
+          }
+          \`\`\``),
+      ).length,
+      0,
+    );
+    assert.equal(zeroLayoutHits(wrapVarValue("[$a, $b]")).length, 0);
+    assert.equal(
+      zeroLayoutHits(
+        wrapVarValue(`\`\`\`
+        $job == null ? null : {lead: 0, next: 30}
+        \`\`\``),
+      ).length,
+      0,
+    );
+    assert.equal(
+      zeroLayoutHits(wrapVarValue(`{lead: 0, next: 30}|set:"tail":"end"`)).length,
+      0,
+    );
+    const debugLog = `function "example" {
+  input {
+  }
+
+  stack {
+    debug.log {
+      value = {
+        lead: 0
+        next: 30
+      }
+    }
+  }
+
+  response = $ok
+}`;
+    assert.equal(zeroLayoutHits(debugLog).length, 0);
+  });
+
+  it("zero_object_literal_layout honors disabled_rules, severity, and suppressions", () => {
+    const fenced = wrapVarValue(`\`\`\`
+        {
+          lead: 0
+          next: 30
+        }
+        \`\`\``);
+    const disabled = lintFile(
+      { path: "z.xs", text: fenced },
+      config({
+        opt_in_rules: ["zero_object_literal_layout"],
+        disabled_rules: ["zero_object_literal_layout"],
+      }),
+    );
+    assert.equal(
+      disabled.some((v) => v.ruleId === "zero_object_literal_layout"),
+      false,
+    );
+
+    const warned = zeroLayoutHits(fenced, { zero_object_literal_layout: "warning" });
+    assert.equal(warned[0]?.severity, "warning");
+
+    const suppressedNext = `function "example" {
+  input {
+  }
+
+  stack {
+    var $row {
+      // xanoscriptlint:disable:next zero_object_literal_layout
+      value = {
+        lead: 0
+        next: 30
+      }
+    }
+  }
+
+  response = $row
+}`;
+    assert.equal(zeroLayoutHits(suppressedNext).length, 0);
+
+    const suppressedRegion = `function "example" {
+  input {
+  }
+
+  stack {
+    // xanoscriptlint:disable zero_object_literal_layout
+    var $row {
+      value = {
+        lead: 0
+        next: 30
+      }
+    }
+    // xanoscriptlint:enable zero_object_literal_layout
+    var $other {
+      value = {
+        lead: 0
+        next: 30
+      }
+    }
+  }
+
+  response = $row
+}`;
+    const regionHits = zeroLayoutHits(suppressedRegion);
+    assert.equal(regionHits.length, 1);
+    assert.equal(regionHits[0]?.line, 15);
+  });
+
+  it("zero_object_literal_layout does not rewrite a dotted key onto |set:", () => {
+    const pad = "x".repeat(20);
+    const dotted = wrapVarValue(`{
+        lead: 0
+        pad : "${pad}"
+        account.name: 1
+      }`);
+    const quoted = wrapVarValue(`{
+        lead: 0
+        pad : "${pad}"
+        "account.name": 1
+      }`);
+    assert.equal(zeroLayoutHits(dotted).length, 1);
+    assert.equal(zeroLayoutHits(quoted).length, 1);
+    assert.equal(
+      Buffer.byteLength(wrapVarValue(`{lead: 0, pad: "${pad}", account.name: 1}`).split("\n")[6] ?? "", "utf8") >= 64,
+      true,
     );
   });
 });

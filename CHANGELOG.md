@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Opt-in `zero_object_literal_layout` flags a `var` / `var.update` / `expect` `value` that is a fenced object, or a native object with a top-level `0` followed by another key that is multiline or 64 UTF-8 bytes or longer (error). Xano fences that object, and the fenced value drops keys. Auto-fix rewrites `var` / `var.update` to a one-line seed under 64 bytes plus `|set:` for the remaining fields; `expect` is reported only.
 - Opt-in `transaction_boundaries` flags `lock = true` outside `db.transaction`, a nested `db.transaction`, a `function.run` of a callee that opens its own transaction, a caller-transaction file that opens `db.transaction`, and a caller-transaction callee run outside one (error). There is no auto-fix.
 - Opt-in `transaction_locks` flags an unlocked `db.get` or single `db.query` whose variable feeds a later `db.edit` / `db.patch` / `db.add_or_edit` of that table (error). There is no auto-fix.
 - Opt-in `transaction_stale_reads` flags a write inside `db.transaction` after a read of that table from outside it, when the transaction does not re-read the table (warning). There is no auto-fix.

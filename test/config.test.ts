@@ -17,6 +17,7 @@ describe("config enablement", () => {
     assert.equal(config.enabledRuleIds.has("align_object_colons"), false);
     assert.equal(config.enabledRuleIds.has("collapse_assignment_values"), false);
     assert.equal(config.enabledRuleIds.has("unfence_assignment_values"), false);
+    assert.equal(config.enabledRuleIds.has("zero_object_literal_layout"), false);
     assert.equal(config.enabledRuleIds.has("fence_multiline_values"), false);
     assert.equal(config.enabledRuleIds.has("guid_placement"), false);
     assert.equal(config.enabledRuleIds.has("lock_placement"), false);

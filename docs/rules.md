@@ -29,6 +29,7 @@
 | [`wrap_enum_values`](#wrap_enum_values) | opt-in | warning | yes | Enum `values` arrays wrap when compact JSON length reaches 64 |
 | [`wrap_piped_values`](#wrap_piped_values) | opt-in | warning | yes | Assignment filter pipelines wrap at pipe length 34 or 3+ filters; a grouped base stays inline |
 | [`wrap_tags_values`](#wrap_tags_values) | opt-in | warning | yes | Declaration `tags` arrays wrap when compact JSON length reaches 64 |
+| [`zero_object_literal_layout`](#zero_object_literal_layout) | opt-in | error | yes | `var` / `var.update` / `expect` `value` object that Xano will fence because a `0` is followed by another key |
 
 List the same catalog from the CLI with `xanoscriptlint rules`.
 
@@ -636,7 +637,7 @@ value = ```
 
 Auto-fixable with `--fix`: the fence is rewritten as `name = {k: v, k2: v2}` (or `[a, b]`).
 
-Bodies that do not parse as exactly one colon-object or array (ternaries, two literals, comments, scalars, nested fences, `"""` strings, tabs) are skipped. A fenced object with a literal `0` followed by another key is also left alone: that is the layout pull writes, and inlining it is push/pull churn. A `0` that is the last key is unfenced. The opener must end its line, and the closer must sit alone on its own line; a closer followed by a pipe is left alone.
+Bodies that do not parse as exactly one colon-object or array (ternaries, two literals, comments, scalars, nested fences, `"""` strings, tabs) are skipped. A fenced object with a literal `0` followed by another key is also left alone: that is the layout pull writes, and inlining it is push/pull churn. Rewrite those with [`zero_object_literal_layout`](#zero_object_literal_layout). A `0` that is the last key is unfenced. The opener must end its line, and the closer must sit alone on its own line; a closer followed by a pipe is left alone.
 
 Override the cutoff with `wrap_at` (a positive integer, default 64). Keep it equal to `collapse_assignment_values.wrap_at`:
 
@@ -838,6 +839,27 @@ Override the cutoff with `wrap_at` (a positive integer, default 64):
 wrap_tags_values:
   wrap_at: 64
 ```
+
+## zero_object_literal_layout
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is error.
+
+Xano evaluates a code-fenced object as expression text, not as a native object. When a top-level field is a numeric `0` (or `0.0`, which Xano rewrites to `0`) followed by another field, the fenced value drops keys: `{lead: 0, next: 30, tail: "end"}` becomes `{lead: null, tail: "end"}`. Xano also *creates* that fence. A multiline `value = {…}` whose top-level fields include a `0` followed by another field is stored fenced on push. A one-line object of 64 UTF-8 bytes or longer is rewritten to a native multiline object on push writeback, then fenced on the next push. A one-line object under 64 bytes stays one line. `|set:` of a literal `0` writes the field correctly.
+
+The rule flags a `value =` assignment inside `var`, `var.update`, or `expect.<matcher>` when:
+
+- the value is a triple-backtick fence whose body is an object (first non-blank character is `{`), whether or not it contains a `0`
+- or the value is a native object whose top-level fields include a `0` / `0.0` followed by another field, and the object is multiline or its one-line form is 64 bytes or longer (same measure as [`collapse_assignment_values`](#collapse_assignment_values): indent + `value =` + inline object)
+
+Do not flag `mock =` or test `input =` (owned by [`fence_multiline_values`](#fence_multiline_values)), a fenced array or non-object expression, a native object whose only `0` is its last top-level field, a `0` inside a nested object, a one-line object under 64 bytes, or `data =` / `response =` / `settings =` / any other owner.
+
+```xs
+var $result {
+  value = {allowed: false, used: 0, limit: 30}|set:"window_seconds":600|set:"retry_after_seconds":0
+}
+```
+
+Auto-fixable with `--fix` on `var` and `var.update` only. When the whole object fits on one line under 64 bytes, it is inlined (the form that stays unfenced). Otherwise the value becomes a one-line seed of leading scalar / plain-variable fields that stays under 64 bytes, then a `|set:` chain for the rest in key order. List and object literals always go onto `|set:`. If a field that would move contains a filter, ternary, or operator, or its key contains a `.` (which `|set:` would treat as a nested path), the value is reported and left alone. Already-quoted keys keep their original escapes. A fenced body that does not parse as an object is reported and left alone. The chain uses the layout [`wrap_piped_values`](#wrap_piped_values) produces, so a non-empty seed stays inline and an empty `{}` seed wraps when that rule would wrap. `expect.*` is reported only; an expect cannot take `|set:`.
 
 ## Team-specific rules
 

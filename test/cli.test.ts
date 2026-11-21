@@ -78,6 +78,7 @@ describe("cli", () => {
     assert.match(stdout.text(), /transaction_boundaries/);
     assert.match(stdout.text(), /transaction_locks/);
     assert.match(stdout.text(), /transaction_stale_reads/);
+    assert.match(stdout.text(), /zero_object_literal_layout/);
     assert.match(stdout.text(), /opt-in/);
     assert.match(stdout.text(), /--opt-in <id>/);
     assert.match(stdout.text(), /--opt-in all/);

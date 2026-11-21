@@ -27,7 +27,8 @@ export function formattingOptInRules(): string[] {
         rule.id !== "statement_spacing" &&
         rule.id !== "transaction_boundaries" &&
         rule.id !== "transaction_locks" &&
-        rule.id !== "transaction_stale_reads",
+        rule.id !== "transaction_stale_reads" &&
+        rule.id !== "zero_object_literal_layout",
     )
     .map((rule) => rule.id);
 }
