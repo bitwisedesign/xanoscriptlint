@@ -5629,6 +5629,30 @@ describe("zero_object_literal_layout", () => {
     assert.equal(regionHits[0]?.line, 15);
   });
 
+  it("zero_object_literal_layout reports a native object that contains comments", () => {
+    const text = wrapVarValue(`{
+        lead: 0
+        // keep
+        next: 30
+      }`);
+    const hits = zeroLayoutHits(text);
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.line, 7);
+    assert.equal(hits[0]?.message, ZERO_LAYOUT_VAR);
+  });
+
+  it("zero_object_literal_layout reports a filter after an array field and keeps later keys", () => {
+    const text = wrapVarValue(`{
+        items: [1, 2, 3]|count
+        used : 0
+        limit: 30
+      }`);
+    const hits = zeroLayoutHits(text);
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.line, 7);
+    assert.equal(hits[0]?.message, ZERO_LAYOUT_VAR);
+  });
+
   it("zero_object_literal_layout does not rewrite a dotted key onto |set:", () => {
     const pad = "x".repeat(20);
     const dotted = wrapVarValue(`{

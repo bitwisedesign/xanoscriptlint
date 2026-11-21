@@ -211,7 +211,7 @@ function parseScalar(cursor: Cursor): Node | null {
   return { kind: "scalar", text, start, end: cursor.i };
 }
 
-export function parseValue(cursor: Cursor): Node | null {
+export function parseValue(cursor: Cursor, fieldFilters = false): Node | null {
   skipSpaces(cursor);
   if (cursor.i >= cursor.text.length) {
     return null;
@@ -221,15 +221,61 @@ export function parseValue(cursor: Cursor): Node | null {
   }
   const ch = peek(cursor);
   if (ch === "{") {
-    return parseObject(cursor);
+    return parseObject(cursor, fieldFilters);
   }
   if (ch === "[") {
-    return parseArray(cursor);
+    return parseArray(cursor, fieldFilters);
   }
   return parseScalar(cursor);
 }
 
-function parseObject(cursor: Cursor): Node | null {
+function completeFieldExpression(cursor: Cursor, value: Node): Node | null {
+  let sawFilter = false;
+  while (true) {
+    if (!skipWs(cursor)) {
+      break;
+    }
+    if (peek(cursor) !== "|" || cursor.text[cursor.i + 1] === "|") {
+      break;
+    }
+    sawFilter = true;
+    while (cursor.i < cursor.text.length) {
+      const ch = peek(cursor);
+      if (ch === "\n" || ch === "," || ch === "}" || ch === "]") {
+        break;
+      }
+      if (ch === "/" && cursor.text[cursor.i + 1] === "/") {
+        return null;
+      }
+      if (cursor.text.startsWith("```", cursor.i) || cursor.text.startsWith('"""', cursor.i)) {
+        return null;
+      }
+      if (ch === '"' || ch === "'") {
+        if (!skipQuotedCursor(cursor, ch)) {
+          return null;
+        }
+        continue;
+      }
+      if (ch === "{" || ch === "[") {
+        if (parseValue(cursor) === null) {
+          return null;
+        }
+        continue;
+      }
+      cursor.i += 1;
+    }
+  }
+  if (!sawFilter) {
+    return value;
+  }
+  const text = cursor.text.slice(value.start, cursor.i).trim();
+  if (text === "") {
+    return null;
+  }
+  return { kind: "scalar", text, start: value.start, end: cursor.i };
+}
+
+function parseObject(cursor: Cursor, fieldFilters: boolean): Node | null {
   const start = cursor.i;
   cursor.i += 1;
   const entries: { key: string; value: Node }[] = [];
@@ -253,11 +299,15 @@ function parseObject(cursor: Cursor): Node | null {
       return null;
     }
     cursor.i += 1;
-    const value = parseValue(cursor);
+    const value = parseValue(cursor, fieldFilters);
     if (value === null) {
       return null;
     }
-    entries.push({ key, value });
+    const field = fieldFilters ? completeFieldExpression(cursor, value) : value;
+    if (field === null) {
+      return null;
+    }
+    entries.push({ key, value: field });
     skipSpaces(cursor);
     if (peek(cursor) === ",") {
       cursor.i += 1;
@@ -265,7 +315,7 @@ function parseObject(cursor: Cursor): Node | null {
   }
 }
 
-function parseArray(cursor: Cursor): Node | null {
+function parseArray(cursor: Cursor, fieldFilters: boolean): Node | null {
   const start = cursor.i;
   cursor.i += 1;
   const items: Node[] = [];
@@ -280,7 +330,7 @@ function parseArray(cursor: Cursor): Node | null {
       cursor.i += 1;
       return { kind: "array", items, start, end: cursor.i };
     }
-    const value = parseValue(cursor);
+    const value = parseValue(cursor, fieldFilters);
     if (value === null) {
       return null;
     }

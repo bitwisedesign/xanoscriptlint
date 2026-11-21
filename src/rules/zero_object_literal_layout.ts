@@ -140,7 +140,7 @@ function firstNonBlankChar(text: string): string {
 
 function parseFenceObject(body: string): ObjectNode | null {
   const cursor = { text: body.trim(), i: 0 };
-  const node = parseValue(cursor);
+  const node = parseValue(cursor, true);
   if (node === null || node.kind !== "object") {
     return null;
   }
@@ -190,8 +190,13 @@ function isSeedable(node: Node): boolean {
     return false;
   }
   const text = node.text;
+  if (isQuotedString(text)) {
+    return true;
+  }
+  if (text.includes("|")) {
+    return false;
+  }
   return (
-    isQuotedString(text) ||
     text === "true" ||
     text === "false" ||
     text === "null" ||
@@ -208,6 +213,16 @@ function isSettable(node: Node): boolean {
     return node.items.every((item) => isSettable(item));
   }
   return isSeedable(node);
+}
+
+function hasFilter(node: Node): boolean {
+  if (node.kind === "object") {
+    return node.entries.some((entry) => hasFilter(entry.value));
+  }
+  if (node.kind === "array") {
+    return node.items.some((item) => hasFilter(item));
+  }
+  return !isQuotedString(node.text) && node.text.includes("|");
 }
 
 function isLiteralZero(node: Node): boolean {
@@ -302,6 +317,135 @@ function buildRewrite(
   return { collapsed: `${renderInline(seedNode)}${filters.join("")}`, filters };
 }
 
+function lineCommentEnd(text: string, i: number): number {
+  const nl = text.indexOf("\n", i);
+  return nl === -1 ? text.length : nl;
+}
+
+function objectClose(text: string, open: number): number | null {
+  let depth = 0;
+  let i = open;
+  while (i < text.length) {
+    if (text.startsWith("```", i) || text.startsWith('"""', i)) {
+      return null;
+    }
+    if (text.startsWith("//", i)) {
+      i = lineCommentEnd(text, i);
+      continue;
+    }
+    const ch = text[i];
+    if (ch === '"' || ch === "'") {
+      const quotedEnd = skipQuoted(text, i, ch);
+      if (quotedEnd === null) {
+        return null;
+      }
+      i = quotedEnd;
+      continue;
+    }
+    if (ch === "{" || ch === "[") {
+      depth += 1;
+      i += 1;
+      continue;
+    }
+    if (ch === "}" || ch === "]") {
+      depth -= 1;
+      if (depth === 0) {
+        return ch === "}" ? i : null;
+      }
+      i += 1;
+      continue;
+    }
+    i += 1;
+  }
+  return null;
+}
+
+function stripLineComments(text: string): string | null {
+  let out = "";
+  let i = 0;
+  while (i < text.length) {
+    if (text.startsWith("//", i)) {
+      i = lineCommentEnd(text, i);
+      continue;
+    }
+    const ch = text[i];
+    if (ch === '"' || ch === "'") {
+      const quotedEnd = skipQuoted(text, i, ch);
+      if (quotedEnd === null) {
+        return null;
+      }
+      out += text.slice(i, quotedEnd);
+      i = quotedEnd;
+      continue;
+    }
+    out += ch;
+    i += 1;
+  }
+  return out;
+}
+
+function parseObjectAt(
+  text: string,
+  start: number,
+  fieldFilters: boolean,
+): ObjectNode | null {
+  const node = parseValue({ text, i: start }, fieldFilters);
+  return node !== null && node.kind === "object" ? node : null;
+}
+
+function commentedObject(text: string, start: number): { end: number; node: ObjectNode } | null {
+  const close = objectClose(text, start);
+  if (close === null) {
+    return null;
+  }
+  const stripped = stripLineComments(text.slice(start, close + 1));
+  if (stripped === null) {
+    return null;
+  }
+  const node = parseObjectAt(stripped, 0, true);
+  if (node === null) {
+    return null;
+  }
+  return { end: close + 1, node };
+}
+
+function nativeLayoutSite(
+  lines: string[],
+  text: string,
+  depths: ReturnType<typeof lineStartDepths>,
+  start: number,
+  end: number,
+  check: ObjectNode,
+  node: ObjectNode | null,
+): LayoutSite | null {
+  const open = offsetToLineCol(lines, start);
+  const close = offsetToLineCol(lines, end - 1);
+  const trailing = lines[close.line]?.slice(close.col + 1) ?? "";
+  const prefix = lines[open.line]?.slice(0, open.col) ?? "";
+  const statement = valueStatementKind(lines, depths, open.line);
+  const multiline = open.line !== close.line;
+  const lineLength = byteLength(prefix) + byteLength(renderInline(check)) + byteLength(trailing);
+  if (
+    statement === null ||
+    followedByPipe(text, end, lines, close.line) ||
+    !hasZeroFollowedByKey(check) ||
+    (!multiline && lineLength < DEFAULT_WRAP_AT)
+  ) {
+    return null;
+  }
+  return {
+    statement,
+    openLine: open.line,
+    closeLine: close.line,
+    openCol: open.col,
+    prefix,
+    trailing,
+    indent: leadingSpaces(lines[open.line] ?? ""),
+    hasTab: lineHasTab(lines, open.line, close.line),
+    node,
+  };
+}
+
 function findLayoutSites(lines: string[]): LayoutSite[] {
   const text = lines.join("\n");
   const depths = lineStartDepths(lines, literalLines(lines));
@@ -368,38 +512,35 @@ function findLayoutSites(lines: string[]): LayoutSite[] {
     if (ch === "{" || ch === "[") {
       const owner = lookbehindAssignment(text, i);
       if (owner === "value") {
-        const node = parseValue({ text, i });
+        const node = parseValue({ text, i }, true);
         if (node !== null && (node.kind === "object" || node.kind === "array")) {
           if (node.kind === "object") {
-            const open = offsetToLineCol(lines, node.start);
-            const close = offsetToLineCol(lines, node.end - 1);
-            const trailing = lines[close.line]?.slice(close.col + 1) ?? "";
-            const prefix = lines[open.line]?.slice(0, open.col) ?? "";
-            const statement = valueStatementKind(lines, depths, open.line);
-            const multiline = open.line !== close.line;
-            const lineLength =
-              byteLength(prefix) + byteLength(renderInline(node)) + byteLength(trailing);
-            if (
-              statement !== null &&
-              !followedByPipe(text, node.end, lines, close.line) &&
-              hasZeroFollowedByKey(node) &&
-              (multiline || lineLength >= DEFAULT_WRAP_AT)
-            ) {
-              sites.push({
-                statement,
-                openLine: open.line,
-                closeLine: close.line,
-                openCol: open.col,
-                prefix,
-                trailing,
-                indent: leadingSpaces(lines[open.line] ?? ""),
-                hasTab: lineHasTab(lines, open.line, close.line),
-                node,
-              });
+            const site = nativeLayoutSite(lines, text, depths, node.start, node.end, node, node);
+            if (site !== null) {
+              sites.push(site);
             }
           }
           i = node.end;
           continue;
+        }
+        if (ch === "{") {
+          const fallback = commentedObject(text, i);
+          if (fallback !== null) {
+            const site = nativeLayoutSite(
+              lines,
+              text,
+              depths,
+              i,
+              fallback.end,
+              fallback.node,
+              null,
+            );
+            if (site !== null) {
+              sites.push(site);
+            }
+            i = fallback.end;
+            continue;
+          }
         }
       }
     }
@@ -417,7 +558,7 @@ function messageFor(kind: StatementKind): string {
 }
 
 function rewriteLines(site: LayoutSite, wrapAt: number): string[] | null {
-  if (site.statement === "expect" || site.node === null) {
+  if (site.statement === "expect" || site.node === null || hasFilter(site.node)) {
     return null;
   }
   const inline = `${site.prefix}${renderInline(site.node)}${site.trailing}`;
