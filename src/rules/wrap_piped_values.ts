@@ -128,6 +128,21 @@ function renderFilter(
   return [`${pad}${filter}`];
 }
 
+export function renderPipedAssignment(
+  prefix: string,
+  collapsed: string,
+  indent: number,
+  options: RuleOptions = {},
+): string[] | null {
+  return renderCanonical(
+    prefix,
+    collapsed,
+    indent,
+    wrapThreshold(options),
+    filterLimit(options),
+  );
+}
+
 function renderCanonical(
   prefix: string,
   collapsed: string,

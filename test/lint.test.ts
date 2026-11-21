@@ -421,6 +421,32 @@ describe("fixture linting", () => {
     assert.equal(opened[0]?.message, "caller-transaction file must not open db.transaction");
   });
 
+  it("committed zero_object_literal_layout fixture matches when that rule is opted in", () => {
+    const config = resolveConfig({ opt_in_rules: ["zero_object_literal_layout"] }, fixtures, null);
+    const zeroLayout = {
+      path: path.join(fixtures, "violations/zero_object_literal_layout.xs"),
+      text: readFileSync(
+        path.join(fixtures, "violations/zero_object_literal_layout.xs"),
+        "utf8",
+      ),
+    };
+    assert.equal(
+      lintFiles([zeroLayout], config).some((v) => v.ruleId === "zero_object_literal_layout"),
+      true,
+    );
+    const kept = {
+      path: path.join(fixtures, "clean/zero_object_literal_layout_kept.xs"),
+      text: readFileSync(
+        path.join(fixtures, "clean/zero_object_literal_layout_kept.xs"),
+        "utf8",
+      ),
+    };
+    assert.equal(
+      lintFiles([kept], config).some((v) => v.ruleId === "zero_object_literal_layout"),
+      false,
+    );
+  });
+
   it("committed no_expect_equal_null fixture matches when that rule is opted in", () => {
     const config = resolveConfig({ opt_in_rules: ["no_expect_equal_null"] }, fixtures, null);
     const expectNull = {

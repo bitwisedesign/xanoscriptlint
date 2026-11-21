@@ -107,6 +107,7 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 | `wrap_enum_values` | ⚪️ | ⚠️ | ✅ | Enum `values` array is inline at compact JSON length 64+ or wrapped below 64 (Xano rewrites this on push) |
 | `wrap_piped_values` | ⚪️ | ⚠️ | ✅ | Assignment filter pipeline is inline at pipe length 34+ or 3+ filters, or wrapped below that; a grouped base stays inline (Xano rewrites this on push) |
 | `wrap_tags_values` | ⚪️ | ⚠️ | ✅ | Declaration `tags` array is inline at compact JSON length 64+ or wrapped below 64 (Xano rewrites this on push) |
+| `zero_object_literal_layout` | ⚪️ | ❌ | ✅ | `var` / `var.update` / `expect` `value` that is a fenced object (even with no `0`), or a native object with a `0` followed by another key that Xano will fence (the fenced value drops keys) |
 
 🟢 on · ⚪️ off · ❌ error · ⚠️ warning · ✅ auto-fix. Off-by-default rules are enabled with `opt_in_rules` or `--opt-in` (`--opt-in all` enables every built-in).
 

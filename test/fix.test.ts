@@ -3290,4 +3290,150 @@ ${inlineOutputLine(OUTPUT_V64)}
       true,
     );
   });
+
+  it("rewrites zero_object_literal_layout to a seed plus |set: and is idempotent", () => {
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+    const before = readFileSync(
+      path.join(fixtures, "violations/zero_object_literal_layout.xs"),
+      "utf8",
+    );
+    const after = readFileSync(
+      path.join(fixtures, "fixed/zero_object_literal_layout.xs"),
+      "utf8",
+    );
+    const result = fixFile(
+      { path: "zero-layout.xs", text: before },
+      config({ only_rules: ["zero_object_literal_layout"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, after);
+    assert.deepEqual(
+      result.corrections.map((correction) => correction.line),
+      [7, 16, 24, 33, 36, 42, 49, 63],
+    );
+    assert.equal(result.corrections[0]?.ruleId, "zero_object_literal_layout");
+
+    const leftover = lintFile(
+      { path: "zero-layout.xs", text: result.text },
+      config({ only_rules: ["zero_object_literal_layout"] }),
+    ).filter((violation) => violation.ruleId === "zero_object_literal_layout");
+    assert.deepEqual(
+      leftover.map((violation) => violation.line),
+      [28, 47],
+    );
+
+    const again = fixFile(
+      { path: "zero-layout.xs", text: result.text },
+      config({ only_rules: ["zero_object_literal_layout"] }),
+    );
+    assert.equal(again.changed, false);
+
+    const allRules = builtinRules.filter((rule) => !rule.defaultEnabled).map((rule) => rule.id);
+    const withAll = fixFile(
+      { path: "zero-layout.xs", text: after },
+      config({ opt_in_rules: allRules }),
+    );
+    assert.equal(withAll.changed, false);
+    assert.equal(withAll.text, after);
+  });
+
+  it("does not rewrite a comment-bearing native object for zero_object_literal_layout", () => {
+    const text = wrapVarValue(`{
+        lead: 0
+        // keep
+        next: 30
+      }`);
+    const result = fixFile(
+      { path: "comment-object.xs", text },
+      config({ only_rules: ["zero_object_literal_layout"] }),
+    );
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
+  });
+
+  it("does not rewrite a filter after an array field for zero_object_literal_layout", () => {
+    const text = wrapVarValue(`{
+        items: [1, 2, 3]|count
+        used : 0
+        limit: 30
+      }`);
+    const result = fixFile(
+      { path: "array-filter.xs", text },
+      config({ only_rules: ["zero_object_literal_layout"] }),
+    );
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
+  });
+
+  it("does not rewrite a nested field filter in a filter arg for zero_object_literal_layout", () => {
+    const text = wrapVarValue(`{
+        items: [1]|set:"nested":{inner: [2]|count}
+        used : 0
+        limit: 30
+      }`);
+    const result = fixFile(
+      { path: "nested-filter.xs", text },
+      config({ only_rules: ["zero_object_literal_layout"] }),
+    );
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
+  });
+
+  it("does not rewrite a dotted key onto |set: for zero_object_literal_layout", () => {
+    const pad = "x".repeat(20);
+    const text = wrapVarValue(`{
+        lead: 0
+        pad : "${pad}"
+        account.name: 1
+      }`);
+    const result = fixFile(
+      { path: "dotted-key.xs", text },
+      config({ only_rules: ["zero_object_literal_layout"] }),
+    );
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
+  });
+
+  it("preserves escaped quoted keys when rewriting onto |set:", () => {
+    const pad = "x".repeat(22);
+    const text = wrapVarValue(`{
+        lead: 0
+        pad : "${pad}"
+        "a\\"b": 1
+      }`);
+    const result = fixFile(
+      { path: "escaped-key.xs", text },
+      config({ only_rules: ["zero_object_literal_layout"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(
+      result.text,
+      wrapVarValue(`{lead: 0, pad: "${pad}"}|set:"a\\"b":1`),
+    );
+  });
+
+  it("does not rewrite a suppressed zero_object_literal_layout violation", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    var $row {
+      // xanoscriptlint:disable:next zero_object_literal_layout
+      value = {
+        lead: 0
+        next: 30
+      }
+    }
+  }
+
+  response = $row
+}`;
+    const result = fixFile(
+      { path: "suppressed-zero-layout.xs", text },
+      config({ only_rules: ["zero_object_literal_layout"] }),
+    );
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
+  });
 });
