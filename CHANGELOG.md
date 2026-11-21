@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-20
+
 ### Added
 
 - Opt-in `zero_object_literal_layout` flags a `var` / `var.update` / `expect` `value` that is a fenced object, or a native object with a top-level `0` followed by another key that is multiline or 64 UTF-8 bytes or longer (error). Xano fences that object, and the fenced value drops keys. Auto-fix rewrites `var` / `var.update` to a one-line seed under 64 bytes plus `|set:` for the remaining fields; `expect` is reported only.
