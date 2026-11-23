@@ -6990,6 +6990,14 @@ ${indentBlock(editWallet("balance: $row.balance"), 4)}
       ),
     );
     assert.deepEqual(lockHitsTx(commented), []);
+    const viaCount = lockFn(
+      txBlock(
+        getWallet("row"),
+        "var $count {\n  value = $row.balance\n}",
+        editWallet("balance: $input.amounts|count"),
+      ),
+    );
+    assert.deepEqual(lockHitsTx(viaCount), []);
   });
 
   it("follows each as with or without a leading dollar sign", () => {

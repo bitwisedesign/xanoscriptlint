@@ -410,6 +410,9 @@ function isBareVarRef(line: string, index: number, varName: string): boolean {
   if (prev !== undefined && /[A-Za-z0-9_$.]/.test(prev)) {
     return false;
   }
+  if (prev === "|" && line[index - 2] !== "|") {
+    return false;
+  }
   const next = line[index + varName.length];
   if (next !== undefined && /[A-Za-z0-9_]/.test(next)) {
     return false;
