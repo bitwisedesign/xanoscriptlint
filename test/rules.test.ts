@@ -6074,6 +6074,16 @@ describe("transaction_locks", () => {
     assert.deepEqual(lockHitsTx(outside).map((v) => v.message), [
       `locked list read of wallet as $rows in another transaction drives db.edit on line ${lineOf(outside, "db.edit")} via $row; ${STALE_LIST_FIX.wrap}`,
     ]);
+    const unsorted = (write: string) =>
+      lockFn(txBlock(listWallets("rows", LIST_RETURN, "lock = true")), eachRow("$rows", "row", write));
+    const unsortedMove = unsorted(txBlock(editWallet("balance: $row.balance + 1", "$row.id")));
+    assert.deepEqual(lockHitsTx(unsortedMove).map((v) => v.message), [
+      `locked list read of wallet as $rows in another transaction drives db.edit on line ${lineOf(unsortedMove, "db.edit")} via $row; ${STALE_LIST_FIX.move} and sort it by id ascending`,
+    ]);
+    const unsortedWrap = unsorted(editWallet("balance: $row.balance + 1", "$row.id"));
+    assert.deepEqual(lockHitsTx(unsortedWrap).map((v) => v.message), [
+      `locked list read of wallet as $rows in another transaction drives db.edit on line ${lineOf(unsortedWrap, "db.edit")} via $row; ${STALE_LIST_FIX.wrap}, and sort the query by id ascending`,
+    ]);
     const relocked = lockFn(
       txBlock(listWallets("rows", sorted, LIST_RETURN, "lock = true")),
       eachRow(
@@ -6115,8 +6125,37 @@ describe("transaction_locks", () => {
       ),
     );
     assert.deepEqual(lockHitsTx(carried).map((v) => v.message), [
-      `locked read of wallet as $fresh in another transaction is used in db.edit data on line ${lineOf(carried, "db.edit")} via $total; ${STALE_FIX.move}`,
+      `locked read of wallet as $fresh from an earlier loop iteration is used in db.edit data on line ${lineOf(carried, "db.edit")} via $total; re-read the row or recompute the value in the current iteration's db.transaction`,
     ]);
+
+    const carriedRows = lockFn(
+      "var $previous {\n  value = []\n}",
+      eachRow(
+        "$input.batches",
+        "batch",
+        txBlock(
+          eachRow("$previous", "old", editWallet("balance: $old.balance + 1", "$old.id")),
+          listWallets("rows", 'sort = {id: "asc"}', LIST_RETURN, "lock = true"),
+          "var.update $previous {\n  value = $rows\n}",
+        ),
+      ),
+    );
+    assert.deepEqual(lockHitsTx(carriedRows).map((v) => v.message), [
+      `locked list read of wallet as $rows from an earlier loop iteration drives db.edit on line ${lineOf(carriedRows, "db.edit")} via $previous -> $old; re-read the rows or recompute the values in the current iteration's db.transaction`,
+    ]);
+  });
+
+  it("matches held keys by whitespace outside quoted literals only", () => {
+    const reread = (lockedKey: string, rereadKey: string) =>
+      lockFn(
+        txBlock(
+          `db.get wallet {\n  field_name = "id"\n  field_value = ${lockedKey}\n  lock = true\n} as $locked`,
+          `db.get wallet {\n  field_name = "id"\n  field_value = ${rereadKey}\n} as $again`,
+          editWallet("balance: $again.balance"),
+        ),
+      );
+    assert.deepEqual(lockHitsTx(reread('$input.id ~ "a  b"', '$input.id   ~   "a  b"')), []);
+    assert.deepEqual(lockHitsTx(reread('$input.id ~ "a  b"', '$input.id ~ "a b"')).length, 1);
   });
 
   it("keeps a held key through |set: of another field but not of id", () => {
@@ -6264,6 +6303,29 @@ describe("transaction_locks", () => {
     assert.deepEqual(lockHitsTx(perRow('sort = {id: "asc"}')), []);
   });
 
+  it("keeps the sort finding through a locked per-row re-read that keys the write", () => {
+    const perRow = (...members: string[]) =>
+      lockFn(
+        txBlock(
+          listWallets("rows", ...members),
+          eachRow(
+            "$rows",
+            "row",
+            [
+              'db.get wallet {\n  field_name = "id"\n  field_value = $row.id\n  lock = true\n} as $fresh',
+              editWallet("is_active: false", "$fresh.id"),
+            ].join("\n\n"),
+          ),
+        ),
+      );
+    const unsorted = perRow(LIST_RETURN, "lock = true");
+    assert.deepEqual(lockHitsTx(unsorted).map((v) => v.message), [
+      `locked list read of wallet as $rows drives db.edit on line ${lineOf(unsorted, "db.edit")}; ${SORT_FIX}`,
+    ]);
+    assert.deepEqual(lockHitsTx(perRow('sort = {id: "asc"}', LIST_RETURN, "lock = true")), []);
+    assert.deepEqual(lockHitsTx(perRow(LIST_RETURN)), []);
+  });
+
   it("does not hold a read key whose input the read overwrites", () => {
     const rebind = (target: string) =>
       lockFn(
@@ -6373,6 +6435,60 @@ ${indentBlock(getWallet("row"), 4)}
     assert.deepEqual(lockHitsTx(resetOnBothPaths), []);
   });
 
+  it("runs finally on paths that leave try and catch", () => {
+    const text = lockFn(
+      txBlock(`try_catch {
+  try {
+${indentBlock(getWallet("row"), 4)}
+
+    return { value = $row }
+  }
+
+  catch {
+    throw { name = "Failed" value = "failed" }
+  }
+
+  finally {
+${indentBlock(editWallet("balance: $row.balance"), 4)}
+  }
+}`),
+    );
+    assert.deepEqual(lockHitsTx(text).map((v) => v.message), [
+      `unlocked read of wallet as $row is used in db.edit data on line ${lineOf(text, "db.edit")}; add lock = true`,
+    ]);
+
+    const continueThroughFinally = lockFn(
+      txBlock(
+        getWallet("row"),
+        "var $carry {\n  value = 0\n}",
+        eachRow(
+          "$input.amounts",
+          "amount",
+          [
+            editWallet("balance: $carry"),
+            "var.update $carry {\n  value = $row.balance\n}",
+            `try_catch {
+  try {
+    conditional {
+      if ($amount > 0) {
+        continue
+      }
+    }
+  }
+
+  finally {
+    var.update $carry {
+      value = 0
+    }
+  }
+}`,
+          ].join("\n\n"),
+        ),
+      ),
+    );
+    assert.deepEqual(lockHitsTx(continueThroughFinally), []);
+  });
+
   it("drops held keys on a dotted var.update of that path only", () => {
     const update = (field: string) =>
       lockFn(
@@ -6434,6 +6550,90 @@ ${indentBlock(getWallet("row"), 4)}
     assert.deepEqual(lockHitsTx(chain(80, "$input.balance")), []);
   });
 
+  it("recognizes if and elseif branches whose conditions span several lines", () => {
+    const branch = (keyword: string) =>
+      lockFn(
+        txBlock(
+          getWallet("row"),
+          "var $balance {\n  value = 0\n}",
+          [
+            "conditional {",
+            ...(keyword === "elseif" ? ["  if ($input.first) {", "    var.update $balance {", "      value = 1", "    }", "  }", ""] : []),
+            `  ${keyword} ($input.mode == "copy"`,
+            "    && $input.allowed) {",
+            "    var.update $balance {",
+            "      value = $row.balance",
+            "    }",
+            "  }",
+            "",
+            "  else {",
+            "    var.update $balance {",
+            "      value = 0",
+            "    }",
+            "  }",
+            "}",
+          ].join("\n"),
+          editWallet("balance: $balance"),
+        ),
+      );
+    for (const keyword of ["if", "elseif"]) {
+      const text = branch(keyword);
+      assert.deepEqual(lockHitsTx(text).map((v) => v.message), [
+        `unlocked read of wallet as $row is used in db.edit data on line ${lineOf(text, "db.edit")} via $balance; add lock = true`,
+      ]);
+    }
+  });
+
+  it("parses one-line if, elseif, and else bodies as branch statements", () => {
+    const branches = (compact: string) =>
+      lockFn(
+        txBlock(
+          getWallet("row"),
+          "var $balance {\n  value = 0\n}",
+          [
+            "conditional {",
+            `  ${compact}`,
+            "",
+            "  else {",
+            "    var.update $row {",
+            "      value = null",
+            "    }",
+            "",
+            "    var.update $balance {",
+            "      value = 0",
+            "    }",
+            "  }",
+            "}",
+          ].join("\n"),
+          editWallet("balance: $row.balance + $balance"),
+        ),
+      );
+    const keepsRow = branches('if ($input.note) { var.update $balance { value = 1 } }');
+    assert.deepEqual(lockHitsTx(keepsRow).map((v) => v.message), [
+      `unlocked read of wallet as $row is used in db.edit data on line ${lineOf(keepsRow, "db.edit")}; add lock = true`,
+    ]);
+    assert.deepEqual(lockHitsTx(branches("if ($input.clear) { var.update $row { value = null } }")), []);
+    const assigns = lockFn(
+      txBlock(
+        getWallet("row"),
+        "var $balance {\n  value = 0\n}",
+        [
+          "conditional {",
+          "  if ($input.copy) { var.update $balance { value = $row.balance } }",
+          '  elseif ($input.half) { var.update $balance { value = 1 } }',
+          "  else { var.update $balance { value = 0 } }",
+          "}",
+        ].join("\n"),
+        editWallet("balance: $balance"),
+      ),
+    );
+    assert.deepEqual(lockHitsTx(assigns).map((v) => v.message), [
+      `unlocked read of wallet as $row is used in db.edit data on line ${lineOf(assigns, "db.edit")} via $balance; add lock = true`,
+    ]);
+    assert.deepEqual(lockHitsTx(branches("if ($input.skip) { return { value = null } }")), []);
+    assert.deepEqual(lockHitsTx(branches('if ($input.skip) { throw { name = "Skipped" value = "skipped" } }')), []);
+  });
+
   it("merges switch cases like conditional branches", () => {
     const overwrite = "var.update $row {\n  value = $fresh\n}";
     const cases = (withDefault: boolean) =>
@@ -6466,6 +6666,29 @@ ${indentBlock(getWallet("row"), 4)}
         ...(afterLoop ? [] : [write]),
       ].join("\n\n");
       return lockFn(txBlock(eachRow("$input.batches", "batch", body), ...(afterLoop ? [write] : [])));
+    };
+    const inside = batch(false);
+    assert.deepEqual(lockHitsTx(inside).map((v) => v.message), [
+      `unlocked list read of wallet as $rows drives db.edit on line ${lineOf(inside, "db.edit")} via $w -> $sum; ${LIST_FIX.same}`,
+    ]);
+    assert.deepEqual(lockHitsTx(batch(true)), []);
+  });
+
+  it("counts a write in a loop around the item loop when the list is read before both", () => {
+    const batch = (afterLoop: boolean) => {
+      const write = editWallet("balance: $sum", "$input.id");
+      const body = [
+        "var $sum {\n  value = 0\n}",
+        eachRow("$rows", "w", "var.update $sum {\n  value = $sum + $w.balance\n}"),
+        ...(afterLoop ? [] : [write]),
+      ].join("\n\n");
+      return lockFn(
+        txBlock(
+          listWallets("rows", LIST_RETURN),
+          eachRow("$input.batches", "batch", body),
+          ...(afterLoop ? [write] : []),
+        ),
+      );
     };
     const inside = batch(false);
     assert.deepEqual(lockHitsTx(inside).map((v) => v.message), [

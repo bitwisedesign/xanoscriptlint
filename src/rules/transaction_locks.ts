@@ -39,7 +39,6 @@ interface Taint {
   origin: Origin;
   path: string[];
   loops: Loop[];
-  scope: Loop[];
   heldBy: string | null;
 }
 
@@ -55,6 +54,14 @@ interface LoopFrame {
   continues: State[];
   breaks: State[];
 }
+
+type Exit = "continue" | "break" | "leave";
+
+interface FinallyFrame {
+  pending: { exit: Exit; state: State }[];
+}
+
+type ControlFrame = { loop: LoopFrame } | FinallyFrame;
 
 interface Hit {
   origin: Origin;
@@ -94,7 +101,14 @@ export const transactionLocks: Rule = {
       .sort((a, b) => a.origin.read.line - b.origin.read.line)
       .map((hit) => ({
         ruleId: transactionLocks.id,
-        message: message(hit.origin, hit.write, hit.path, analysis.txOf(hit.origin.read), analysis.txOf(hit.write)),
+        message: message(
+          hit.origin,
+          hit.write,
+          hit.path,
+          analysis.txOf(hit.origin.read),
+          analysis.txOf(hit.write),
+          sortsByIdAsc(analysis.flow.member(hit.origin.read, "sort"), hit.origin.read.arg ?? ""),
+        ),
         severity,
         file: file.path,
         line: hit.origin.read.line + 1,
@@ -108,7 +122,7 @@ class LockAnalysis {
   private readonly statements = new Map<number, Statement>();
   private readonly steps = new Map<number, FlowStep>();
   private readonly origins = new Map<string, Origin>();
-  private readonly loopFrames: LoopFrame[] = [];
+  private readonly control: ControlFrame[] = [];
   private readonly activeLoops: Loop[] = [];
   private readonly tryFrames: State[][] = [];
 
@@ -155,8 +169,7 @@ class LockAnalysis {
       return state;
     }
     if (block.keyword === "continue" || block.keyword === "break") {
-      const frame = this.loopFrames[this.loopFrames.length - 1];
-      (block.keyword === "continue" ? frame?.continues : frame?.breaks)?.push(clone(state));
+      this.exitTo(block.keyword, state);
       return deadState();
     }
     const stmt = this.statements.get(block.line);
@@ -188,6 +201,7 @@ class LockAnalysis {
       return this.execTryCatch(block, state);
     }
     if (EXIT_KEYWORDS.has(block.keyword)) {
+      this.exitTo("leave", state);
       return deadState();
     }
     const out = this.execAll(block.children, state);
@@ -248,11 +262,11 @@ class LockAnalysis {
       dropVar(iteration.held, index);
     }
     const frame: LoopFrame = { continues: [], breaks: [] };
-    this.loopFrames.push(frame);
+    this.control.push({ loop: frame });
     this.activeLoops.push(loop);
     const out = this.execAll(body, iteration);
     this.activeLoops.pop();
-    this.loopFrames.pop();
+    this.control.pop();
     return { end: merge([out, ...frame.continues]), breaks: frame.breaks };
   }
 
@@ -261,21 +275,62 @@ class LockAnalysis {
     const tryPart = part("try");
     const catchPart = part("catch");
     const finallyPart = part("finally");
+    const frame: FinallyFrame = { pending: [] };
+    if (finallyPart !== undefined) {
+      this.control.push(frame);
+    }
     const throwSites: State[] = [];
     this.tryFrames.push(throwSites);
     const tried = tryPart === undefined ? clone(state) : this.execAll(tryPart.children, clone(state));
     this.tryFrames.pop();
     let out = tried;
+    const escaped: State[] = [];
     if (catchPart !== undefined) {
+      this.tryFrames.push(escaped);
       out = merge([tried, this.execAll(catchPart.children, merge([state, ...throwSites]))]);
+      this.tryFrames.pop();
+    } else {
+      escaped.push(clone(state), ...throwSites);
     }
-    return finallyPart === undefined ? out : this.execAll(finallyPart.children, out);
+    this.tryFrames[this.tryFrames.length - 1]?.push(...escaped);
+    if (finallyPart === undefined) {
+      return out;
+    }
+    this.control.pop();
+    for (const exit of ["continue", "break", "leave"] as const) {
+      const entries = frame.pending.filter((p) => p.exit === exit).map((p) => p.state);
+      if (exit === "leave") {
+        entries.push(...escaped);
+      }
+      if (entries.length === 0) {
+        continue;
+      }
+      const after = this.execAll(finallyPart.children, merge(entries));
+      if (!after.dead) {
+        this.exitTo(exit, after);
+      }
+    }
+    return this.execAll(finallyPart.children, out);
+  }
+
+  private exitTo(exit: Exit, state: State): void {
+    for (let i = this.control.length - 1; i >= 0; i -= 1) {
+      const frame = this.control[i];
+      if ("pending" in frame) {
+        frame.pending.push({ exit, state: clone(state) });
+        return;
+      }
+      if (exit !== "leave") {
+        (exit === "continue" ? frame.loop.continues : frame.loop.breaks).push(clone(state));
+        return;
+      }
+    }
   }
 
   private assignItem(step: FlowStep, state: State, loop: Loop): void {
     const source = LIST_SOURCE.exec(step.source.trim())?.[1] ?? null;
     const lockedTables = source === null ? [] : heldTables(state.held, source, "[]");
-    state.env.set(step.name, derive(state.env, step.source, step.name, loop));
+    state.env.set(step.name, derive(state.env, step.source, step.name, [...this.activeLoops, loop]));
     dropVar(state.held, step.name);
     for (const table of lockedTables) {
       state.held.add(heldKey(table, `$${step.name}.id`));
@@ -284,7 +339,7 @@ class LockAnalysis {
 
   private applyAssign(step: FlowStep, state: State): State {
     if (step.field !== "") {
-      const added = derive(state.env, step.source, step.name, null);
+      const added = derive(state.env, step.source, step.name);
       state.env.set(step.name, union(state.env.get(step.name) ?? [], added));
       dropPath(state.held, step.name, step.field);
       return state;
@@ -292,7 +347,7 @@ class LockAnalysis {
     const alias = aliasSource(step.source);
     const rows = alias === null ? [] : heldTables(state.held, alias, ".id");
     const lists = alias === null ? [] : heldTables(state.held, alias, "[]");
-    state.env.set(step.name, derive(state.env, step.source, step.name, null));
+    state.env.set(step.name, derive(state.env, step.source, step.name));
     dropVar(state.held, step.name);
     for (const table of rows) {
       state.held.add(heldKey(table, `$${step.name}.id`));
@@ -312,7 +367,7 @@ class LockAnalysis {
     }
     if (stmt.varName !== null) {
       if (RETURNING_WRITE_OPS.has(stmt.op)) {
-        state.env.set(stmt.varName, derive(state.env, this.writeData(stmt), stmt.varName, null));
+        state.env.set(stmt.varName, derive(state.env, this.writeData(stmt), stmt.varName));
       } else {
         state.env.delete(stmt.varName);
       }
@@ -329,16 +384,14 @@ class LockAnalysis {
     const locked = (stmt.lock && inTx) || keyHeld;
     const single = stmt.op === "db.get" || stmt.singleReturn;
     if (stmt.varName !== null) {
-      const taints: Taint[] = [];
-      if (!locked) {
-        const inputs = [this.flow.member(stmt, "field_value"), this.flow.member(stmt, "where")]
-          .filter((text): text is string => text !== null)
-          .join("\n");
-        taints.push(...derive(state.env, inputs, stmt.varName, null));
-      }
+      const inputs = [this.flow.member(stmt, "field_value"), this.flow.member(stmt, "where")]
+        .filter((text): text is string => text !== null)
+        .join("\n");
+      const derived = derive(state.env, inputs, stmt.varName);
+      const taints = locked ? derived.filter((taint) => taint.origin.shape === "locked_list") : derived;
       for (const shape of originShapes(stmt, this.flow, locked)) {
         const heldBy = shape === "stale" || shape === "stale_list" ? this.txOf(stmt) : null;
-        taints.push({ origin: this.origin(stmt, shape), path: [], loops: [], scope: [...this.activeLoops], heldBy });
+        taints.push({ origin: this.origin(stmt, shape), path: [], loops: [], heldBy });
       }
       state.env.set(stmt.varName, taints);
       dropVar(state.held, stmt.varName);
@@ -405,8 +458,7 @@ class LockAnalysis {
     const keyHeld =
       HELD_KEY_WRITE_OPS.has(write.op) && this.keyedById(write) && state.held.has(heldKey(table, key));
     const inLoop = (taint: Taint) =>
-      taint.loops.length > 0 &&
-      [...taint.scope, ...taint.loops].some((loop) => loop.line < write.line && write.line <= loop.endLine);
+      taint.loops.some((loop) => loop.line < write.line && write.line <= loop.endLine);
     const active = (taint: Taint, ...shapes: Shape[]) => taint.heldBy === null && shapes.includes(taint.origin.shape);
     const single = matches(state.env, data, (taint) => active(taint, "single", "stale"));
     const list = matches(
@@ -489,7 +541,10 @@ function sortsByIdAsc(sortText: string | null, table: string): boolean {
 }
 
 function heldKey(table: string, expr: string): string {
-  return `${table}\u0001${expr.trim().replace(/\s+/g, " ")}`;
+  const normalized = expr
+    .trim()
+    .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|\s+/g, (match, quoted: string | undefined) => quoted ?? " ");
+  return `${table}\u0001${normalized}`;
 }
 
 function heldExpr(key: string): string {
@@ -664,7 +719,7 @@ function matches(env: Env, text: string, keep: (taint: Taint) => boolean): Map<O
   return found;
 }
 
-function derive(env: Env, text: string, target: string, loop: Loop | null): Taint[] {
+function derive(env: Env, text: string, target: string, added: Loop[] = []): Taint[] {
   const found = new Map<string, Taint>();
   if (text.trim().length === 0) {
     return [];
@@ -675,9 +730,10 @@ function derive(env: Env, text: string, target: string, loop: Loop | null): Tain
     }
     for (const taint of taints) {
       const path = extend(taint, target);
-      const loops = loop === null || taint.loops.some((outer) => outer.line === loop.line)
-        ? taint.loops
-        : [...taint.loops, loop];
+      const loops = [
+        ...taint.loops,
+        ...added.filter((loop) => !taint.loops.some((known) => known.line === loop.line)),
+      ];
       const next = { ...taint, path, loops };
       const id = taintKey(next);
       const prior = found.get(id);
@@ -703,20 +759,28 @@ function message(
   path: string[],
   readTx: string | null,
   writeTx: string | null,
+  sorted: boolean,
 ): string {
   const read = origin.read;
   const via = path.length === 0 ? "" : ` via ${path.map((name) => `$${name}`).join(" -> ")}`;
   const at = `${write.op} on line ${write.line + 1}`;
+  const carried = writeTx !== null && readTx === writeTx;
   if (origin.shape === "stale") {
+    if (carried) {
+      return `locked read of ${read.arg} as $${read.varName} from an earlier loop iteration is used in ${write.op} data on line ${write.line + 1}${via}; re-read the row or recompute the value in the current iteration's db.transaction`;
+    }
     const fix = writeTx === null
       ? "wrap the read and the write in one db.transaction"
       : "move the read into the db.transaction that holds the write";
     return `locked read of ${read.arg} as $${read.varName} in another transaction is used in ${write.op} data on line ${write.line + 1}${via}; ${fix}`;
   }
   if (origin.shape === "stale_list") {
+    if (carried) {
+      return `locked list read of ${read.arg} as $${read.varName} from an earlier loop iteration drives ${at}${via}; re-read the rows or recompute the values in the current iteration's db.transaction`;
+    }
     const fix = writeTx === null
-      ? "wrap the query and the writes in one db.transaction"
-      : "move the query into the db.transaction that holds the write";
+      ? `wrap the query and the writes in one db.transaction${sorted ? "" : ", and sort the query by id ascending"}`
+      : `move the query into the db.transaction that holds the write${sorted ? "" : " and sort it by id ascending"}`;
     return `locked list read of ${read.arg} as $${read.varName} in another transaction drives ${at}${via}; ${fix}`;
   }
   if (origin.shape === "locked_list") {

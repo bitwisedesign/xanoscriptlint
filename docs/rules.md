@@ -562,7 +562,7 @@ Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is er
 
 Finds reads whose values feed a later write of the same table without a row lock that protects them. It checks two shapes: a single-row read whose value reaches a write's `data`, and a list query whose rows drive per-row writes.
 
-A read counts as locked only when it has `lock = true` and sits in a transaction. A statement is in a transaction when it is lexically inside `db.transaction { stack { ... } }`, or when its file matches a `caller_transaction` glob, in which case every statement in the file shares one transaction. `lock = true` outside any transaction locks nothing, so the rule treats that read as unlocked.
+A read counts as locked when it has `lock = true` and sits in a transaction, or when it omits `lock = true` but is keyed by a row its transaction already holds (see [Held keys](#held-keys)). A statement is in a transaction when it is lexically inside `db.transaction { stack { ... } }`, or when its file matches a `caller_transaction` glob, in which case every statement in the file shares one transaction. `lock = true` outside any transaction locks nothing, so the rule treats that read as unlocked.
 
 ### Taint
 
@@ -575,9 +575,9 @@ A variable is tainted by an unlocked read when its value derives from that read.
 
 A locked read produces a variable that is clean only inside the `db.transaction` that took the lock, even when its `field_value` or `where` uses tainted data. When that transaction closes, the lock is released: the variable and everything derived from it become tainted by the locked read, and the held keys from that transaction stop applying (see [Locked reads in another transaction](#locked-reads-in-another-transaction)). A caller-transaction file is one transaction, so its locked reads never expire. When the match passes through variables, the message names each one in order from the read to the write, for example `via $balance -> $next_balance`.
 
-Taint is flow-sensitive. `var $x`, `var.update $x`, a read's `as $x`, and a write's `as $x` replace `$x`'s taint with the taint of the new value (for a write, the taint of its `data`), so overwriting `$x` with a clean value clears it from that statement onward. `var.update $x.field` changes one field only, so it adds the new value's taint to `$x` and keeps what `$x` already had. After a `conditional` or `switch`, a variable is tainted if any branch, including falling through with no matching branch, can leave it tainted. In a `foreach`, `for`, or `while` body, a variable is tainted at the top of the body if it is tainted on entry, at the end of the body, or at a `continue`. A `break` leaves the loop without reaching the back edge. Code after `throw` or `return` is unreachable and contributes nothing. In `try_catch`, `catch` starts from the state before every statement in `try`, since any of them can throw, and the paths through `try` and `catch` merge after the block. Loops that have not settled after 64 passes over the body are widened: every variable carries every taint seen so far, and no keys are held.
+Taint is flow-sensitive. `var $x`, `var.update $x`, a read's `as $x`, and a write's `as $x` replace `$x`'s taint with the taint of the new value (for a write, the taint of its `data`), so overwriting `$x` with a clean value clears it from that statement onward. `var.update $x.field` changes one field only, so it adds the new value's taint to `$x` and keeps what `$x` already had. After a `conditional` or `switch`, a variable is tainted if any branch, including falling through with no matching branch, can leave it tainted. In a `foreach`, `for`, or `while` body, a variable is tainted at the top of the body if it is tainted on entry, at the end of the body, or at a `continue`. A `break` leaves the loop without reaching the back edge. Code after `throw` or `return` is unreachable and contributes nothing. In `try_catch`, `catch` starts from the state before every statement in `try`, since any of them can throw, and the paths through `try` and `catch` merge after the block. `finally` is checked on every path that reaches it, including `return`, `throw`, `continue`, `break`, and uncaught errors. Those exits continue after `finally` completes, unless `finally` itself exits. Loops that have not settled after 64 passes over the body are widened: every variable carries every taint seen so far, and no keys are held.
 
-For the list shape, rows must reach the write through a `foreach` item. The write then counts as per-row when it sits inside that `foreach`, a loop around it, or a loop around the list query.
+For the list shape, rows must reach the write through a `foreach` item. The write then counts as per-row when it sits inside that `foreach` or any loop around it, wherever the list query sits.
 
 ### Held keys
 
@@ -589,7 +589,7 @@ Within one `db.transaction`, or one caller-transaction file, a locked read of ta
 
 Keys match by identical expression text. A held key applies only after the locked read, inside the same transaction scope, and only when every path to the use holds it. Reassigning a variable drops the keys that mention it. That includes any statement whose `as $x` rebinds it, such as a one-line `function.run`, and `var.update $x.id`, but not `var.update $x.other`. A locked read whose `field_value` or `where` mentions its own `as` variable does not hold that key, because the variable changes when the read completes. A key locked in a `foreach` body applies to later statements in that same iteration.
 
-An unlocked `db.get` or single `db.query` of T keyed by a held key for T counts as a locked read, so its result is clean. A `db.edit` or `db.patch` on T with `field_name = "id"` whose `field_value` is a held key for T takes no taint from `field_value`, but its `data` is still checked. The exemption does not cover a locked list's sort finding: the list still takes its row locks in `sort` order.
+An unlocked `db.get` or single `db.query` of T keyed by a held key for T counts as a locked read, so its result is clean. A `db.edit` or `db.patch` on T with `field_name = "id"` whose `field_value` is a held key for T takes no taint from `field_value`, but its `data` is still checked. The exemption does not cover a locked list's sort finding: the list still takes its row locks in `sort` order. For the same reason, a locked re-read keyed by the list's rows passes the sort finding on to its result.
 
 ### Single reads
 
@@ -626,9 +626,14 @@ locked read of wallet as $fresh in another transaction is used in db.edit data o
 locked list read of wallet as $rows in another transaction drives db.edit on line 30 via $row; move the query into the db.transaction that holds the write
 ```
 
-When the write is outside any transaction, the fix is `wrap the read and the write in one db.transaction` (single read) or `wrap the query and the writes in one db.transaction` (list). Re-locking the row in the write's transaction clears the finding the same way it does for an unlocked read.
+When the write is outside any transaction, the fix is `wrap the read and the write in one db.transaction` (single read) or `wrap the query and the writes in one db.transaction` (list). When a list query does not pass the sort check, its fix also asks you to sort the query by `id` ascending. Re-locking the row in the write's transaction clears the finding the same way it does for an unlocked read.
 
-A `foreach` whose body opens its own `db.transaction`, then reads with a lock and writes inside it, is clean, because the read and the write share that iteration's transaction. A value carried from one iteration into the next, such as a running total, crosses a transaction boundary and is reported.
+A `foreach` whose body opens its own `db.transaction`, then reads with a lock and writes inside it, is clean, because the read and the write share that iteration's transaction. A value carried from one iteration into the next, such as a running total, crosses a transaction boundary and is reported. Because the read and the write sit in the same `db.transaction` block, the message names the earlier iteration instead:
+
+```text
+locked read of wallet as $fresh from an earlier loop iteration is used in db.edit data on line 30 via $total; re-read the row or recompute the value in the current iteration's db.transaction
+locked list read of wallet as $rows from an earlier loop iteration drives db.edit on line 30 via $previous -> $old; re-read the rows or recompute the values in the current iteration's db.transaction
+```
 
 ### Fix text
 

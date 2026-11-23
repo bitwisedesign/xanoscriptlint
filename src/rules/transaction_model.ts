@@ -31,8 +31,7 @@ const VAR_OPENER =
   /^\s*(var(?:\.update)?)\s+\$([A-Za-z_][A-Za-z0-9_]*)((?:\.[A-Za-z_][A-Za-z0-9_]*|\[[^\]]*\])*)\s*\{/;
 const LOOP_CONTROL = /^\s*(continue|break)\s*$/;
 const EXIT_LEAF = /^\s*(?:return|throw)\b(?!\s*=)/;
-const LOOP_HEADER = /^\s*(?:foreach|for|while)\s*\(/;
-const INLINE_BRANCH_CONTROL = /^\s*(?:if|elseif|else)\b.*\{\s*(continue|break)\s*\}\s*$/;
+const HEADER_OPENER = /^\s*(?:foreach|for|while|if|elseif)\s*\(/;
 const MEMBER_BLOCK = /^\s*[A-Za-z_][A-Za-z0-9_]*\s*=(?!=)/;
 const FOREACH_OPENER = /^\s*foreach\s*\(/;
 const EACH_AS = /^\s*each\s+as\s+\$([A-Za-z_][A-Za-z0-9_]*)\b/;
@@ -107,14 +106,15 @@ export function parseFlow(text: string): FlowModel {
     }
     const line = lines[i];
     const inTest = enclosing(regions, i, "test").length > 0;
-    const declared = VAR_OPENER.exec(line);
+    const compact = compactBranchBody(line);
+    const declared = VAR_OPENER.exec(compact ?? line);
     if (declared !== null) {
-      const end = closeLine(depths, i, line) ?? i;
+      const end = compact === null ? (closeLine(depths, i, line) ?? i) : i;
       steps.push({
         kind: declared[1] === "var.update" ? "var.update" : "var",
         name: declared[2],
         field: declared[3] ?? "",
-        source: blockBody(lines, literals, i, end),
+        source: compact === null ? blockBody(lines, literals, i, end) : innerBlockText(compact),
         line: i,
         endLine: end,
         inTest,
@@ -157,11 +157,11 @@ function blockTree(
     const line = lines[i];
     let opens = depths.after[i] > depths.starts[i];
     let header = i;
-    if (!opens && LOOP_HEADER.test(line)) {
+    if (!opens && HEADER_OPENER.test(line)) {
       header = headerOpenLine(lines, depths, i) ?? i;
       opens = header > i;
     }
-    const control = INLINE_BRANCH_CONTROL.exec(stripLineComment(line))?.[1] ?? null;
+    const compact = opens ? null : compactBranchBody(line);
     const leaf =
       !opens &&
       (DB_OPENER.test(line) ||
@@ -169,7 +169,7 @@ function blockTree(
         FUNCTION_RUN_OPENER.test(line) ||
         LOOP_CONTROL.test(stripLineComment(line)) ||
         EXIT_LEAF.test(line) ||
-        control !== null ||
+        compact !== null ||
         (varNameOnClose(line) !== null && !/^\s*\}/.test(line)));
     if (!opens && !leaf) {
       continue;
@@ -180,9 +180,9 @@ function blockTree(
       line: i,
       endLine,
       asVar: varNameOnClose(lines[endLine] ?? ""),
-      children: control === null
+      children: compact === null || compact === ""
         ? []
-        : [{ keyword: control, line: i, endLine: i, asVar: null, children: [] }],
+        : [{ keyword: BLOCK_KEYWORD.exec(compact)?.[1] ?? "", line: i, endLine: i, asVar: null, children: [] }],
     };
     (open.length > 0 ? open[open.length - 1].children : roots).push(block);
     if (opens) {
@@ -191,6 +191,40 @@ function blockTree(
     i = header;
   }
   return roots;
+}
+
+function compactBranchBody(line: string): string | null {
+  const code = stripLineComment(line);
+  const masked = maskQuoted(code);
+  const head = /^\s*(if|elseif|else)\b/.exec(masked);
+  if (head === null) {
+    return null;
+  }
+  let at = head[0].length;
+  if (head[1] !== "else") {
+    const paren = masked.indexOf("(", at);
+    let depth = 0;
+    let i = paren;
+    for (; paren >= 0 && i < masked.length; i += 1) {
+      depth += masked[i] === "(" ? 1 : masked[i] === ")" ? -1 : 0;
+      if (depth === 0) {
+        break;
+      }
+    }
+    if (paren < 0 || i >= masked.length) {
+      return null;
+    }
+    at = i + 1;
+  }
+  const open = masked.indexOf("{", at);
+  if (open < 0 || masked.slice(at, open).trim() !== "") {
+    return null;
+  }
+  const close = matchingBrace(code, open);
+  if (close < 0 || masked.slice(close + 1).trim() !== "") {
+    return null;
+  }
+  return code.slice(open + 1, close).trim();
 }
 
 function headerOpenLine(lines: string[], depths: ReturnType<typeof lineStartDepths>, start: number): number | null {
@@ -222,15 +256,18 @@ function eachItem(lines: string[], literals: Set<number>, open: number, end: num
 
 function blockBody(lines: string[], literals: Set<number>, open: number, end: number): string {
   if (open === end) {
-    const code = stripLineComment(lines[open]);
-    const brace = maskQuoted(code).indexOf("{");
-    if (brace < 0) {
-      return "";
-    }
-    const close = matchingBrace(code, brace);
-    return code.slice(brace + 1, close < 0 ? code.length : close);
+    return innerBlockText(stripLineComment(lines[open]));
   }
   return codeText(lines, literals, open + 1, end - 1);
+}
+
+function innerBlockText(code: string): string {
+  const brace = maskQuoted(code).indexOf("{");
+  if (brace < 0) {
+    return "";
+  }
+  const close = matchingBrace(code, brace);
+  return code.slice(brace + 1, close < 0 ? code.length : close);
 }
 
 function codeText(lines: string[], literals: Set<number>, start: number, end: number): string {
