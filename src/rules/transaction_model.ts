@@ -20,15 +20,15 @@ const FUNCTION_RUN_ARG =
   /^\s*function\.run\s+(?:"([^"]*)"|'([^']*)')/;
 
 const LOCK_TRUE = /^\s*lock\s*=\s*true\b/;
-const INLINE_LOCK_TRUE = /\{\s*lock\s*=\s*true\s*\}/;
+const INLINE_LOCK_TRUE = /(?:^|[{\s])lock\s*=\s*true\b/;
 const DATA_MEMBER = /^\s*data\s*=/;
 const RETURN_MEMBER = /^\s*return\s*=/;
-const AS_VAR = /(?:^|[}\s])as\s+\$([A-Za-z_][A-Za-z0-9_]*)\s*$/;
+const AS_VAR = /(?:^|[}\s])as\s+\$?([A-Za-z_][A-Za-z0-9_]*)\s*$/;
 const TYPE_SINGLE = /type\s*:\s*["']single["']/;
 const INLINE_RETURN = /\{\s*return\s*=\s*\{/;
 
 const VAR_OPENER =
-  /^\s*(var(?:\.update)?)\s+\$([A-Za-z_][A-Za-z0-9_]*)((?:\.[A-Za-z_][A-Za-z0-9_]*|\[[^\]]*\])*)\s*\{/;
+  /^\s*(var(?:\.update)?)\s+\$?([A-Za-z_][A-Za-z0-9_]*)((?:\.[A-Za-z_][A-Za-z0-9_]*|\[[^\]]*\])*)\s*\{/;
 const LOOP_CONTROL = /^\s*(continue|break)\s*$/;
 const EXIT_LEAF = /^\s*(?:return|throw)\b(?!\s*=)/;
 const HEADER_OPENER = /^\s*(?:foreach|for|while|if|elseif)\s*\(/;
@@ -405,6 +405,22 @@ export function lineHasVarRef(line: string, varName: string): boolean {
   return scanLineForVarRef(line, varName, "code").found;
 }
 
+function isBareVarRef(line: string, index: number, varName: string): boolean {
+  const prev = line[index - 1];
+  if (prev !== undefined && /[A-Za-z0-9_$.]/.test(prev)) {
+    return false;
+  }
+  const next = line[index + varName.length];
+  if (next !== undefined && /[A-Za-z0-9_]/.test(next)) {
+    return false;
+  }
+  let after = index + varName.length;
+  while (after < line.length && /\s/.test(line[after])) {
+    after += 1;
+  }
+  return line[after] !== ":";
+}
+
 function scanLineForVarRef(
   line: string,
   varName: string,
@@ -449,6 +465,8 @@ function scanLineForVarRef(
         if (next === undefined || !/[A-Za-z0-9_]/.test(next)) {
           return { found: true, mode };
         }
+      } else if (line.startsWith(varName, i) && isBareVarRef(line, i, varName)) {
+        return { found: true, mode };
       }
       i += 1;
       continue;

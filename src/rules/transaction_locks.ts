@@ -21,7 +21,7 @@ const ID_FIELD = /^\s*["']id["']\s*$/;
 const EACH_AS = /^\s*each\s+as\s+\$?([A-Za-z_][A-Za-z0-9_]*)\b/;
 const LIST_SOURCE = /^\(\s*\$([A-Za-z_][A-Za-z0-9_]*)(?:\.items)?\s*\)$/;
 const SET_SEGMENT = /^\s*set\s*:\s*(["'])([^"']*)\1\s*:/;
-const GET_FILTER = /^\s*(?:get|get_ifnotnull)\s*:\s*(["'])([^"']*)\1/;
+const GET_FILTER = /^\s*(?:get|get_ifnotnull)\s*:\s*(["'])([^"']*)\1\s*$/;
 const MAX_LOOP_PASSES = 64;
 
 type Shape = "single" | "list" | "locked_list" | "stale" | "stale_list";
@@ -127,7 +127,7 @@ class LockAnalysis {
   private readonly origins = new Map<string, Origin>();
   private readonly control: ControlFrame[] = [];
   private readonly activeLoops: Loop[] = [];
-  private readonly tryFrames: State[][] = [];
+  private readonly tryFrames: { sites: State[]; hasCatch: boolean }[] = [];
 
   constructor(
     private readonly lines: string[],
@@ -170,7 +170,7 @@ class LockAnalysis {
       if (current.dead) {
         break;
       }
-      this.tryFrames[this.tryFrames.length - 1]?.push(clone(current));
+      this.tryFrames[this.tryFrames.length - 1]?.sites.push(clone(current));
       current = this.exec(block, current);
     }
     return current;
@@ -218,7 +218,9 @@ class LockAnalysis {
       return this.execTryCatch(block, state);
     }
     if (EXIT_KEYWORDS.has(block.keyword)) {
-      this.exitTo("leave", state);
+      if (block.keyword !== "throw" || !this.catching()) {
+        this.exitTo("leave", state);
+      }
       return deadState();
     }
     const out = this.execAll(block.children, state);
@@ -297,26 +299,26 @@ class LockAnalysis {
       this.control.push(frame);
     }
     const throwSites: State[] = [];
-    this.tryFrames.push(throwSites);
+    this.tryFrames.push({ sites: throwSites, hasCatch: catchPart !== undefined });
     const tried = tryPart === undefined ? clone(state) : this.execAll(tryPart.children, clone(state));
     this.tryFrames.pop();
     let out = tried;
     const escaped: State[] = [];
     if (catchPart !== undefined) {
-      this.tryFrames.push(escaped);
+      this.tryFrames.push({ sites: escaped, hasCatch: false });
       out = merge([tried, this.execAll(catchPart.children, merge([state, ...throwSites]))]);
       this.tryFrames.pop();
     } else {
       escaped.push(clone(state), ...throwSites);
     }
-    this.tryFrames[this.tryFrames.length - 1]?.push(...escaped);
+    this.tryFrames[this.tryFrames.length - 1]?.sites.push(...escaped);
     if (finallyPart === undefined) {
       return out;
     }
     this.control.pop();
     for (const exit of ["continue", "break", "leave"] as const) {
       const entries = frame.pending.filter((p) => p.exit === exit).map((p) => p.state);
-      if (exit === "leave") {
+      if (exit === "leave" && catchPart === undefined) {
         entries.push(...escaped);
       }
       if (entries.length === 0) {
@@ -333,8 +335,8 @@ class LockAnalysis {
   private releaseSaved(tx: string, held: Set<string>): void {
     const close = (state: State): State => ({ env: release(state.env, tx), held: new Set(held), dead: state.dead });
     for (const frame of this.tryFrames) {
-      for (let i = 0; i < frame.length; i += 1) {
-        frame[i] = close(frame[i]);
+      for (let i = 0; i < frame.sites.length; i += 1) {
+        frame.sites[i] = close(frame.sites[i]);
       }
     }
     for (const frame of this.control) {
@@ -347,6 +349,10 @@ class LockAnalysis {
       frame.loop.continues = frame.loop.continues.map(close);
       frame.loop.breaks = frame.loop.breaks.map(close);
     }
+  }
+
+  private catching(): boolean {
+    return this.tryFrames.some((frame) => frame.hasCatch);
   }
 
   private exitTo(exit: Exit, state: State): void {

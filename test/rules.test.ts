@@ -6493,6 +6493,36 @@ ${indentBlock(editWallet("balance: $fresh.balance"), 4)}
     ]);
   });
 
+  it("sends a caught throw to catch without queuing it as a finally leave", () => {
+    const text = lockFn(
+      txBlock(`try_catch {
+  try {
+${indentBlock(getWallet("row"), 4)}
+
+    var $balance {
+      value = $row.balance
+    }
+
+    throw {
+      name = "Failed"
+      value = "failed"
+    }
+  }
+
+  catch {
+    var.update $balance {
+      value = 0
+    }
+  }
+
+  finally {
+${indentBlock(editWallet("balance: $balance"), 4)}
+  }
+}`),
+    );
+    assert.deepEqual(lockHitsTx(text), []);
+  });
+
   it("runs finally on paths that leave try and catch", () => {
     const text = lockFn(
       txBlock(`try_catch {
@@ -6545,6 +6575,21 @@ ${indentBlock(editWallet("balance: $row.balance"), 4)}
       ),
     );
     assert.deepEqual(lockHitsTx(continueThroughFinally), []);
+  });
+
+  it("does not treat a get filter with a default as the same key as the field", () => {
+    const reread = (key: string) =>
+      lockFn(
+        txBlock(
+          getWallet("record", "\n  lock = true"),
+          `db.get wallet {\n  field_name = "id"\n  field_value = ${key}\n} as $again`,
+          editWallet("balance: $again.balance"),
+        ),
+      );
+    assert.deepEqual(lockHitsTx(reread('$record|get:"id"')), []);
+    assert.deepEqual(lockHitsTx(reread("$record.id")), []);
+    const fallback = reread('$record|get:"id":$input.other_id');
+    assert.deepEqual(lockHitsTx(fallback).map((v) => v.line), [lineOf(fallback, "as $again") - 3]);
   });
 
   it("drops a held key that a get filter reads from the updated field", () => {
@@ -6854,6 +6899,54 @@ ${indentBlock(editWallet("balance: $row.balance"), 4)}
     assert.deepEqual(lockHitsTx(exit('throw { name = "Skipped" value = "skipped" }')), []);
   });
 
+  it("counts lock = true among other members of a compact query", () => {
+    const query = (lock: string, inTx: boolean) => {
+      const stmt = `db.query wallet { where = $db.wallet.user_id == $input.user_id ${lock} sort = {id: "asc"} return = {type: "list"} } as $rows`;
+      const loop = eachRow("$rows", "row", editWallet("is_active: false", "$row.id"));
+      return lockFn(inTx ? txBlock(stmt, loop) : [stmt, loop].join("\n\n"));
+    };
+    assert.deepEqual(lockHitsTx(query("lock = true", true)), []);
+    const outside = query("lock = true", false);
+    assert.deepEqual(lockHitsTx(outside).map((v) => v.message), [
+      `unlocked list read of wallet as $rows drives db.edit on line ${lineOf(outside, "db.edit")} via $row; ${LIST_FIX.wrap}`,
+    ]);
+    const unlocked = query("", true);
+    assert.deepEqual(lockHitsTx(unlocked).map((v) => v.message), [
+      `unlocked list read of wallet as $rows drives db.edit on line ${lineOf(unlocked, "db.edit")} via $row; ${LIST_FIX.same}`,
+    ]);
+  });
+
+  it("binds a bare var the same as var $name", () => {
+    const declare = (name: string) =>
+      lockFn(
+        txBlock(
+          getWallet("row"),
+          `var ${name} {\n  value = $row.balance\n}`,
+          editWallet("balance: $balance"),
+        ),
+      );
+    const dollar = declare("$balance");
+    assert.deepEqual(lockHitsTx(dollar).map((v) => v.message), [
+      `unlocked read of wallet as $row is used in db.edit data on line ${lineOf(dollar, "db.edit")} via $balance; add lock = true`,
+    ]);
+    const bare = declare("balance");
+    assert.deepEqual(lockHitsTx(bare).map((v) => v.message), [
+      `unlocked read of wallet as $row is used in db.edit data on line ${lineOf(bare, "db.edit")} via $balance; add lock = true`,
+    ]);
+  });
+
+  it("binds a bare as alias the same as as $name", () => {
+    const text = lockFn(
+      txBlock(
+        listWallets("rows", LIST_RETURN).replace("as $rows", "as rows"),
+        eachRow("$rows", "row", editWallet("is_active: false", "$row.id")),
+      ),
+    );
+    assert.deepEqual(lockHitsTx(text).map((v) => v.message), [
+      `unlocked list read of wallet as $rows drives db.edit on line ${lineOf(text, "db.edit")} via $row; ${LIST_FIX.same}`,
+    ]);
+  });
+
   it("binds a bodyless db.query as the list variable", () => {
     const text = lockFn(
       txBlock(
@@ -6873,6 +6966,30 @@ ${indentBlock(editWallet("balance: $row.balance"), 4)}
     assert.deepEqual(lockHitsTx(braced).map((v) => v.message), [
       `unlocked list read of wallet as $rows drives db.edit on line ${lineOf(braced, "db.edit")} via $row; ${LIST_FIX.same}`,
     ]);
+  });
+
+  it("treats a bare loop-item name as a reference without matching lookalikes", () => {
+    const write = (data: string, key: string) =>
+      lockFn(
+        txBlock(
+          listWallets("rows", LIST_RETURN),
+          eachRow("$rows", "row", editWallet(data, key)),
+        ),
+      );
+    const bare = write("is_active: false", "row.id");
+    assert.deepEqual(lockHitsTx(bare).map((v) => v.message), [
+      `unlocked list read of wallet as $rows drives db.edit on line ${lineOf(bare, "db.edit")} via $row; ${LIST_FIX.same}`,
+    ]);
+    assert.deepEqual(lockHitsTx(write("is_active: false", "$other.row")), []);
+    assert.deepEqual(lockHitsTx(write("note: \"row\"", "$input.id")), []);
+    assert.deepEqual(lockHitsTx(write("label: {row: 1}", "$input.id")), []);
+    const commented = lockFn(
+      txBlock(
+        listWallets("rows", LIST_RETURN),
+        eachRow("$rows", "row", 'db.edit wallet {\n  field_name = "id"\n  field_value = $input.id\n  data = {is_active: false} // row.id\n} as $updated'),
+      ),
+    );
+    assert.deepEqual(lockHitsTx(commented), []);
   });
 
   it("follows each as with or without a leading dollar sign", () => {
