@@ -78,7 +78,7 @@ caller_transaction:
   - "wallet/apply_debit.xs"
 ```
 
-Globs are relative to the directory that contains the config file, using the same picomatch rules as `included`. Matching files are treated as already running inside the caller's `db.transaction`. [`transaction_boundaries`](rules.md#transaction_boundaries) and [`transaction_stale_reads`](rules.md#transaction_stale_reads) use this list. The linter does not infer a file-naming convention; each repo encodes its own.
+Globs are relative to the directory that contains the config file, using the same picomatch rules as `included`. Matching files are treated as already running inside the caller's `db.transaction`. [`transaction_boundaries`](rules.md#transaction_boundaries), [`transaction_locks`](rules.md#transaction_locks), and [`transaction_stale_reads`](rules.md#transaction_stale_reads) use this list. For `transaction_locks`, every statement in a matching file counts as being in one shared transaction, so `lock = true` there counts as a real lock. The linter does not infer a file-naming convention; each repo encodes its own.
 
 When a transaction rule is enabled, linting a single path still indexes every included `.xs` file so `function.run` callees in other files are visible.
 

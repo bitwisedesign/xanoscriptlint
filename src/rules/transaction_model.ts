@@ -27,6 +27,17 @@ const AS_VAR = /(?:^|})\s*as\s+\$([A-Za-z_][A-Za-z0-9_]*)\s*$/;
 const TYPE_SINGLE = /type\s*:\s*["']single["']/;
 const INLINE_RETURN = /\{\s*return\s*=\s*\{/;
 
+const VAR_OPENER =
+  /^\s*(var(?:\.update)?)\s+\$([A-Za-z_][A-Za-z0-9_]*)((?:\.[A-Za-z_][A-Za-z0-9_]*|\[[^\]]*\])*)\s*\{/;
+const LOOP_CONTROL = /^\s*(continue|break)\s*$/;
+const EXIT_LEAF = /^\s*(?:return|throw)\b(?!\s*=)/;
+const LOOP_HEADER = /^\s*(?:foreach|for|while)\s*\(/;
+const INLINE_BRANCH_CONTROL = /^\s*(?:if|elseif|else)\b.*\{\s*(continue|break)\s*\}\s*$/;
+const MEMBER_BLOCK = /^\s*[A-Za-z_][A-Za-z0-9_]*\s*=(?!=)/;
+const FOREACH_OPENER = /^\s*foreach\s*\(/;
+const EACH_AS = /^\s*each\s+as\s+\$([A-Za-z_][A-Za-z0-9_]*)\b/;
+const MEMBER_START = /^\s*[A-Za-z_][A-Za-z0-9_]*\s*=(?!=)/;
+
 interface Region {
   kind: "unit" | "tx" | "test" | "stmt";
   op: string;
@@ -36,7 +47,40 @@ interface Region {
   endLine: number;
 }
 
-export function parseXs(text: string): ParsedFile {
+interface Scan {
+  lines: string[];
+  literals: Set<number>;
+  depths: ReturnType<typeof lineStartDepths>;
+  regions: Region[];
+}
+
+export interface FlowStep {
+  kind: "var" | "var.update" | "foreach";
+  name: string;
+  field: string;
+  source: string;
+  line: number;
+  endLine: number;
+  inTest: boolean;
+}
+
+export interface FlowBlock {
+  keyword: string;
+  line: number;
+  endLine: number;
+  asVar: string | null;
+  children: FlowBlock[];
+}
+
+export interface FlowModel {
+  steps: FlowStep[];
+  blocks: FlowBlock[];
+  member(stmt: Statement, name: string): string | null;
+}
+
+const BLOCK_KEYWORD = /^\s*([A-Za-z_][A-Za-z0-9_.]*)/;
+
+function scan(text: string): Scan {
   const lines = splitLines(text);
   const literals = literalLines(lines);
   const depths = lineStartDepths(lines, literals);
@@ -51,6 +95,216 @@ export function parseXs(text: string): ParsedFile {
       regions.push(region);
     }
   }
+  return { lines, literals, depths, regions };
+}
+
+export function parseFlow(text: string): FlowModel {
+  const { lines, literals, depths, regions } = scan(text);
+  const steps: FlowStep[] = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    if (literals.has(i) || isCommentLine(lines[i]) || isBlankLine(lines[i])) {
+      continue;
+    }
+    const line = lines[i];
+    const inTest = enclosing(regions, i, "test").length > 0;
+    const declared = VAR_OPENER.exec(line);
+    if (declared !== null) {
+      const end = closeLine(depths, i, line) ?? i;
+      steps.push({
+        kind: declared[1] === "var.update" ? "var.update" : "var",
+        name: declared[2],
+        field: declared[3] ?? "",
+        source: blockBody(lines, literals, i, end),
+        line: i,
+        endLine: end,
+        inTest,
+      });
+      continue;
+    }
+    if (!FOREACH_OPENER.test(line)) {
+      continue;
+    }
+    const header = headerOpenLine(lines, depths, i);
+    const end = header === null ? i : (findCloseLine(depths, header) ?? header);
+    const code = codeText(lines, literals, i, header ?? i);
+    const source = code.slice(code.indexOf("("), code.lastIndexOf(")") + 1);
+    const item = eachItem(lines, literals, header ?? i, end);
+    if (item !== null) {
+      steps.push({ kind: "foreach", name: item, field: "", source, line: i, endLine: end, inTest });
+    }
+  }
+  return {
+    steps,
+    blocks: blockTree(lines, literals, depths),
+    member: (stmt, name) => memberText(lines, literals, depths, stmt, name),
+  };
+}
+
+function blockTree(
+  lines: string[],
+  literals: Set<number>,
+  depths: ReturnType<typeof lineStartDepths>,
+): FlowBlock[] {
+  const roots: FlowBlock[] = [];
+  const open: FlowBlock[] = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    if (literals.has(i) || isCommentLine(lines[i]) || isBlankLine(lines[i])) {
+      continue;
+    }
+    while (open.length > 0 && open[open.length - 1].endLine < i) {
+      open.pop();
+    }
+    const line = lines[i];
+    let opens = depths.after[i] > depths.starts[i];
+    let header = i;
+    if (!opens && LOOP_HEADER.test(line)) {
+      header = headerOpenLine(lines, depths, i) ?? i;
+      opens = header > i;
+    }
+    const control = INLINE_BRANCH_CONTROL.exec(stripLineComment(line))?.[1] ?? null;
+    const leaf =
+      !opens &&
+      (DB_OPENER.test(line) ||
+        VAR_OPENER.test(line) ||
+        FUNCTION_RUN_OPENER.test(line) ||
+        LOOP_CONTROL.test(stripLineComment(line)) ||
+        EXIT_LEAF.test(line) ||
+        control !== null ||
+        (varNameOnClose(line) !== null && !/^\s*\}/.test(line)));
+    if (!opens && !leaf) {
+      continue;
+    }
+    const endLine = opens ? (findCloseLine(depths, header) ?? header) : i;
+    const block: FlowBlock = {
+      keyword: MEMBER_BLOCK.test(line) ? "" : (BLOCK_KEYWORD.exec(line)?.[1] ?? ""),
+      line: i,
+      endLine,
+      asVar: varNameOnClose(lines[endLine] ?? ""),
+      children: control === null
+        ? []
+        : [{ keyword: control, line: i, endLine: i, asVar: null, children: [] }],
+    };
+    (open.length > 0 ? open[open.length - 1].children : roots).push(block);
+    if (opens) {
+      open.push(block);
+    }
+    i = header;
+  }
+  return roots;
+}
+
+function headerOpenLine(lines: string[], depths: ReturnType<typeof lineStartDepths>, start: number): number | null {
+  const base = depths.starts[start];
+  let parens = 0;
+  for (let i = start; i < lines.length; i += 1) {
+    if (depths.starts[i] !== base) {
+      return null;
+    }
+    for (const ch of maskQuoted(stripLineComment(lines[i]))) {
+      parens += ch === "(" ? 1 : ch === ")" ? -1 : 0;
+    }
+    if (parens <= 0) {
+      return depths.after[i] > base ? i : null;
+    }
+  }
+  return null;
+}
+
+function eachItem(lines: string[], literals: Set<number>, open: number, end: number): string | null {
+  for (let i = open + 1; i < end; i += 1) {
+    if (literals.has(i) || isCommentLine(lines[i]) || isBlankLine(lines[i])) {
+      continue;
+    }
+    return EACH_AS.exec(lines[i])?.[1] ?? null;
+  }
+  return null;
+}
+
+function blockBody(lines: string[], literals: Set<number>, open: number, end: number): string {
+  if (open === end) {
+    const code = stripLineComment(lines[open]);
+    const brace = maskQuoted(code).indexOf("{");
+    if (brace < 0) {
+      return "";
+    }
+    const close = matchingBrace(code, brace);
+    return code.slice(brace + 1, close < 0 ? code.length : close);
+  }
+  return codeText(lines, literals, open + 1, end - 1);
+}
+
+function codeText(lines: string[], literals: Set<number>, start: number, end: number): string {
+  const kept: string[] = [];
+  for (let i = start; i <= end; i += 1) {
+    if (literals.has(i) || isCommentLine(lines[i])) {
+      continue;
+    }
+    kept.push(stripLineComment(lines[i]));
+  }
+  return kept.join("\n");
+}
+
+function memberText(
+  lines: string[],
+  literals: Set<number>,
+  depths: ReturnType<typeof lineStartDepths>,
+  stmt: Statement,
+  name: string,
+): string | null {
+  const opener = new RegExp(`^\\s*${name}\\s*=(?!=)`);
+  if (stmt.line === stmt.endLine) {
+    return inlineMemberText(lines[stmt.line], name);
+  }
+  const region: Region = {
+    kind: "stmt",
+    op: stmt.op,
+    arg: stmt.arg,
+    line: stmt.line,
+    column: stmt.column,
+    endLine: stmt.endLine,
+  };
+  const bodyDepth = depths.after[stmt.line] > depths.starts[stmt.line]
+    ? depths.after[stmt.line]
+    : depths.starts[stmt.line];
+  const members = memberLines(lines, literals, depths, region, bodyDepth);
+  const at = members.findIndex((line) => opener.test(lines[line]));
+  if (at < 0) {
+    return null;
+  }
+  const start = members[at];
+  const next = members.slice(at + 1).find((line) => MEMBER_START.test(lines[line]));
+  const text = codeText(lines, literals, start, (next ?? stmt.endLine) - 1);
+  return text.slice(text.indexOf("=") + 1);
+}
+
+function inlineMemberText(line: string, name: string): string | null {
+  const code = stripLineComment(line);
+  const brace = maskQuoted(code).indexOf("{");
+  if (brace < 0) {
+    return null;
+  }
+  const close = matchingBrace(code, brace);
+  const inner = code.slice(brace + 1, close < 0 ? code.length : close);
+  const masked = maskQuoted(inner);
+  const found = new RegExp(`(?:^|[\\s{,])${name}\\s*=(?!=)`).exec(masked);
+  if (found === null) {
+    return null;
+  }
+  let start = found.index + found[0].length;
+  while (start < inner.length && /\s/.test(inner[start])) {
+    start += 1;
+  }
+  let from = start;
+  if (inner[start] === "{") {
+    const end = matchingBrace(inner, start);
+    from = end < 0 ? inner.length : end + 1;
+  }
+  const next = /\s[A-Za-z_][A-Za-z0-9_]*\s*=(?!=)/.exec(masked.slice(from));
+  return inner.slice(start, next === null ? inner.length : from + next.index);
+}
+
+export function parseXs(text: string): ParsedFile {
+  const { lines, literals, depths, regions } = scan(text);
 
   const units: Unit[] = [];
   const statements: Statement[] = [];
@@ -94,23 +348,6 @@ export function parseXs(text: string): ParsedFile {
   }
 
   return { units, statements };
-}
-
-export function dataText(lines: string[], range: DataRange): string {
-  const chunk = lines.slice(range.startLine, range.endLine + 1).join("\n");
-  const dataAt = chunk.search(/\bdata\s*=/);
-  if (dataAt < 0) {
-    return "";
-  }
-  const braceAt = indexOfCode(chunk, "{", dataAt);
-  if (braceAt < 0) {
-    return "";
-  }
-  const close = matchingBrace(chunk, braceAt);
-  if (close < 0) {
-    return chunk.slice(braceAt);
-  }
-  return chunk.slice(braceAt, close + 1);
 }
 
 type VarScanMode = "code" | "double" | "single" | "triple";
@@ -471,47 +708,6 @@ function stripTrailingBrace(name: string | null): string | null {
     return null;
   }
   return name.replace(/\{$/, "").trim() || null;
-}
-
-function indexOfCode(text: string, token: string, from: number): number {
-  let i = from;
-  let mode: "code" | "double" | "single" = "code";
-  let escape = false;
-  while (i < text.length) {
-    const ch = text[i];
-    if (mode === "code") {
-      if (ch === "/" && text[i + 1] === "/") {
-        const nl = text.indexOf("\n", i);
-        i = nl < 0 ? text.length : nl + 1;
-        continue;
-      }
-      if (text.startsWith(token, i)) {
-        return i;
-      }
-      if (ch === '"') {
-        mode = "double";
-      } else if (ch === "'") {
-        mode = "single";
-      }
-      i += 1;
-      continue;
-    }
-    if (escape) {
-      escape = false;
-      i += 1;
-      continue;
-    }
-    if (ch === "\\") {
-      escape = true;
-      i += 1;
-      continue;
-    }
-    if ((mode === "double" && ch === '"') || (mode === "single" && ch === "'")) {
-      mode = "code";
-    }
-    i += 1;
-  }
-  return -1;
 }
 
 function matchingBrace(text: string, open: number): number {

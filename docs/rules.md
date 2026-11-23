@@ -20,7 +20,7 @@
 | [`statement_spacing`](#statement_spacing) | opt-in | warning | yes | Blank lines between sibling statements only after a multi-line statement or next to a comment |
 | [`tags_placement`](#tags_placement) | opt-in | warning | yes | `tags` sits immediately before the first of `llm`, `tools`, `test`, `cache`, `external_access`, `history`, or `guid`, with Xano blank-line rules |
 | [`transaction_boundaries`](#transaction_boundaries) | opt-in | error | no | `lock = true` and `db.transaction` sit at the right boundary; caller-transaction callees are not run outside one |
-| [`transaction_locks`](#transaction_locks) | opt-in | error | no | An unlocked `db.get` or single `db.query` whose variable feeds a later write of that table needs `lock = true` |
+| [`transaction_locks`](#transaction_locks) | opt-in | error | no | A single read whose value feeds a later write of that table, or a list read whose rows drive per-row writes, must be locked in the write's `db.transaction`; locked lists sort by `id` ascending |
 | [`transaction_stale_reads`](#transaction_stale_reads) | opt-in | warning | no | A write inside `db.transaction` must not rely on a read of that table from outside it |
 | [`unfence_assignment_values`](#unfence_assignment_values) | opt-in | warning | yes | Fenced assignment whose one-line form is under 64 UTF-8 bytes, except a `0` followed by another key |
 | [`unquote_bare_test_names`](#unquote_bare_test_names) | opt-in | warning | yes | Quoted `test` names and top-level `mock` keys with no spaces must be unquoted |
@@ -560,9 +560,89 @@ Intentional exceptions use `xanoscriptlint:disable` comments. The violation for 
 
 Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is error. There is no auto-fix.
 
-An unlocked `db.get`, or `db.query` with `return = {type: "single"}`, of table T whose `as $var` is referenced inside the `data = { ... }` block of a later `db.edit` / `db.patch` / `db.add_or_edit` on T needs `lock = true` on the read. A locked read of T between the two statements clears the finding. The report sits on the read, and the message names the write's line.
+Finds reads whose values feed a later write of the same table without a row lock that protects them. It checks two shapes: a single-row read whose value reaches a write's `data`, and a list query whose rows drive per-row writes.
 
-Only the `data` object is scanned. `field_value = $var.id` and the write's `} as $var` do not count. The rule runs in every file, including caller-transaction files. Statements inside `test` blocks are ignored, as are `$var` mentions in comments, strings, and `"""` literals.
+A read counts as locked only when it has `lock = true` and sits in a transaction. A statement is in a transaction when it is lexically inside `db.transaction { stack { ... } }`, or when its file matches a `caller_transaction` glob, in which case every statement in the file shares one transaction. `lock = true` outside any transaction locks nothing, so the rule treats that read as unlocked.
+
+### Taint
+
+A variable is tainted by an unlocked read when its value derives from that read. Taint follows:
+
+- `var $x { value = ... }` and `var.update $x { value = ... }` whose expression references a tainted variable or one of its fields, including inside filters (`|set:`, `|merge:`, `|filter:`, and so on), ternaries, and `~`
+- chains of any length, and assignments inside `conditional`, `foreach`, and other nested blocks
+- the `each as $item` variable of a `foreach` over a tainted value
+- an unlocked `db.get` or `db.query` whose `field_value` or `where` references a tainted value, whatever table it reads
+
+A locked read produces a variable that is clean only inside the `db.transaction` that took the lock, even when its `field_value` or `where` uses tainted data. When that transaction closes, the lock is released: the variable and everything derived from it become tainted by the locked read, and the held keys from that transaction stop applying (see [Locked reads in another transaction](#locked-reads-in-another-transaction)). A caller-transaction file is one transaction, so its locked reads never expire. When the match passes through variables, the message names each one in order from the read to the write, for example `via $balance -> $next_balance`.
+
+Taint is flow-sensitive. `var $x`, `var.update $x`, a read's `as $x`, and a write's `as $x` replace `$x`'s taint with the taint of the new value (for a write, the taint of its `data`), so overwriting `$x` with a clean value clears it from that statement onward. `var.update $x.field` changes one field only, so it adds the new value's taint to `$x` and keeps what `$x` already had. After a `conditional` or `switch`, a variable is tainted if any branch, including falling through with no matching branch, can leave it tainted. In a `foreach`, `for`, or `while` body, a variable is tainted at the top of the body if it is tainted on entry, at the end of the body, or at a `continue`. A `break` leaves the loop without reaching the back edge. Code after `throw` or `return` is unreachable and contributes nothing. In `try_catch`, `catch` starts from the state before every statement in `try`, since any of them can throw, and the paths through `try` and `catch` merge after the block. Loops that have not settled after 64 passes over the body are widened: every variable carries every taint seen so far, and no keys are held.
+
+For the list shape, rows must reach the write through a `foreach` item. The write then counts as per-row when it sits inside that `foreach`, a loop around it, or a loop around the list query.
+
+### Held keys
+
+Within one `db.transaction`, or one caller-transaction file, a locked read of table T marks the row it locked as held. A held key for T is:
+
+- the `field_value` of a `lock = true` `db.get T` with `field_name = "id"`
+- `X` in a `lock = true` single `db.query T` whose `where` is `$db.T.id == X`
+- `$v.id`, where `$v` holds the result of a locked read of T, including a variable assigned `$v` exactly, or `$v` followed only by `|set:` of fields other than `id`, and each `each as` item of a locked list query that passes the sort check
+
+Keys match by identical expression text. A held key applies only after the locked read, inside the same transaction scope, and only when every path to the use holds it. Reassigning a variable drops the keys that mention it. That includes any statement whose `as $x` rebinds it, such as a one-line `function.run`, and `var.update $x.id`, but not `var.update $x.other`. A locked read whose `field_value` or `where` mentions its own `as` variable does not hold that key, because the variable changes when the read completes. A key locked in a `foreach` body applies to later statements in that same iteration.
+
+An unlocked `db.get` or single `db.query` of T keyed by a held key for T counts as a locked read, so its result is clean. A `db.edit` or `db.patch` on T with `field_name = "id"` whose `field_value` is a held key for T takes no taint from `field_value`, but its `data` is still checked. The exemption does not cover a locked list's sort finding: the list still takes its row locks in `sort` order.
+
+### Single reads
+
+An unlocked `db.get`, or `db.query` with `return = {type: "single"}`, of table T whose taint reaches the `data` of a later `db.edit` / `db.patch` / `db.add_or_edit` on T is reported:
+
+```text
+unlocked read of wallet as $row is used in db.edit data on line 14 via $next_balance; add lock = true
+```
+
+Only `data` is scanned, either a `data = { ... }` block or a variable such as `data = $updates`, including any filters after it such as `|set:`. `field_value = $row.id`, `db.del`, and the write's `} as $var` do not count for this shape.
+
+### List reads
+
+A list `db.query` of table T (`return = {type: "list"}`, a `return` with `paging`, or no `return`) is reported when a later write to T runs inside a `foreach` over its result, or over a variable derived from it, and uses the loop item or a value derived from it in the `field_value` or `data` of `db.edit` / `db.patch` / `db.add_or_edit`. A list read that only drives `db.del` is not reported. When one list read drives both a delete and an edit or patch, it is reported at the first edit or patch.
+
+```text
+unlocked list read of wallet as $rows drives db.edit on line 20 via $row; add sort = {id: "asc"} and lock = true to the query
+```
+
+A locked list query locks every row it returns in `sort` order, and with `paging` it locks every row that matches `where`. Opposite-order lockers deadlock, so a locked list query is clean only when the first or only `sort` key is `id` ascending (`sort = {id: "asc"}` or `sort = {wallet.id: "asc"}`). A locked list with no `sort`, `id` descending, or another first key is reported:
+
+```text
+locked list read of wallet as $rows drives db.edit on line 20; sort by id ascending so locks follow the order other lockers use
+```
+
+Paging does not narrow the lock. An unlocked list whose items only key a locked `db.get`, with writes that use that locked row or its held key, is clean, because the locked read produces a clean variable.
+
+### Locked reads in another transaction
+
+A locked read whose value is used after its `db.transaction` closes is reported with the same rules as the unlocked shapes. A single read is reported when its value reaches the `data` of a later write to the same table, and a list query is reported when its rows drive a per-row write to the same table:
+
+```text
+locked read of wallet as $fresh in another transaction is used in db.edit data on line 30 via $balance; move the read into the db.transaction that holds the write
+locked list read of wallet as $rows in another transaction drives db.edit on line 30 via $row; move the query into the db.transaction that holds the write
+```
+
+When the write is outside any transaction, the fix is `wrap the read and the write in one db.transaction` (single read) or `wrap the query and the writes in one db.transaction` (list). Re-locking the row in the write's transaction clears the finding the same way it does for an unlocked read.
+
+A `foreach` whose body opens its own `db.transaction`, then reads with a lock and writes inside it, is clean, because the read and the write share that iteration's transaction. A value carried from one iteration into the next, such as a running total, crosses a transaction boundary and is reported.
+
+### Fix text
+
+The fix depends on where the read and the write sit. The write's transaction is the innermost `db.transaction` around it.
+
+| Write | Read | Single-read fix | List-read fix |
+| --- | --- | --- | --- |
+| In transaction T | In T | `add lock = true` | `add sort = {id: "asc"} and lock = true to the query` |
+| In transaction T | Not in T | `move the read into the db.transaction that holds the write and add lock = true` | `move the query into the db.transaction that holds the write, sort it by id ascending, and add lock = true` |
+| Not in a transaction | Any | `wrap the read and the write in one db.transaction and add lock = true` | `wrap the query and the writes in one db.transaction, sort the query by id ascending, and add lock = true` |
+
+These are the fixes for unlocked reads. The fixes for locked reads used in another transaction are listed in that section.
+
+Each read is reported once, on the read's line, and the message names the first offending write. A write to a different table never matches. The rule runs in every file, including caller-transaction files. Statements inside `test` blocks are ignored, as are `$var` mentions in comments, strings, and `"""` literals.
 
 ```xs
     db.transaction {
