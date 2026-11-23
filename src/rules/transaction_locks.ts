@@ -18,9 +18,10 @@ const PAGING = /\bpaging\s*:/;
 const FIRST_SORT_KEY =
   /^\s*(?:"([^"]*)"|'([^']*)'|([A-Za-z_][A-Za-z0-9_.]*))\s*:\s*["']([A-Za-z]+)["']/;
 const ID_FIELD = /^\s*["']id["']\s*$/;
-const EACH_AS = /^\s*each\s+as\s+\$([A-Za-z_][A-Za-z0-9_]*)\b/;
+const EACH_AS = /^\s*each\s+as\s+\$?([A-Za-z_][A-Za-z0-9_]*)\b/;
 const LIST_SOURCE = /^\(\s*\$([A-Za-z_][A-Za-z0-9_]*)(?:\.items)?\s*\)$/;
 const SET_SEGMENT = /^\s*set\s*:\s*(["'])([^"']*)\1\s*:/;
+const GET_FILTER = /^\s*(?:get|get_ifnotnull)\s*:\s*(["'])([^"']*)\1/;
 const MAX_LOOP_PASSES = 64;
 
 type Shape = "single" | "list" | "locked_list" | "stale" | "stale_list";
@@ -67,6 +68,7 @@ interface Hit {
   origin: Origin;
   write: Statement;
   path: string[];
+  loops: Loop[];
 }
 
 export const transactionLocks: Rule = {
@@ -108,6 +110,7 @@ export const transactionLocks: Rule = {
           analysis.txOf(hit.origin.read),
           analysis.txOf(hit.write),
           sortsByIdAsc(analysis.flow.member(hit.origin.read, "sort"), hit.origin.read.arg ?? ""),
+          hit.loops.some((loop) => !analysis.loopInWriteTx(loop, hit.write)),
         ),
         severity,
         file: file.path,
@@ -138,6 +141,15 @@ class LockAnalysis {
     for (const step of flow.steps) {
       this.steps.set(step.line, step);
     }
+  }
+
+  loopInWriteTx(loop: Loop, write: Statement): boolean {
+    const txLine = write.txLines[write.txLines.length - 1];
+    if (txLine === undefined) {
+      return false;
+    }
+    const tx = this.statements.get(txLine);
+    return tx !== undefined && tx.line < loop.line && loop.endLine <= tx.endLine;
   }
 
   txOf(stmt: Statement): string | null {
@@ -180,7 +192,12 @@ class LockAnalysis {
       if (stmt.op === "db.transaction") {
         const before = new Set(state.held);
         const out = this.execAll(block.children, state);
-        return out.dead || this.callerTx ? out : { env: release(out.env, String(stmt.line)), held: before, dead: false };
+        if (this.callerTx) {
+          return out;
+        }
+        const tx = String(stmt.line);
+        this.releaseSaved(tx, before);
+        return { env: release(out.env, tx), held: before, dead: out.dead };
       }
       return this.applyStatement(stmt, state);
     }
@@ -313,6 +330,25 @@ class LockAnalysis {
     return this.execAll(finallyPart.children, out);
   }
 
+  private releaseSaved(tx: string, held: Set<string>): void {
+    const close = (state: State): State => ({ env: release(state.env, tx), held: new Set(held), dead: state.dead });
+    for (const frame of this.tryFrames) {
+      for (let i = 0; i < frame.length; i += 1) {
+        frame[i] = close(frame[i]);
+      }
+    }
+    for (const frame of this.control) {
+      if ("pending" in frame) {
+        for (const pending of frame.pending) {
+          pending.state = close(pending.state);
+        }
+        continue;
+      }
+      frame.loop.continues = frame.loop.continues.map(close);
+      frame.loop.breaks = frame.loop.breaks.map(close);
+    }
+  }
+
   private exitTo(exit: Exit, state: State): void {
     for (let i = this.control.length - 1; i >= 0; i -= 1) {
       const frame = this.control[i];
@@ -427,8 +463,12 @@ class LockAnalysis {
     const where = this.flow.member(stmt, "where");
     const match = where === null
       ? null
-      : new RegExp(`^\\s*\\$db\\.${escapeRegExp(table)}\\.id\\s*==\\s*([\\s\\S]+?)\\s*$`).exec(where);
-    return match?.[1] ?? null;
+      : new RegExp(`^\\s*\\$db\\.${escapeRegExp(table)}\\.id\\s*==\\s*([\\s\\S]+)$`).exec(where);
+    const key = match?.[1]?.trim() ?? null;
+    if (key === null || /(?:^|[^|])\|{2}|&&/.test(maskQuotedExpr(key))) {
+      return null;
+    }
+    return key;
   }
 
   private keyedById(stmt: Statement): boolean {
@@ -481,7 +521,7 @@ class LockAnalysis {
         write.line < prior.write.line ||
         (write.line === prior.write.line && path.length < prior.path.length)
       ) {
-        this.hits.set(origin.read, { origin, write, path });
+        this.hits.set(origin.read, { origin, write, path, loops: [...this.activeLoops] });
       }
     }
   }
@@ -541,10 +581,23 @@ function sortsByIdAsc(sortText: string | null, table: string): boolean {
 }
 
 function heldKey(table: string, expr: string): string {
-  const normalized = expr
+  const collapsed = expr
     .trim()
     .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|\s+/g, (match, quoted: string | undefined) => quoted ?? " ");
-  return `${table}\u0001${normalized}`;
+  return `${table}\u0001${canonicalizeGet(collapsed)}`;
+}
+
+function canonicalizeGet(expr: string): string {
+  const [head, ...filters] = topLevelPipes(expr);
+  if (filters.length !== 1) {
+    return expr;
+  }
+  const get = GET_FILTER.exec(filters[0]);
+  const root = /^\s*(\$[A-Za-z_][A-Za-z0-9_]*)\s*$/.exec(head ?? "");
+  if (get === null || root === null || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(get[2])) {
+    return expr;
+  }
+  return `${root[1]}.${get[2]}`;
 }
 
 function heldExpr(key: string): string {
@@ -571,13 +624,40 @@ function dropVar(held: Set<string>, name: string): void {
 
 function dropPath(held: Set<string>, name: string, field: string): void {
   const target = `$${name}${field}`;
+  const leaf = field.replace(/^\./, "");
   for (const key of [...held]) {
     const expr = heldExpr(key);
     const covers = target.startsWith(expr) && /^[.[]/.test(target.slice(expr.length));
-    if (expr === `$${name}[]` || covers || textHasVarRef(expr, `${name}${field}`)) {
+    if (expr === `$${name}[]` || covers || textHasVarRef(expr, `${name}${field}`) || readsField(expr, name, leaf)) {
       held.delete(key);
     }
   }
+}
+
+function readsField(expr: string, name: string, field: string): boolean {
+  if (field.length === 0 || !textHasVarRef(expr, name)) {
+    return false;
+  }
+  const [head, ...filters] = topLevelPipes(expr);
+  const root = new RegExp(`^\\s*\\$${escapeRegExp(name)}((?:\\.[A-Za-z_][A-Za-z0-9_]*)*)\\s*$`).exec(head ?? "");
+  if (root === null) {
+    return true;
+  }
+  const accessed = root[1] === "" ? null : root[1].slice(1);
+  if (accessed !== null) {
+    return accessed === field || accessed.startsWith(`${field}.`) || field.startsWith(`${accessed}.`);
+  }
+  for (const filter of filters) {
+    const get = GET_FILTER.exec(filter);
+    if (get !== null) {
+      return get[2] === field || get[2].startsWith(`${field}.`);
+    }
+    const set = SET_SEGMENT.exec(filter);
+    if (set !== null && (set[2] === field || set[2].startsWith(`${field}.`))) {
+      return true;
+    }
+  }
+  return filters.length === 0;
 }
 
 function aliasSource(source: string): string | null {
@@ -627,6 +707,10 @@ function topLevelPipes(text: string): string[] {
   }
   segments.push(text.slice(start));
   return segments;
+}
+
+function maskQuotedExpr(text: string): string {
+  return text.replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, (quoted) => " ".repeat(quoted.length));
 }
 
 function escapeRegExp(text: string): string {
@@ -760,6 +844,7 @@ function message(
   readTx: string | null,
   writeTx: string | null,
   sorted: boolean,
+  queryBeforeWriteTx: boolean,
 ): string {
   const read = origin.read;
   const via = path.length === 0 ? "" : ` via ${path.map((name) => `$${name}`).join(" -> ")}`;
@@ -778,8 +863,9 @@ function message(
     if (carried) {
       return `locked list read of ${read.arg} as $${read.varName} from an earlier loop iteration drives ${at}${via}; re-read the rows or recompute the values in the current iteration's db.transaction`;
     }
-    const fix = writeTx === null
-      ? `wrap the query and the writes in one db.transaction${sorted ? "" : ", and sort the query by id ascending"}`
+    const sort = sorted ? "" : " and sort the query by id ascending";
+    const fix = writeTx === null || queryBeforeWriteTx
+      ? `wrap the query and the loop in one db.transaction, or re-read each row under lock for the write${sort}`
       : `move the query into the db.transaction that holds the write${sorted ? "" : " and sort it by id ascending"}`;
     return `locked list read of ${read.arg} as $${read.varName} in another transaction drives ${at}${via}; ${fix}`;
   }

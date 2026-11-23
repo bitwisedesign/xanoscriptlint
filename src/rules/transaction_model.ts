@@ -23,7 +23,7 @@ const LOCK_TRUE = /^\s*lock\s*=\s*true\b/;
 const INLINE_LOCK_TRUE = /\{\s*lock\s*=\s*true\s*\}/;
 const DATA_MEMBER = /^\s*data\s*=/;
 const RETURN_MEMBER = /^\s*return\s*=/;
-const AS_VAR = /(?:^|})\s*as\s+\$([A-Za-z_][A-Za-z0-9_]*)\s*$/;
+const AS_VAR = /(?:^|[}\s])as\s+\$([A-Za-z_][A-Za-z0-9_]*)\s*$/;
 const TYPE_SINGLE = /type\s*:\s*["']single["']/;
 const INLINE_RETURN = /\{\s*return\s*=\s*\{/;
 
@@ -34,7 +34,7 @@ const EXIT_LEAF = /^\s*(?:return|throw)\b(?!\s*=)/;
 const HEADER_OPENER = /^\s*(?:foreach|for|while|if|elseif)\s*\(/;
 const MEMBER_BLOCK = /^\s*[A-Za-z_][A-Za-z0-9_]*\s*=(?!=)/;
 const FOREACH_OPENER = /^\s*foreach\s*\(/;
-const EACH_AS = /^\s*each\s+as\s+\$([A-Za-z_][A-Za-z0-9_]*)\b/;
+const EACH_AS = /^\s*each\s+as\s+\$?([A-Za-z_][A-Za-z0-9_]*)\b/;
 const MEMBER_START = /^\s*[A-Za-z_][A-Za-z0-9_]*\s*=(?!=)/;
 
 interface Region {
