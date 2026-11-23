@@ -6990,14 +6990,20 @@ ${indentBlock(editWallet("balance: $row.balance"), 4)}
       ),
     );
     assert.deepEqual(lockHitsTx(commented), []);
-    const viaCount = lockFn(
-      txBlock(
-        getWallet("row"),
-        "var $count {\n  value = $row.balance\n}",
-        editWallet("balance: $input.amounts|count"),
-      ),
-    );
-    assert.deepEqual(lockHitsTx(viaCount), []);
+    const viaFilter = (expr: string) =>
+      lockFn(
+        txBlock(
+          getWallet("row"),
+          "var $count {\n  value = $row.balance\n}",
+          editWallet(`balance: ${expr}`),
+        ),
+      );
+    assert.deepEqual(lockHitsTx(viaFilter("$input.amounts|count")), []);
+    assert.deepEqual(lockHitsTx(viaFilter("$input.amounts| count")), []);
+    const orCount = viaFilter("$input.flag ||count");
+    assert.deepEqual(lockHitsTx(orCount).map((v) => v.message), [
+      `unlocked read of wallet as $row is used in db.edit data on line ${lineOf(orCount, "db.edit")} via $count; add lock = true`,
+    ]);
   });
 
   it("follows each as with or without a leading dollar sign", () => {

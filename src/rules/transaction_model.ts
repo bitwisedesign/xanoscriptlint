@@ -406,11 +406,15 @@ export function lineHasVarRef(line: string, varName: string): boolean {
 }
 
 function isBareVarRef(line: string, index: number, varName: string): boolean {
-  const prev = line[index - 1];
+  let before = index - 1;
+  while (before >= 0 && /\s/.test(line[before])) {
+    before -= 1;
+  }
+  const prev = line[before];
   if (prev !== undefined && /[A-Za-z0-9_$.]/.test(prev)) {
     return false;
   }
-  if (prev === "|" && line[index - 2] !== "|") {
+  if (prev === "|" && line[before - 1] !== "|") {
     return false;
   }
   const next = line[index + varName.length];
