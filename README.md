@@ -98,7 +98,7 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 | `statement_spacing` | ⚪️ | ⚠️ | ✅ | Blank line between sibling statements when the previous one is single-line and no comment is adjacent (Xano removes it on push) |
 | `tags_placement` | ⚪️ | ⚠️ | ✅ | `tags` not immediately before the first of `llm`, `tools`, `test`, `cache`, `external_access`, `history`, or `guid`, or with the wrong blank lines around it (Xano rewrites this on push) |
 | `transaction_boundaries` | ⚪️ | ❌ | — | `lock = true` outside `db.transaction`, nested `db.transaction`, or a caller-transaction helper run on the wrong side of a transaction |
-| `transaction_locks` | ⚪️ | ❌ | — | Unlocked `db.get` / single `db.query` whose variable feeds a later write of that table |
+| `transaction_locks` | ⚪️ | ❌ | — | Unlocked `db.get` / single `db.query` whose value (directly or through variables) reaches the `data` of a later `db.edit` / `db.patch` / `db.add_or_edit` of that table, or a list `db.query` whose rows drive a per-row `db.edit` / `db.patch` / `db.add_or_edit` of that table and is unlocked or not sorted by `id` ascending; a locked read counts as unlocked once its `db.transaction` closes |
 | `transaction_stale_reads` | ⚪️ | ⚠️ | — | Write inside `db.transaction` after a read of that table from outside it, with no re-read |
 | `unfence_assignment_values` | ⚪️ | ⚠️ | ✅ | Fenced assignment object or array whose one-line form is under 64 UTF-8 bytes (Xano unfences it on push), except a `0` followed by another key |
 | `unquote_bare_test_names` | ⚪️ | ⚠️ | ✅ | Quoted `test "name"` or top-level `mock` key `"name"` when `name` has no spaces (Xano strips those quotes on push) |

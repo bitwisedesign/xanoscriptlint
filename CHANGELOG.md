@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `transaction_locks` follows a read's value through variables, loop items, and dependent reads, and the message names the path (`via $a -> $b`). Overwriting a variable with a clean value clears it.
+- `transaction_locks` flags a list `db.query` whose rows drive per-row writes of that table unless it is locked and sorted by `id` ascending. An unlocked list is acceptable when each item only identifies a row that the loop re-reads under lock, and the write uses that fresh value or its held key.
+- `transaction_locks` treats a locked read as unlocked when its value is used outside the `db.transaction` that took the lock, including after that transaction closes.
+- `transaction_locks` treats an unlocked re-read of a row already locked in the same transaction as locked.
+- `transaction_locks` fix text now says whether to add the lock, move the read into the write's transaction, or wrap both in one. See [docs/rules.md](docs/rules.md#transaction_locks).
+
 ## [0.9.0] - 2026-11-20
 
 ### Added
