@@ -6,6 +6,7 @@ import { guidPlacement } from "./guid_placement.js";
 import { indentation } from "./indentation.js";
 import { lockPlacement } from "./lock_placement.js";
 import { noEmptyExpectThrow } from "./no_empty_expect_throw.js";
+import { noEqualTrueCondition } from "./no_equal_true_condition.js";
 import { noExpectEqualNull } from "./no_expect_equal_null.js";
 import { noNullResponse } from "./no_null_response.js";
 import { noTrailingComments } from "./no_trailing_comments.js";
@@ -26,6 +27,8 @@ import { unquoteEnumDefaults } from "./unquote_enum_defaults.js";
 import { wrapEnumValues } from "./wrap_enum_values.js";
 import { wrapPipedValues } from "./wrap_piped_values.js";
 import { wrapAssignmentArrays } from "./wrap_assignment_arrays.js";
+import { wrapAssignmentObjects } from "./wrap_assignment_objects.js";
+import { wrapIndexEntries } from "./wrap_index_entries.js";
 import { wrapTagsValues } from "./wrap_tags_values.js";
 import type { Rule } from "./types.js";
 
@@ -41,6 +44,8 @@ export const builtinRules: Rule[] = [
   wrapPipedValues,
   wrapTagsValues,
   wrapAssignmentArrays,
+  wrapAssignmentObjects,
+  wrapIndexEntries,
   tagsPlacement,
   emptyFunctionRun,
   guidPlacement,
@@ -57,6 +62,7 @@ export const builtinRules: Rule[] = [
   noZeroNumericDefault,
   quoteNegativeNumericDefault,
   unquoteEnumDefaults,
+  noEqualTrueCondition,
   statementSpacing,
   separatorIndentation,
 ];

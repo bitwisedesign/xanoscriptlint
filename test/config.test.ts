@@ -327,6 +327,24 @@ custom_rules:
     assert.equal(config.ruleOptions.get("wrap_assignment_arrays")?.wrapAt, 64);
   });
 
+  it("parses wrap_assignment_objects wrap_at", () => {
+    const config = resolveConfig(
+      { wrap_assignment_objects: { wrap_at: 64 } },
+      "/tmp",
+      null,
+    );
+    assert.equal(config.ruleOptions.get("wrap_assignment_objects")?.wrapAt, 64);
+  });
+
+  it("parses wrap_index_entries wrap_at", () => {
+    const config = resolveConfig(
+      { wrap_index_entries: { wrap_at: 64 } },
+      "/tmp",
+      null,
+    );
+    assert.equal(config.ruleOptions.get("wrap_index_entries")?.wrapAt, 64);
+  });
+
   it("parses collapse_assignment_values wrap_at", () => {
     const config = resolveConfig(
       { collapse_assignment_values: { wrap_at: 32 } },

@@ -17,6 +17,7 @@ import { startsPipeLine } from "./pipe_chains.js";
 import { DEFAULT_WRAP_AT } from "./wrap_enum_values.js";
 import { renderPipedAssignment } from "./wrap_piped_values.js";
 import type { FixResult, Rule, RuleOptions, SourceFile, Violation } from "./types.js";
+import { expressionObjectWidth } from "./xano_json_width.js";
 
 type ObjectNode = Extract<Node, { kind: "object" }>;
 type StatementKind = "var" | "var.update" | "expect";
@@ -280,8 +281,6 @@ function setKey(key: string): string | null {
 
 function buildRewrite(
   node: ObjectNode,
-  prefix: string,
-  trailing: string,
   wrapAt: number,
 ): { collapsed: string; filters: string[] } | null {
   const seed: ObjectNode["entries"] = [];
@@ -297,9 +296,7 @@ function buildRewrite(
       start: 0,
       end: 0,
     };
-    const lineBytes =
-      byteLength(prefix) + byteLength(renderInline(candidate)) + byteLength(trailing);
-    if (lineBytes >= wrapAt) {
+    if (expressionObjectWidth(candidate, "upper") >= wrapAt) {
       break;
     }
     seed.push(entry);
@@ -424,12 +421,15 @@ function nativeLayoutSite(
   const prefix = lines[open.line]?.slice(0, open.col) ?? "";
   const statement = valueStatementKind(lines, depths, open.line);
   const multiline = open.line !== close.line;
-  const lineLength = byteLength(prefix) + byteLength(renderInline(check)) + byteLength(trailing);
+  const oneLineWidth =
+    statement === "expect"
+      ? byteLength(prefix) + byteLength(renderInline(check)) + byteLength(trailing)
+      : expressionObjectWidth(check, "upper");
   if (
     statement === null ||
     followedByPipe(text, end, lines, close.line) ||
     !hasZeroFollowedByKey(check) ||
-    (!multiline && lineLength < DEFAULT_WRAP_AT)
+    (!multiline && oneLineWidth < DEFAULT_WRAP_AT)
   ) {
     return null;
   }
@@ -562,10 +562,10 @@ function rewriteLines(site: LayoutSite, wrapAt: number): string[] | null {
     return null;
   }
   const inline = `${site.prefix}${renderInline(site.node)}${site.trailing}`;
-  if (byteLength(inline) < wrapAt) {
+  if (expressionObjectWidth(site.node, "upper") < wrapAt) {
     return [inline];
   }
-  const rewrite = buildRewrite(site.node, site.prefix, site.trailing, wrapAt);
+  const rewrite = buildRewrite(site.node, wrapAt);
   if (rewrite === null) {
     return null;
   }

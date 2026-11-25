@@ -83,6 +83,9 @@ import {
   ASSIGN_LINE_62,
   ASSIGN_LINE_63,
   ASSIGN_LINE_64,
+  JSON_PAD_63,
+  JSON_PAD_64,
+  jsonPadForWidth,
   PIPE_33,
   PIPE_34,
   PIPE_BYTES_33,
@@ -2846,26 +2849,21 @@ ${inlineTagsLine(TAGS_V64)}
     );
   });
 
-  it("collapse_assignment_values uses collapsed line length, not entry count", () => {
-    const lineOf = (pad: string) => wrapAssign("input", inlineAssignObj(pad)).split("\n")[6] ?? "";
-    assert.equal(lineOf(ASSIGN_LINE_62).length, 62);
-    assert.equal(lineOf(ASSIGN_LINE_63).length, 63);
-    assert.equal(lineOf(ASSIGN_LINE_64).length, 64);
-
+  it("collapse_assignment_values uses JSON width for in-scope objects", () => {
     const inline63 = lintFile(
-      { path: "i63.xs", text: wrapAssign("input", inlineAssignObj(ASSIGN_LINE_63)) },
+      { path: "i63.xs", text: wrapAssign("input", inlineAssignObj(JSON_PAD_63)) },
       config(),
     ).filter((v) => v.ruleId === "collapse_assignment_values");
     assert.equal(inline63.length, 0);
 
     const inline64 = lintFile(
-      { path: "i64.xs", text: wrapAssign("input", inlineAssignObj(ASSIGN_LINE_64)) },
+      { path: "i64.xs", text: wrapAssign("input", inlineAssignObj(JSON_PAD_64)) },
       config(),
     ).filter((v) => v.ruleId === "collapse_assignment_values");
     assert.equal(inline64.length, 0);
 
     const wrapped63 = lintFile(
-      { path: "w63.xs", text: wrapAssign("input", wrappedAssignObj(ASSIGN_LINE_63)) },
+      { path: "w63.xs", text: wrapAssign("input", wrappedAssignObj(JSON_PAD_63)) },
       config(),
     ).filter((v) => v.ruleId === "collapse_assignment_values");
     assert.equal(wrapped63.length, 1);
@@ -2873,82 +2871,127 @@ ${inlineTagsLine(TAGS_V64)}
     assert.equal(wrapped63[0]?.severity, "warning");
     assert.equal(
       wrapped63[0]?.message,
-      "input value of line length 63 must be inline (threshold 64)",
+      "input object of JSON width 63 must be inline (threshold 64)",
     );
 
     const wrapped64 = lintFile(
-      { path: "w64.xs", text: wrapAssign("input", wrappedAssignObj(ASSIGN_LINE_64)) },
+      { path: "w64.xs", text: wrapAssign("input", wrappedAssignObj(JSON_PAD_64)) },
       config(),
     ).filter((v) => v.ruleId === "collapse_assignment_values");
     assert.equal(wrapped64.length, 0);
 
-    const wrapped62 = lintFile(
-      { path: "w62.xs", text: wrapAssign("input", wrappedAssignObj(ASSIGN_LINE_62)) },
-      config(),
-    ).filter((v) => v.ruleId === "collapse_assignment_values");
-    assert.equal(wrapped62.length, 1);
+    const slash63 = wrapAssign("input", wrappedAssignObj(jsonPadForWidth(63)));
+    const slashHits = lintFile({ path: "slash.xs", text: slash63 }, config()).filter(
+      (v) => v.ruleId === "collapse_assignment_values",
+    );
+    assert.equal(slashHits.length, 1);
+
+    const withSlash = wrapAssign("input", wrappedAssignObj(`${"x".repeat(50)}/`));
+    const slashKept = lintFile({ path: "slash-keep.xs", text: withSlash }, config()).filter(
+      (v) => v.ruleId === "collapse_assignment_values",
+    );
+    assert.equal(slashKept.length, 0);
+
+    const nestedBand = wrapAssign(
+      "input",
+      `{
+        current: {bio: "Hello"}
+        has_bio: true
+        bio    : "   "
+      }`,
+    );
     assert.equal(
-      wrapped62[0]?.message,
-      "input value of line length 62 must be inline (threshold 64)",
+      lintFile({ path: "band.xs", text: nestedBand }, config()).some(
+        (v) => v.ruleId === "collapse_assignment_values",
+      ),
+      false,
     );
 
-    const spacedPad = `${"x".repeat(40)}  x`;
-    assert.equal(lineOf(spacedPad).length, 64);
-    const wrappedSpaced = lintFile(
-      { path: "w-spaces.xs", text: wrapAssign("input", wrappedAssignObj(spacedPad)) },
-      config(),
-    ).filter((v) => v.ruleId === "collapse_assignment_values");
-    assert.equal(wrappedSpaced.length, 0);
+    const quoted = wrapAssign("input", wrappedAssignObj('say \\"hi\\"'));
+    assert.equal(
+      lintFile({ path: "quoted.xs", text: quoted }, config()).some(
+        (v) => v.ruleId === "collapse_assignment_values",
+      ),
+      true,
+    );
+
+    const accent = wrapAssign("input", wrappedAssignObj("é"));
+    const accentHits = lintFile({ path: "accent.xs", text: accent }, config()).filter(
+      (v) => v.ruleId === "collapse_assignment_values",
+    );
+    assert.equal(accentHits.length, 1);
+    assert.match(accentHits[0]?.message ?? "", /JSON width 18 /);
+
+    const deep = `function "example" {
+  input {
+  }
+
+  stack {
+    function.run "Orders/dispatch" {
+      input = {ok: 1}
+${" ".repeat(40)}mock = {
+${" ".repeat(42)}user_id: $auth.id
+${" ".repeat(42)}order_uuid: $input.order_uuid
+${" ".repeat(40)}}
+    } as $dispatch
+  }
+
+  response = $dispatch
+}`;
+    const deepHits = lintFile({ path: "deep.xs", text: deep }, config()).filter(
+      (v) => v.ruleId === "collapse_assignment_values",
+    );
+    assert.equal(deepHits.length, 1);
+    assert.match(deepHits[0]?.message ?? "", /JSON width 55 /);
   });
 
-  it("collapse_assignment_values uses UTF-8 byte length, not character count", () => {
-    const lineOf = (pad: string) => wrapAssign("input", inlineAssignObj(pad)).split("\n")[6] ?? "";
-    const mask = "••••••••••••";
-    const maskInline = wrapAssign("value", `{Authorization: "${mask}"}`);
-    const maskLine = maskInline.split("\n")[6] ?? "";
-    assert.equal(maskLine.length, 45);
-    assert.equal(Buffer.byteLength(maskLine, "utf8"), 69);
-
-    const wrappedMask = lintFile(
-      {
-        path: "mask.xs",
-        text: wrapAssign(
-          "value",
-          `{
-        Authorization: "${mask}"
-      }`,
-        ),
-      },
-      config(),
-    ).filter((v) => v.ruleId === "collapse_assignment_values");
-    assert.equal(wrappedMask.length, 0);
-
-    const bytes63 = "•".repeat(14);
-    const bytes64 = `${bytes63}x`;
-    assert.equal(Buffer.byteLength(lineOf(bytes63), "utf8"), 63);
-    assert.equal(Buffer.byteLength(lineOf(bytes64), "utf8"), 64);
-    assert.equal(lineOf(bytes63).length < 63, true);
-    assert.equal(lineOf(bytes64).length < 64, true);
+  it("collapse_assignment_values keeps line length for out-of-scope owners", () => {
+    const lineOf = (pad: string) => wrapReturn(inlineAssignObj(pad)).split("\n")[5] ?? "";
+    const pad63 = "x".repeat(45);
+    const pad64 = "x".repeat(46);
+    assert.equal(lineOf(pad63).length, 63);
+    assert.equal(lineOf(pad64).length, 64);
 
     const wrapped63 = lintFile(
-      { path: "b63.xs", text: wrapAssign("input", wrappedAssignObj(bytes63)) },
+      { path: "r63.xs", text: wrapReturn(wrappedAssignObj(pad63)) },
       config(),
     ).filter((v) => v.ruleId === "collapse_assignment_values");
     assert.equal(wrapped63.length, 1);
     assert.equal(
       wrapped63[0]?.message,
-      "input value of line length 63 must be inline (threshold 64)",
+      "return value of line length 63 must be inline (threshold 64)",
     );
 
     const wrapped64 = lintFile(
-      { path: "b64.xs", text: wrapAssign("input", wrappedAssignObj(bytes64)) },
+      { path: "r64.xs", text: wrapReturn(wrappedAssignObj(pad64)) },
       config(),
     ).filter((v) => v.ruleId === "collapse_assignment_values");
     assert.equal(wrapped64.length, 0);
+
+    const mask = "••••••••••••";
+    const wrappedMask = lintFile(
+      {
+        path: "mask.xs",
+        text: wrapReturn(`{
+        Authorization: "${mask}"
+      }`),
+      },
+      config(),
+    ).filter((v) => v.ruleId === "collapse_assignment_values");
+    assert.equal(wrappedMask.length, 0);
   });
 
   it("collapse_assignment_values flags assignment owners including return", () => {
-    for (const owner of ["input", "data", "mock", "response", "output", "sort"]) {
+    for (const owner of ["input", "data", "mock", "response"]) {
+      const hits = lintFile(
+        { path: `${owner}.xs`, text: wrapAssign(owner, wrappedAssignObj("x")) },
+        config(),
+      ).filter((v) => v.ruleId === "collapse_assignment_values");
+      assert.equal(hits.length, 1, owner);
+      assert.match(hits[0]?.message ?? "", new RegExp(`^${owner} object of JSON width \\d+ must be inline`));
+    }
+
+    for (const owner of ["output", "sort"]) {
       const hits = lintFile(
         { path: `${owner}.xs`, text: wrapAssign(owner, wrappedAssignObj("x")) },
         config(),
@@ -2980,6 +3023,20 @@ ${inlineTagsLine(TAGS_V64)}
 }`;
     assert.equal(
       lintFile({ path: "pipe.xs", text: piped }, config()).some(
+        (v) => v.ruleId === "collapse_assignment_values",
+      ),
+      false,
+    );
+
+    const continued = wrapAssign(
+      "input",
+      `{
+        k: "x"
+      }
+      |set:"n":1`,
+    );
+    assert.equal(
+      lintFile({ path: "pipe-next.xs", text: continued }, config()).some(
         (v) => v.ruleId === "collapse_assignment_values",
       ),
       false,
@@ -3069,7 +3126,7 @@ ${wrappedTagsBlock(TAGS_V63)}
   });
 
   it("collapse_assignment_values honors disabled_rules, severity, and wrap_at", () => {
-    const wrapped = wrapAssign("input", wrappedAssignObj(ASSIGN_LINE_62));
+    const wrapped = wrapAssign("input", wrappedAssignObj(JSON_PAD_63));
     const disabled = lintFile(
       { path: "off.xs", text: wrapped },
       config({ disabled_rules: ["collapse_assignment_values"] }),
@@ -3089,13 +3146,13 @@ ${wrappedTagsBlock(TAGS_V63)}
     );
 
     const raised = lintFile(
-      { path: "raised.xs", text: wrapAssign("input", wrappedAssignObj(ASSIGN_LINE_64)) },
+      { path: "raised.xs", text: wrapAssign("input", wrappedAssignObj(JSON_PAD_64)) },
       config({ collapse_assignment_values: { wrap_at: 80 } }),
     ).filter((v) => v.ruleId === "collapse_assignment_values");
     assert.equal(raised.length, 1);
 
     const lowered = lintFile(
-      { path: "lowered.xs", text: wrapAssign("input", wrappedAssignObj(ASSIGN_LINE_62)) },
+      { path: "lowered.xs", text: wrapAssign("input", wrappedAssignObj(JSON_PAD_63)) },
       config({ collapse_assignment_values: { wrap_at: 10 } }),
     );
     assert.equal(
@@ -7300,13 +7357,11 @@ describe("zero_object_literal_layout", () => {
     assert.equal(zeroLayoutHits(kept).length, 0);
   });
 
-  it("zero_object_literal_layout flags a 64-byte one-liner and skips a 63-byte one", () => {
-    const line63 = `{lead: 0, next: 30, tail: "${"x".repeat(20)}"}`;
-    const line64 = `{lead: 0, next: 30, tail: "${"x".repeat(21)}"}`;
+  it("zero_object_literal_layout flags a 64-wide one-liner and skips a 63-wide one", () => {
+    const line63 = `{lead: 0, next: 30, tail: "${"x".repeat(25)}"}`;
+    const line64 = `{lead: 0, next: 30, tail: "${"x".repeat(26)}"}`;
     const text63 = wrapVarValue(line63);
     const text64 = wrapVarValue(line64);
-    assert.equal(Buffer.byteLength(text63.split("\n")[6] ?? "", "utf8"), 63);
-    assert.equal(Buffer.byteLength(text64.split("\n")[6] ?? "", "utf8"), 64);
     assert.equal(zeroLayoutHits(text63).length, 0);
     const hits = zeroLayoutHits(text64);
     assert.equal(hits.length, 1);
@@ -7487,6 +7542,298 @@ describe("zero_object_literal_layout", () => {
     assert.equal(
       Buffer.byteLength(wrapVarValue(`{lead: 0, pad: "${pad}", account.name: 1}`).split("\n")[6] ?? "", "utf8") >= 64,
       true,
+    );
+  });
+});
+
+function wrapObjectHits(text: string, overrides: Parameters<typeof resolveConfig>[0] = {}) {
+  return lintFile({ path: "a.xs", text }, config(overrides)).filter(
+    (v) => v.ruleId === "wrap_assignment_objects",
+  );
+}
+
+function wrapIndexHits(text: string, overrides: Parameters<typeof resolveConfig>[0] = {}) {
+  return lintFile({ path: "a.xs", text }, config(overrides)).filter(
+    (v) => v.ruleId === "wrap_index_entries",
+  );
+}
+
+function equalTrueHits(text: string, overrides: Parameters<typeof resolveConfig>[0] = {}) {
+  return lintFile({ path: "a.xs", text }, config(overrides)).filter(
+    (v) => v.ruleId === "no_equal_true_condition",
+  );
+}
+
+describe("wrap_assignment_objects", () => {
+  it("wraps in-scope objects at JSON width 64 and skips 63", () => {
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+    const before = readFileSync(
+      path.join(fixtures, "violations/wrap_assignment_objects.xs"),
+      "utf8",
+    );
+    const kept = readFileSync(
+      path.join(fixtures, "clean/wrap_assignment_objects_kept.xs"),
+      "utf8",
+    );
+    const hits = wrapObjectHits(before);
+    assert.equal(hits.length, 2);
+    assert.equal(hits[0]?.line, 7);
+    assert.equal(hits[0]?.severity, "warning");
+    assert.equal(
+      hits[0]?.message,
+      "input object of JSON width 64 must be wrapped (threshold 64)",
+    );
+    assert.equal(wrapObjectHits(kept).length, 0);
+
+    assert.equal(wrapObjectHits(wrapAssign("input", inlineAssignObj(JSON_PAD_63))).length, 0);
+    assert.equal(wrapObjectHits(wrapAssign("input", inlineAssignObj(JSON_PAD_64))).length, 1);
+  });
+
+  it("skips expect, sort, pipes, zero-owned var objects, and nested-band objects", () => {
+    const expectText = `function "example" {
+  input {
+  }
+
+  stack {
+    var $ok {
+      value = 1
+    }
+  }
+
+  response = $ok
+
+  test "keeps a long expect object inline" {
+    expect.to_equal ($response) {
+      value = {k: "${JSON_PAD_64}"}
+    }
+  }
+
+  test "keeps a same-line expect object inline" {
+    expect.to_equal ($response) { value = {k: "${JSON_PAD_64}"} }
+  }
+}`;
+    assert.equal(wrapObjectHits(expectText).length, 0);
+    assert.equal(wrapObjectHits(wrapAssign("sort", inlineAssignObj(JSON_PAD_64))).length, 0);
+
+    const piped = wrapVarValue(`{k: "${JSON_PAD_64}"}|set:"n":1`);
+    assert.equal(wrapObjectHits(piped).length, 0);
+
+    const continued = wrapVarValue(`{k: "${JSON_PAD_64}"}
+      |set:"n":1`);
+    assert.equal(wrapObjectHits(continued).length, 0);
+
+    const zeroOwned = wrapVarValue(`{lead: 0, next: 30, tail: "${"x".repeat(26)}"}`);
+    assert.equal(wrapObjectHits(zeroOwned).length, 0);
+
+    const nestedBand = wrapAssign(
+      "input",
+      `{current: {bio: "Hello"}, has_bio: true, bio: "   "}`,
+    );
+    assert.equal(wrapObjectHits(nestedBand).length, 0);
+
+    const filtered = wrapAssign(
+      "input",
+      `{user_id: $input.new|get:"user_id", type: "sync_inbox"}`,
+    );
+    assert.equal(wrapObjectHits(filtered).length, 1);
+
+    const deep = `function "example" {
+  input {
+  }
+
+  stack {
+    function.run "Orders/dispatch" {
+      input = {ok: 1}
+${" ".repeat(40)}mock = {k: "${JSON_PAD_64}"}
+    } as $dispatch
+  }
+
+  response = $dispatch
+}`;
+    assert.equal(wrapObjectHits(deep).length, 1);
+
+    const zeroCommented = `function "example" {
+  input {
+  }
+
+  stack {
+    var $row {
+// explanation
+      value = {lead: 0, next: 30, tail: "${"x".repeat(26)}"}
+    }
+  }
+
+  response = $row
+}`;
+    assert.equal(wrapObjectHits(zeroCommented).length, 0);
+
+    const nonzeroCommented = `function "example" {
+  input {
+  }
+
+  stack {
+    var $row {
+// explanation
+      value = {k: "${JSON_PAD_64}"}
+    }
+  }
+
+  response = $row
+}`;
+    assert.equal(wrapObjectHits(nonzeroCommented).length, 1);
+  });
+
+  it("honors disabled_rules, severity, and wrap_at", () => {
+    const text = wrapAssign("input", inlineAssignObj(JSON_PAD_64));
+    assert.equal(
+      wrapObjectHits(text, { disabled_rules: ["wrap_assignment_objects"] }).length,
+      0,
+    );
+    assert.equal(
+      wrapObjectHits(text, { wrap_assignment_objects: "error" })[0]?.severity,
+      "error",
+    );
+    assert.equal(
+      wrapObjectHits(text, { wrap_assignment_objects: { wrap_at: 80 } }).length,
+      0,
+    );
+    assert.equal(
+      wrapObjectHits(wrapAssign("input", inlineAssignObj(JSON_PAD_63)), {
+        wrap_assignment_objects: { wrap_at: 10 },
+      }).length,
+      1,
+    );
+  });
+});
+
+describe("wrap_index_entries", () => {
+  it("wraps and collapses index entries and field arrays at JSON width 64", () => {
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+    const before = readFileSync(path.join(fixtures, "violations/wrap_index_entries.xs"), "utf8");
+    const kept = readFileSync(path.join(fixtures, "clean/wrap_index_entries_kept.xs"), "utf8");
+    const hits = wrapIndexHits(before);
+    assert.equal(hits.length, 3);
+    assert.equal(hits[0]?.severity, "warning");
+    assert.match(hits[0]?.message ?? "", /index entry of JSON width 60 must be inline/);
+    assert.match(hits[1]?.message ?? "", /index entry of JSON width 68 must be wrapped/);
+    assert.match(hits[2]?.message ?? "", /index field of JSON width 69 must be wrapped/);
+    assert.equal(wrapIndexHits(kept).length, 0);
+  });
+
+  it("honors disabled_rules, severity, and wrap_at", () => {
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+    const before = readFileSync(path.join(fixtures, "violations/wrap_index_entries.xs"), "utf8");
+    assert.equal(
+      wrapIndexHits(before, { disabled_rules: ["wrap_index_entries"] }).length,
+      0,
+    );
+    assert.equal(
+      wrapIndexHits(before, { wrap_index_entries: "error" })[0]?.severity,
+      "error",
+    );
+    assert.equal(
+      wrapIndexHits(before, { wrap_index_entries: { wrap_at: 80 } }).length,
+      1,
+    );
+  });
+
+  it("still lints sibling index entries when a comment sits in the list", () => {
+    const long = `{type: "btree|unique", field: [{name: "account_code", op: "asc"}]}`;
+    const longer = `{type: "btree|unique", field: [{name: "region_code_name", op: "asc"}]}`;
+    const table = (entries: string) => `table sample {
+  schema {
+    int id
+  }
+
+  index = [
+${entries}
+  ]
+}`;
+    const commented = table(`    ${long}
+    // keep this note
+    ${longer}`);
+    assert.equal(wrapIndexHits(commented).length, 2);
+
+    const disableNext = table(`    // xanoscriptlint:disable:next wrap_index_entries
+    ${long}
+    ${longer}`);
+    assert.equal(wrapIndexHits(disableNext).length, 1);
+
+    const innerComment = table(`    {
+      type : "btree|unique"
+      // keep
+      field: [{name: "account_code", op: "asc"}]
+    }
+    ${longer}`);
+    assert.equal(wrapIndexHits(innerComment).length, 1);
+  });
+});
+
+describe("no_equal_true_condition", () => {
+  it("flags == true in if/elseif and skips false, not-true, filters, and fences", () => {
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+    const before = readFileSync(
+      path.join(fixtures, "violations/no_equal_true_condition.xs"),
+      "utf8",
+    );
+    const kept = readFileSync(
+      path.join(fixtures, "clean/no_equal_true_condition_kept.xs"),
+      "utf8",
+    );
+    const hits = equalTrueHits(before);
+    assert.equal(hits.length, 2);
+    assert.equal(hits[0]?.line, 6);
+    assert.equal(hits[0]?.severity, "warning");
+    assert.equal(equalTrueHits(kept).length, 0);
+
+    const skipped = `function "example" {
+  input {
+  }
+
+  stack {
+    if ($row.flag === true) {
+      var $a { value = 1 }
+    }
+    if (!$row.flag == true) {
+      var $b { value = 1 }
+    }
+    if ($row.flag|is_bool == true) {
+      var $c { value = 1 }
+    }
+    if ($row.flag == false) {
+      var $d { value = 1 }
+    }
+    var $js {
+      value = """
+        if (node.negate === true) {
+          return 1
+        }
+        """
+    }
+    var $closer {
+      value = """
+        if ($row.flag == true) """
+    }
+  }
+
+  response = $a
+}`;
+    assert.equal(equalTrueHits(skipped).length, 0);
+  });
+
+  it("honors disabled_rules and severity", () => {
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+    const before = readFileSync(
+      path.join(fixtures, "violations/no_equal_true_condition.xs"),
+      "utf8",
+    );
+    assert.equal(
+      equalTrueHits(before, { disabled_rules: ["no_equal_true_condition"] }).length,
+      0,
+    );
+    assert.equal(
+      equalTrueHits(before, { no_equal_true_condition: "error" })[0]?.severity,
+      "error",
     );
   });
 });

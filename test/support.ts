@@ -211,6 +211,14 @@ export const ASSIGN_LINE_62 = "x".repeat(41);
 export const ASSIGN_LINE_63 = "x".repeat(42);
 export const ASSIGN_LINE_64 = "x".repeat(43);
 
+/** Pad for `{k: "PAD"}` so expression JSON width is `width`. */
+export function jsonPadForWidth(width: number): string {
+  return "x".repeat(width - 12);
+}
+
+export const JSON_PAD_63 = jsonPadForWidth(63);
+export const JSON_PAD_64 = jsonPadForWidth(64);
+
 export function inlineAssignObj(pad: string): string {
   return `{k: "${pad}"}`;
 }

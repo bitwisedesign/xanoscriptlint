@@ -81,13 +81,14 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 | Id | Default | Severity | Auto-fix | What it catches |
 | --- | :---: | :---: | :---: | --- |
 | `align_object_colons` | ⚪️ | ⚠️ | ✅ | Object entry colons must align to the longest name (Xano rewrites this on push) |
-| `collapse_assignment_values` | ⚪️ | ⚠️ | ✅ | Wrapped assignment object or array whose one-line form is under 64 UTF-8 bytes (Xano collapses it on push) |
+| `collapse_assignment_values` | ⚪️ | ⚠️ | ✅ | Wrapped `input`/`value`/`data`/`response`/`mock` object whose JSON width is under 64, or other wrapped assignment whose one-line form is under 64 UTF-8 bytes (Xano collapses it on push) |
 | `empty_function_run` | 🟢 | ❌ | — | `function.run ""` / `function.run ''` |
 | `fence_multiline_values` | ⚪️ | ⚠️ | ✅ | Multiline mock or input value not wrapped in a triple-backtick fence (Xano fences it on push); a one-line fence body is unfenced onto the key line; `function.run` mocks stay compact except when unfencing |
 | `guid_placement` | ⚪️ | ⚠️ | ✅ | `guid` with a blank line after a single-line value, or without one after a `}` / `]` closer |
 | `indentation` | ⚪️ | ⚠️ | ✅ | Code indented other than two spaces per nesting level, or a wrapped filter pipeline not at its opener's indent plus two (Xano rewrites this on push) |
 | `lock_placement` | ⚪️ | ⚠️ | ✅ | `lock` not immediately after `field_value` in `db.get`, or not first in `db.query` (Xano rewrites this on push) |
 | `no_empty_expect_throw` | ⚪️ | ❌ | — | `expect.to_throw` with `exception = ""` or with no `exception` (pin the throw name or precondition error string) |
+| `no_equal_true_condition` | ⚪️ | ⚠️ | ✅ | `$path == true` in `if` / `elseif` (Xano strips it on push) |
 | `no_null_response` | ⚪️ | ⚠️ | ✅ | `response = null` (use `response = {}`) |
 | `no_expect_equal_null` | ⚪️ | ❌ | — | `expect.to_equal` / `expect.to_not_equal` with `value = null` (use `to_not_be_defined` / `to_be_defined`, or `to_be_null` / `to_not_be_null`) |
 | `no_reserved_var` | 🟢 | ❌ | — | reserved variable name declared via `var`, `var.update`, `as`, or `each as` |
@@ -105,7 +106,9 @@ See [docs/configuration.md](docs/configuration.md) and [docs/rules.md](docs/rule
 | `unquote_bare_test_names` | ⚪️ | ⚠️ | ✅ | Quoted `test "name"` or top-level `mock` key `"name"` when `name` has no spaces (Xano strips those quotes on push) |
 | `unquote_enum_defaults` | ⚪️ | ⚠️ | ✅ | Quoted enum default that is a bare identifier (Xano strips the quotes on push) |
 | `wrap_assignment_arrays` | ⚪️ | ⚠️ | ✅ | Assignment string array is inline at compact JSON length 64+ (Xano rewrites this on push); `tags` and `values` stay with their own rules |
+| `wrap_assignment_objects` | ⚪️ | ⚠️ | ✅ | `input`/`value`/`data`/`response`/`mock` object is inline at JSON width 64+ (Xano rewrites this on push) |
 | `wrap_enum_values` | ⚪️ | ⚠️ | ✅ | Enum `values` array is inline at compact JSON length 64+ or wrapped below 64 (Xano rewrites this on push) |
+| `wrap_index_entries` | ⚪️ | ⚠️ | ✅ | Table `index` entry or its `field` array is inline at constant JSON width 64+ or wrapped below 64 (Xano rewrites this on push) |
 | `wrap_piped_values` | ⚪️ | ⚠️ | ✅ | Assignment filter pipeline is inline at pipe length 34+ or 3+ filters, or wrapped below that; a grouped base stays inline (Xano rewrites this on push) |
 | `wrap_tags_values` | ⚪️ | ⚠️ | ✅ | Declaration `tags` array is inline at compact JSON length 64+ or wrapped below 64 (Xano rewrites this on push) |
 | `zero_object_literal_layout` | ⚪️ | ❌ | ✅ | `var` / `var.update` / `expect` `value` that is a fenced object (even with no `0`), or a native object with a `0` followed by another key that Xano will fence (the fenced value drops keys) |

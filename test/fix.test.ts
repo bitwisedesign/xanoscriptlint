@@ -72,8 +72,8 @@ import {
   wrappedAssignObj,
   inlineAssignArr,
   wrappedAssignArr,
-  ASSIGN_LINE_63,
-  ASSIGN_LINE_64,
+  JSON_PAD_63,
+  JSON_PAD_64,
   PIPE_33,
   PIPE_34,
   ISSUED_ITEM_FILTERS,
@@ -1451,8 +1451,8 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
   });
 
   it("collapses an under-threshold assignment object and is idempotent", () => {
-    const text = wrapAssign("input", wrappedAssignObj(ASSIGN_LINE_63));
-    const expected = wrapAssign("input", inlineAssignObj(ASSIGN_LINE_63));
+    const text = wrapAssign("input", wrappedAssignObj(JSON_PAD_63));
+    const expected = wrapAssign("input", inlineAssignObj(JSON_PAD_63));
     const result = fixFile({ path: "collapse.xs", text }, config());
     assert.equal(result.changed, true);
     assert.equal(result.text, expected);
@@ -1462,7 +1462,7 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
     assert.equal(again.text, expected);
   });
 
-  it("collapses a short non-ASCII assignment and leaves a 69-byte mask wrapped", () => {
+  it("collapses a short non-ASCII assignment and leaves a unicode mask wrapped", () => {
     const cafe = wrapAssign("input", wrappedAssignObj("café"));
     const cafeFixed = fixFile({ path: "cafe.xs", text: cafe }, config());
     assert.equal(cafeFixed.changed, true);
@@ -1498,16 +1498,12 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
     assert.equal(result.text, expected);
   });
 
-  it("does not expand a long inline assignment", () => {
-    const text = wrapAssign("input", inlineAssignObj(ASSIGN_LINE_64));
-    const result = fixFile({ path: "inline.xs", text }, config());
-    assert.equal(result.changed, false);
-    assert.equal(result.text, text);
-  });
-
-  it("does not collapse when the one-line form reaches the threshold", () => {
-    const text = wrapAssign("input", wrappedAssignObj(ASSIGN_LINE_64));
-    const result = fixFile({ path: "keep.xs", text }, config());
+  it("does not collapse when JSON width reaches the threshold", () => {
+    const text = wrapAssign("input", wrappedAssignObj(JSON_PAD_64));
+    const result = fixFile(
+      { path: "keep.xs", text },
+      config({ only_rules: ["collapse_assignment_values"] }),
+    );
     assert.equal(result.changed, false);
     assert.equal(result.text, text);
   });
@@ -1526,8 +1522,8 @@ ${inlineEnumDecl("enum lane", ENUM_V64)}
   });
 
   it("preserves CRLF when collapsing assignment values", () => {
-    const source = wrapAssign("input", wrappedAssignObj(ASSIGN_LINE_63));
-    const expected = wrapAssign("input", inlineAssignObj(ASSIGN_LINE_63));
+    const source = wrapAssign("input", wrappedAssignObj(JSON_PAD_63));
+    const expected = wrapAssign("input", inlineAssignObj(JSON_PAD_63));
     const crlf = source.replace(/\n/g, "\r\n");
     const result = fixFile({ path: "crlf-assign.xs", text: crlf }, config());
     assert.equal(result.changed, true);
@@ -3410,7 +3406,7 @@ ${inlineOutputLine(OUTPUT_V64)}
   });
 
   it("preserves escaped quoted keys when rewriting onto |set:", () => {
-    const pad = "x".repeat(22);
+    const pad = "x".repeat(28);
     const text = wrapVarValue(`{
         lead: 0
         pad : "${pad}"
@@ -3450,5 +3446,99 @@ ${inlineOutputLine(OUTPUT_V64)}
     );
     assert.equal(result.changed, false);
     assert.equal(result.text, text);
+  });
+
+  it("wraps over-threshold assignment objects and inserts a sibling separator", () => {
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+    const before = readFileSync(
+      path.join(fixtures, "violations/wrap_assignment_objects.xs"),
+      "utf8",
+    );
+    const after = readFileSync(path.join(fixtures, "fixed/wrap_assignment_objects.xs"), "utf8");
+    const result = fixFile(
+      { path: "wrap-obj.xs", text: before },
+      config({ only_rules: ["wrap_assignment_objects"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, after);
+    assert.equal(result.corrections[0]?.ruleId, "wrap_assignment_objects");
+    const again = fixFile(
+      { path: "wrap-obj.xs", text: result.text },
+      config({ only_rules: ["wrap_assignment_objects"] }),
+    );
+    assert.equal(again.changed, false);
+
+    const allRules = builtinRules.filter((rule) => !rule.defaultEnabled).map((rule) => rule.id);
+    const withAll = fixFile(
+      { path: "wrap-obj.xs", text: after },
+      config({ opt_in_rules: allRules }),
+    );
+    assert.equal(withAll.changed, false);
+    assert.equal(withAll.text, after);
+  });
+
+  it("rewrites index entries and field arrays in both directions", () => {
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+    const before = readFileSync(path.join(fixtures, "violations/wrap_index_entries.xs"), "utf8");
+    const after = readFileSync(path.join(fixtures, "fixed/wrap_index_entries.xs"), "utf8");
+    const result = fixFile(
+      { path: "wrap-index.xs", text: before },
+      config({ only_rules: ["wrap_index_entries"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, after);
+    assert.equal(result.corrections[0]?.ruleId, "wrap_index_entries");
+    const again = fixFile(
+      { path: "wrap-index.xs", text: result.text },
+      config({ only_rules: ["wrap_index_entries"] }),
+    );
+    assert.equal(again.changed, false);
+  });
+
+  it("strips == true from if/elseif conditions", () => {
+    const fixtures = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+    const before = readFileSync(
+      path.join(fixtures, "violations/no_equal_true_condition.xs"),
+      "utf8",
+    );
+    const after = readFileSync(
+      path.join(fixtures, "fixed/no_equal_true_condition.xs"),
+      "utf8",
+    );
+    const result = fixFile(
+      { path: "eq-true.xs", text: before },
+      config({ only_rules: ["no_equal_true_condition"] }),
+    );
+    assert.equal(result.changed, true);
+    assert.equal(result.text, after);
+    assert.equal(result.corrections[0]?.ruleId, "no_equal_true_condition");
+    const again = fixFile(
+      { path: "eq-true.xs", text: result.text },
+      config({ only_rules: ["no_equal_true_condition"] }),
+    );
+    assert.equal(again.changed, false);
+  });
+
+  it("does not strip == true on a multiline-string closer line", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    var $js {
+      value = """
+        if ($row.flag == true) """
+    }
+  }
+
+  response = $js
+}`;
+    const result = fixFile(
+      { path: "eq-true-closer.xs", text },
+      config({ only_rules: ["no_equal_true_condition"] }),
+    );
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
+    assert.match(result.text, /if \(\$row\.flag == true\) """/);
   });
 });
