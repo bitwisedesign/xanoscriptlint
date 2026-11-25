@@ -653,6 +653,30 @@ describe("built-in rules", () => {
     assert.equal(omitted.length, 1);
     assert.equal(omitted[0]?.message, bare[0]?.message);
 
+    const emptyAfterString = lintFile(
+      {
+        path: "after-string.xs",
+        text: wrapTestBlocks(`  test "rejects missing row" {
+    input = {id: 1}
+    expect.to_throw {
+      note = """
+        }
+        exception = "not_found"
+        """
+      exception = ""
+    }
+  }
+`),
+      },
+      config(opted),
+    ).filter((v) => v.ruleId === "no_empty_expect_throw");
+    assert.equal(emptyAfterString.length, 1);
+    assert.equal(emptyAfterString[0]?.line, 12);
+    assert.equal(
+      emptyAfterString[0]?.message,
+      'expect.to_throw with exception = "" passes on any error; set exception to the throw name or the precondition error string',
+    );
+
     const workflow = lintFile(
       { path: "wf.xs", text: EXPECT_THROW_EMPTY_WORKFLOW_XS },
       config(opted),
@@ -690,6 +714,16 @@ describe("built-in rules", () => {
       wrapTestBlocks(`  test "keeps extra properties" {
     expect.to_throw {
       description = "missing"
+      exception = "not_found"
+    }
+  }
+`),
+      wrapTestBlocks(`  test "ignores braces and exception text in a string" {
+    expect.to_throw {
+      note = """
+        }
+        exception = ""
+        """
       exception = "not_found"
     }
   }

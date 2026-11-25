@@ -31,11 +31,15 @@ function kindFromBody(body: string): ExceptionKind {
   return exceptionKind(match[1]);
 }
 
-function kindFromBlock(lines: string[], start: number): ExceptionKind | undefined {
+function kindFromBlock(
+  lines: string[],
+  start: number,
+  literals: ReadonlySet<number>,
+): ExceptionKind | undefined {
   let kind: "empty" | "ok" | undefined;
   for (let i = start; i < lines.length; i += 1) {
     const line = lines[i];
-    if (isBlankLine(line) || isCommentLine(line)) {
+    if (isBlankLine(line) || isCommentLine(line) || literals.has(i)) {
       continue;
     }
     if (CLOSER.test(line)) {
@@ -83,7 +87,7 @@ export const noEmptyExpectThrow: Rule = {
         if (oneLine !== null && oneLine[1] !== undefined) {
           kind = kindFromBody(oneLine[1]);
         } else if (OPENER.test(line)) {
-          kind = kindFromBlock(lines, i + 1);
+          kind = kindFromBlock(lines, i + 1, literals);
         }
       }
       const message = kind === undefined ? undefined : messageFor(kind);
