@@ -459,6 +459,18 @@ describe("fixture linting", () => {
     );
   });
 
+  it("committed no_empty_expect_throw fixture matches when that rule is opted in", () => {
+    const config = resolveConfig({ opt_in_rules: ["no_empty_expect_throw"] }, fixtures, null);
+    const expectThrow = {
+      path: path.join(fixtures, "violations/expect_throw_empty.xs"),
+      text: readFileSync(path.join(fixtures, "violations/expect_throw_empty.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([expectThrow], config).some((v) => v.ruleId === "no_empty_expect_throw"),
+      true,
+    );
+  });
+
   it("CLI lints a violations directory and exits 2", async () => {
     await withTempDir(async (dir) => {
       await writeXs(dir, ".xanoscriptlint.yml", "included:\n  - \"**/*.xs\"\n");

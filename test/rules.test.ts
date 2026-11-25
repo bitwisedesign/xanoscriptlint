@@ -67,6 +67,13 @@ import {
   EXPECT_EQUAL_NULL_ONE_LINE_XS,
   EXPECT_EQUAL_NULL_WORKFLOW_XS,
   EXPECT_EQUAL_NULL_XS,
+  EXPECT_THROW_BARE_XS,
+  EXPECT_THROW_CLEAN_XS,
+  EXPECT_THROW_EMPTY_BLOCK_XS,
+  EXPECT_THROW_EMPTY_BRACES_XS,
+  EXPECT_THROW_EMPTY_ONE_LINE_XS,
+  EXPECT_THROW_EMPTY_WORKFLOW_XS,
+  EXPECT_THROW_EMPTY_XS,
   BARE_TEST_NAME_XS,
   BARE_TEST_NAME_FIXED_XS,
   inlinePiped,
@@ -557,6 +564,216 @@ describe("built-in rules", () => {
         """`);
     const inTriple = lintFile({ path: "triple.xs", text: triple }, config(opted)).filter(
       (v) => v.ruleId === "no_expect_equal_null",
+    );
+    assert.equal(inTriple.length, 0);
+  });
+
+  it("no_empty_expect_throw is opt-in, defaults to error, and flags exception = \"\"", () => {
+    const off = lintFile({ path: "e.xs", text: EXPECT_THROW_EMPTY_XS }, config());
+    assert.equal(
+      off.some((v) => v.ruleId === "no_empty_expect_throw"),
+      false,
+    );
+
+    const hits = lintFile(
+      { path: "e.xs", text: EXPECT_THROW_EMPTY_XS },
+      config({ opt_in_rules: ["no_empty_expect_throw"] }),
+    ).filter((v) => v.ruleId === "no_empty_expect_throw");
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]?.severity, "error");
+    assert.equal(hits[0]?.line, 12);
+    assert.equal(hits[0]?.column, 5);
+    assert.equal(
+      hits[0]?.message,
+      'expect.to_throw with exception = "" passes on any error; set exception to the throw name or the precondition error string',
+    );
+
+    const warned = lintFile(
+      { path: "e.xs", text: EXPECT_THROW_EMPTY_XS },
+      config({ opt_in_rules: ["no_empty_expect_throw"], no_empty_expect_throw: "warning" }),
+    ).filter((v) => v.ruleId === "no_empty_expect_throw");
+    assert.equal(warned[0]?.severity, "warning");
+  });
+
+  it("no_empty_expect_throw flags one-line, bare, empty blocks, and workflow_test forms", () => {
+    const opted = { opt_in_rules: ["no_empty_expect_throw"] } as const;
+
+    const oneLine = lintFile(
+      { path: "one.xs", text: EXPECT_THROW_EMPTY_ONE_LINE_XS },
+      config(opted),
+    ).filter((v) => v.ruleId === "no_empty_expect_throw");
+    assert.equal(oneLine.length, 1);
+    assert.equal(oneLine[0]?.line, 12);
+    assert.equal(oneLine[0]?.column, 5);
+    assert.equal(
+      oneLine[0]?.message,
+      'expect.to_throw with exception = "" passes on any error; set exception to the throw name or the precondition error string',
+    );
+
+    const bare = lintFile(
+      { path: "bare.xs", text: EXPECT_THROW_BARE_XS },
+      config(opted),
+    ).filter((v) => v.ruleId === "no_empty_expect_throw");
+    assert.equal(bare.length, 1);
+    assert.equal(bare[0]?.line, 12);
+    assert.equal(bare[0]?.column, 5);
+    assert.equal(
+      bare[0]?.message,
+      "expect.to_throw without exception passes on any error; set exception to the throw name or the precondition error string",
+    );
+
+    const braces = lintFile(
+      { path: "braces.xs", text: EXPECT_THROW_EMPTY_BRACES_XS },
+      config(opted),
+    ).filter((v) => v.ruleId === "no_empty_expect_throw");
+    assert.equal(braces.length, 1);
+    assert.equal(braces[0]?.line, 12);
+    assert.equal(braces[0]?.message, bare[0]?.message);
+
+    const emptyBlock = lintFile(
+      { path: "block.xs", text: EXPECT_THROW_EMPTY_BLOCK_XS },
+      config(opted),
+    ).filter((v) => v.ruleId === "no_empty_expect_throw");
+    assert.equal(emptyBlock.length, 1);
+    assert.equal(emptyBlock[0]?.line, 12);
+    assert.equal(emptyBlock[0]?.message, bare[0]?.message);
+
+    const omitted = lintFile(
+      {
+        path: "omit.xs",
+        text: wrapTestBlocks(`  test "rejects missing row" {
+    expect.to_throw {
+      description = "missing"
+    }
+  }
+`),
+      },
+      config(opted),
+    ).filter((v) => v.ruleId === "no_empty_expect_throw");
+    assert.equal(omitted.length, 1);
+    assert.equal(omitted[0]?.message, bare[0]?.message);
+
+    const emptyAfterString = lintFile(
+      {
+        path: "after-string.xs",
+        text: wrapTestBlocks(`  test "rejects missing row" {
+    input = {id: 1}
+    expect.to_throw {
+      note = """
+        }
+        exception = "not_found"
+        """
+      exception = ""
+    }
+  }
+`),
+      },
+      config(opted),
+    ).filter((v) => v.ruleId === "no_empty_expect_throw");
+    assert.equal(emptyAfterString.length, 1);
+    assert.equal(emptyAfterString[0]?.line, 12);
+    assert.equal(
+      emptyAfterString[0]?.message,
+      'expect.to_throw with exception = "" passes on any error; set exception to the throw name or the precondition error string',
+    );
+
+    const workflow = lintFile(
+      { path: "wf.xs", text: EXPECT_THROW_EMPTY_WORKFLOW_XS },
+      config(opted),
+    ).filter((v) => v.ruleId === "no_empty_expect_throw");
+    assert.equal(workflow.length, 1);
+    assert.equal(workflow[0]?.line, 7);
+  });
+
+  it("no_empty_expect_throw skips pinned exceptions, comments, and string literals", () => {
+    const opted = { opt_in_rules: ["no_empty_expect_throw"] } as const;
+
+    const skipped = [
+      wrapTestBlocks(`  test "pins throw name" {
+    expect.to_throw {
+      exception = "not_found"
+    }
+  }
+`),
+      wrapTestBlocks(`  test "pins variable" {
+    expect.to_throw {
+      exception = $expected
+    }
+  }
+`),
+      wrapTestBlocks(`  test "pins expression" {
+    expect.to_throw {
+      exception = "missing: "|concat:$id
+    }
+  }
+`),
+      wrapTestBlocks(`  test "one-line pin" {
+    expect.to_throw { exception = "not_found" }
+  }
+`),
+      wrapTestBlocks(`  test "keeps extra properties" {
+    expect.to_throw {
+      description = "missing"
+      exception = "not_found"
+    }
+  }
+`),
+      wrapTestBlocks(`  test "ignores braces and exception text in a string" {
+    expect.to_throw {
+      note = """
+        }
+        exception = ""
+        """
+      exception = "not_found"
+    }
+  }
+`),
+      EXPECT_THROW_CLEAN_XS,
+    ];
+    for (const text of skipped) {
+      const hits = lintFile({ path: "ok.xs", text }, config(opted)).filter(
+        (v) => v.ruleId === "no_empty_expect_throw",
+      );
+      assert.equal(hits.length, 0, text);
+    }
+
+    const commented = lintFile(
+      {
+        path: "c.xs",
+        text: wrapTestBlocks(`  test "commented" {
+    // expect.to_throw {
+    //   exception = ""
+    // }
+    // expect.to_throw
+  }
+`),
+      },
+      config(opted),
+    );
+    assert.equal(
+      commented.some((v) => v.ruleId === "no_empty_expect_throw"),
+      false,
+    );
+
+    const fenced = wrapMockBlock(`        "checkout scenario": \`\`\`
+          expect.to_throw {
+            exception = ""
+          }
+          expect.to_throw
+          \`\`\``);
+    const inFence = lintFile({ path: "fence.xs", text: fenced }, config(opted)).filter(
+      (v) => v.ruleId === "no_empty_expect_throw",
+    );
+    assert.equal(inFence.length, 0);
+
+    const triple = wrapVarValue(`"""
+        expect.to_throw {
+          exception = ""
+        }
+        expect.to_throw
+        """`);
+    const inTriple = lintFile({ path: "triple.xs", text: triple }, config(opted)).filter(
+      (v) => v.ruleId === "no_empty_expect_throw",
     );
     assert.equal(inTriple.length, 0);
   });

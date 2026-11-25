@@ -22,6 +22,7 @@ export function formattingOptInRules(): string[] {
         !rule.defaultEnabled &&
         rule.id !== "no_null_response" &&
         rule.id !== "no_expect_equal_null" &&
+        rule.id !== "no_empty_expect_throw" &&
         rule.id !== "indentation" &&
         rule.id !== "separator_indentation" &&
         rule.id !== "statement_spacing" &&
@@ -469,6 +470,65 @@ export const EXPECT_EQUAL_NULL_CLEAN_XS = wrapTestBlocks(`  test "omits coupon w
     expect.to_be_null ($response.deleted_at)
     expect.to_be_defined ($response.shipped_at)
     expect.to_not_be_null ($response.created_at)
+  }
+`);
+
+export const EXPECT_THROW_EMPTY_XS = wrapTestBlocks(`  test "rejects missing row" {
+    input = {id: 1}
+    expect.to_throw {
+      exception = ""
+    }
+  }
+`);
+
+export const EXPECT_THROW_EMPTY_ONE_LINE_XS = wrapTestBlocks(`  test "rejects missing row" {
+    input = {id: 1}
+    expect.to_throw { exception = "" }
+  }
+`);
+
+export const EXPECT_THROW_BARE_XS = wrapTestBlocks(`  test "rejects missing row" {
+    input = {id: 1}
+    expect.to_throw
+  }
+`);
+
+export const EXPECT_THROW_EMPTY_BRACES_XS = wrapTestBlocks(`  test "rejects missing row" {
+    input = {id: 1}
+    expect.to_throw {}
+  }
+`);
+
+export const EXPECT_THROW_EMPTY_BLOCK_XS = wrapTestBlocks(`  test "rejects missing row" {
+    input = {id: 1}
+    expect.to_throw {
+    }
+  }
+`);
+
+export const EXPECT_THROW_EMPTY_WORKFLOW_XS = `workflow_test "checkout rejects unpaid cart" {
+  stack {
+    api.call checkout/pay verb=POST {
+      input = {id: 1}
+    } as $endpoint1
+
+    expect.to_throw {
+      exception = ""
+    }
+  }
+}`;
+
+export const EXPECT_THROW_CLEAN_XS = wrapTestBlocks(`  test "rejects missing row" {
+    input = {id: 1}
+    expect.to_throw {
+      exception = "not_found"
+    }
+    expect.to_throw {
+      exception = $expected
+    }
+    expect.to_throw {
+      exception = "missing: "|concat:$id
+    }
   }
 `);
 

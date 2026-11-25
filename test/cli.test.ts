@@ -75,6 +75,7 @@ describe("cli", () => {
     assert.match(stdout.text(), /empty_function_run/);
     assert.match(stdout.text(), /no_reserved_var/);
     assert.match(stdout.text(), /no_expect_equal_null/);
+    assert.match(stdout.text(), /no_empty_expect_throw/);
     assert.match(stdout.text(), /transaction_boundaries/);
     assert.match(stdout.text(), /transaction_locks/);
     assert.match(stdout.text(), /transaction_stale_reads/);
