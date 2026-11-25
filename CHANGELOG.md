@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-25
+
 ### Added
 
 - Opt-in `no_empty_expect_throw` flags `expect.to_throw` with `exception = ""` or with no `exception` (error). Pin `exception` to the `throw` name or the `precondition` error string. There is no auto-fix.
