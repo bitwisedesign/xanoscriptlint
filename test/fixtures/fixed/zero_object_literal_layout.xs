@@ -13,7 +13,7 @@ function "example" {
       value = {allowed: false, used: 0, limit: 30}|set:"window_seconds":600|set:"retry_after_seconds":0
     }
     var $oneline_64 {
-      value = {lead: 0, next: 30}|set:"tail":"xxxxxxxxxxxxxxxxxxxxx"
+      value = {lead: 0, next: 30}|set:"tail":"xxxxxxxxxxxxxxxxxxxxxxxxxx"
     }
     var $zero_dot {
       value = {lead: 0.0, next: 30}
@@ -22,7 +22,7 @@ function "example" {
       value = {lead: 0}|set:"items":["xxxxxxxxxxxxxxxxxxxxxxxxxxx"]|set:"next":30
     }
     var $input_key {
-      value = {id: $input.key, used: 0}|set:"extra":"xxxxxxxxxxxxxx"
+      value = {id: $input.key, used: 0}|set:"extra":"xxxxxxxxxxxxxxxxxxx"
     }
     var $filter_field {
       value = {

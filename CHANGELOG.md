@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Opt-in `no_empty_expect_throw` flags `expect.to_throw` with `exception = ""` or with no `exception` (error). Pin `exception` to the `throw` name or the `precondition` error string. There is no auto-fix.
+- Opt-in `wrap_assignment_objects` flags an inline `input` / `value` / `data` / `response` / `mock` object whose JSON width is 64 or more (warning). Auto-fix writes one entry per line with aligned colons, nested values inline, and a sibling separator after `}` when needed. `expect.*`, `sort`, pipes, and `var` / `var.update` objects owned by `zero_object_literal_layout` are skipped. The cutoff is configurable with `wrap_at`.
+- Opt-in `wrap_index_entries` flags a table `index` entry, or a `field` array inside a wrapped entry, that is inline at constant JSON width 64 or more or wrapped below that (warning). Auto-fix rewrites the item to Xano's push form. The cutoff is configurable with `wrap_at`.
+- Opt-in `no_equal_true_condition` flags `$path == true` in `if` / `elseif` conditions (warning). Auto-fix drops `== true` and the space before it. `===`, `!` prefixes, filters, `== false`, `!= true`, `where` / `value =` expressions, and fence / `"""` bodies are skipped.
+
+### Changed
+
+- `collapse_assignment_values` measures `input` / `value` / `data` / `response` / `mock` objects by PHP `json_encode` length of the stored value (expression text, with `/` escaped and non-ASCII as `\uXXXX`) instead of reconstructed line length. Other assignments keep the line-length measure.
+- `zero_object_literal_layout` uses that JSON width for `var` / `var.update` wrap and seed checks. `expect.*` still uses reconstructed line length.
 
 ## [0.10.0] - 2026-11-23
 

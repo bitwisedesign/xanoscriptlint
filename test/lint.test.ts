@@ -145,6 +145,33 @@ describe("fixture linting", () => {
       true,
     );
 
+    const wrapAssignObjects = {
+      path: path.join(fixtures, "violations/wrap_assignment_objects.xs"),
+      text: readFileSync(path.join(fixtures, "violations/wrap_assignment_objects.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([wrapAssignObjects], config).some((v) => v.ruleId === "wrap_assignment_objects"),
+      true,
+    );
+
+    const wrapIndexEntries = {
+      path: path.join(fixtures, "violations/wrap_index_entries.xs"),
+      text: readFileSync(path.join(fixtures, "violations/wrap_index_entries.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([wrapIndexEntries], config).some((v) => v.ruleId === "wrap_index_entries"),
+      true,
+    );
+
+    const equalTrue = {
+      path: path.join(fixtures, "violations/no_equal_true_condition.xs"),
+      text: readFileSync(path.join(fixtures, "violations/no_equal_true_condition.xs"), "utf8"),
+    };
+    assert.equal(
+      lintFiles([equalTrue], config).some((v) => v.ruleId === "no_equal_true_condition"),
+      true,
+    );
+
     const tagsPlacement = {
       path: path.join(fixtures, "violations/tags_placement.xs"),
       text: readFileSync(path.join(fixtures, "violations/tags_placement.xs"), "utf8"),

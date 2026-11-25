@@ -2,8 +2,14 @@ import { isSuppressed, parseSuppressions } from "../suppress.js";
 import { joinLineRecords, splitLineRecords } from "./line_records.js";
 import type { LineRecord } from "./line_records.js";
 import type { Rule, RuleOptions, SourceFile, Violation } from "./types.js";
+import { startsPipeLine } from "./pipe_chains.js";
 import { DEFAULT_WRAP_AT, enumValuesOpenLines } from "./wrap_enum_values.js";
 import { tagsOpenLines } from "./wrap_tags_values.js";
+import {
+  enclosingStatement,
+  expressionObjectWidth,
+  isExpressionObjectOwner,
+} from "./xano_json_width.js";
 
 const COMPOUND_EQ = "!<>=+*/-";
 
@@ -19,7 +25,7 @@ export type Node =
 
 type ContainerNode = Extract<Node, { kind: "object" | "array" }>;
 
-interface AssignmentSite {
+export interface AssignmentSite {
   kind: "inline" | "multiline";
   owner: string;
   openLine: number;
@@ -374,12 +380,16 @@ function lineHasTab(lines: string[], startLine: number, endLine: number): boolea
   return false;
 }
 
-function isPiped(text: string, end: number): boolean {
+function isPiped(text: string, end: number, lines: string[], closeLine: number): boolean {
   let i = end;
   while (i < text.length && (text[i] === " " || text[i] === "\t")) {
     i += 1;
   }
-  return text[i] === "|";
+  if (text[i] === "|") {
+    return text[i + 1] !== "|";
+  }
+  const next = lines[closeLine + 1];
+  return next !== undefined && startsPipeLine(next);
 }
 
 export function skipSpan(text: string, start: number, closer: string): number | null {
@@ -387,7 +397,7 @@ export function skipSpan(text: string, start: number, closer: string): number | 
   return end === -1 ? null : end + closer.length;
 }
 
-function findAssignmentSites(lines: string[]): AssignmentSite[] {
+export function findAssignmentSites(lines: string[]): AssignmentSite[] {
   const text = lines.join("\n");
   const enumLines = enumValuesOpenLines(lines);
   const tagLines = tagsOpenLines(lines);
@@ -443,7 +453,7 @@ function findAssignmentSites(lines: string[]): AssignmentSite[] {
             lineLength:
               byteLength(prefix) + byteLength(renderInline(node)) + byteLength(trailing),
             hasTab: lineHasTab(lines, open.line, close.line),
-            piped: isPiped(text, node.end),
+            piped: isPiped(text, node.end, lines, close.line),
             node,
           });
           i = node.end;
@@ -456,8 +466,15 @@ function findAssignmentSites(lines: string[]): AssignmentSite[] {
   return sites.filter((site) => !enumLines.has(site.openLine) && !tagLines.has(site.openLine));
 }
 
-function eligible(site: AssignmentSite): boolean {
+export function assignmentSiteEligible(site: AssignmentSite): boolean {
   return !site.hasTab && !site.piped;
+}
+
+export function usesExpressionJsonWidth(site: AssignmentSite, lines: string[]): boolean {
+  return (
+    site.node.kind === "object" &&
+    isExpressionObjectOwner(site.owner, enclosingStatement(lines, site.openLine))
+  );
 }
 
 function violationsFor(
@@ -469,10 +486,24 @@ function violationsFor(
   const wrapAt = wrapThreshold(options);
   const violations: Violation[] = [];
   for (const site of findAssignmentSites(lines)) {
-    if (!eligible(site)) {
+    if (!assignmentSiteEligible(site) || site.kind !== "multiline") {
       continue;
     }
-    if (site.kind === "multiline" && site.lineLength < wrapAt) {
+    if (usesExpressionJsonWidth(site, lines)) {
+      const width = expressionObjectWidth(site.node, "upper");
+      if (width < wrapAt) {
+        violations.push({
+          ruleId: collapseAssignmentValues.id,
+          message: `${site.owner} object of JSON width ${width} must be inline (threshold ${wrapAt})`,
+          severity,
+          file: file.path,
+          line: site.openLine + 1,
+          column: site.openCol + 1,
+        });
+      }
+      continue;
+    }
+    if (site.lineLength < wrapAt) {
       violations.push({
         ruleId: collapseAssignmentValues.id,
         message: `${site.owner} value of line length ${site.lineLength} must be inline (threshold ${wrapAt})`,
@@ -497,7 +528,7 @@ function collapseSite(records: LineRecord[], site: AssignmentSite): boolean {
 export const collapseAssignmentValues: Rule = {
   id: "collapse_assignment_values",
   description:
-    "Assignment objects and arrays collapse to one line when that line would be shorter than 64 (Xano rewrites this on push)",
+    "Assignment objects collapse when JSON width is under 64; other assignments collapse when the one-line form is under 64 UTF-8 bytes (Xano rewrites this on push)",
   defaultEnabled: false,
   defaultSeverity: "warning",
   numericOptions: ["wrap_at"],
@@ -520,7 +551,7 @@ export const collapseAssignmentValues: Rule = {
     const records = splitLineRecords(file.text);
     const lines = records.map((record) => record.content);
     const sites = findAssignmentSites(lines)
-      .filter((site) => eligible(site) && rewriteLines.has(site.openLine + 1))
+      .filter((site) => assignmentSiteEligible(site) && rewriteLines.has(site.openLine + 1))
       .sort((a, b) => b.openLine - a.openLine);
     let changed = false;
     for (const site of sites) {

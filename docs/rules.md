@@ -3,13 +3,14 @@
 | Id | Default | Severity | Auto-fix | Description |
 | --- | --- | --- | --- | --- |
 | [`align_object_colons`](#align_object_colons) | opt-in | warning | yes | Object entry colons must align to the longest name |
-| [`collapse_assignment_values`](#collapse_assignment_values) | opt-in | warning | yes | Wrapped assignment whose one-line form is under 64 UTF-8 bytes |
+| [`collapse_assignment_values`](#collapse_assignment_values) | opt-in | warning | yes | Wrapped `input`/`value`/`data`/`response`/`mock` object whose JSON width is under 64, or other wrapped assignment whose one-line form is under 64 UTF-8 bytes |
 | [`empty_function_run`](#empty_function_run) | on | error | no | `function.run` must not be called with an empty name |
 | [`fence_multiline_values`](#fence_multiline_values) | opt-in | warning | yes | Multiline mock and input values must be fenced; a one-line fence body is unfenced |
 | [`guid_placement`](#guid_placement) | opt-in | warning | yes | `guid` needs a blank line above it only when it follows a block closer |
 | [`indentation`](#indentation) | opt-in | warning | yes | Code uses two spaces per nesting level; a wrapped filter pipeline sits at its opener's indent plus two |
 | [`lock_placement`](#lock_placement) | opt-in | warning | yes | `lock` sits immediately after `field_value` in `db.get`, or first in `db.query` |
 | [`no_empty_expect_throw`](#no_empty_expect_throw) | opt-in | error | no | `expect.to_throw` with `exception = ""` or with no `exception` passes on any error |
+| [`no_equal_true_condition`](#no_equal_true_condition) | opt-in | warning | yes | `$path == true` in `if` / `elseif` is stripped on push |
 | [`no_expect_equal_null`](#no_expect_equal_null) | opt-in | error | no | `expect.to_equal` / `expect.to_not_equal` with `value = null` is verbose; use a dedicated assertion |
 | [`no_null_response`](#no_null_response) | opt-in | warning | yes | Do not assign `response = null` |
 | [`no_reserved_var`](#no_reserved_var) | on | error | no | Do not declare a reserved variable name |
@@ -27,7 +28,9 @@
 | [`unquote_bare_test_names`](#unquote_bare_test_names) | opt-in | warning | yes | Quoted `test` names and top-level `mock` keys with no spaces must be unquoted |
 | [`unquote_enum_defaults`](#unquote_enum_defaults) | opt-in | warning | yes | Quoted enum defaults that are bare identifiers must be unquoted |
 | [`wrap_assignment_arrays`](#wrap_assignment_arrays) | opt-in | warning | yes | Assignment string arrays wrap when compact JSON length reaches 64 |
+| [`wrap_assignment_objects`](#wrap_assignment_objects) | opt-in | warning | yes | `input`/`value`/`data`/`response`/`mock` objects wrap when JSON width reaches 64 |
 | [`wrap_enum_values`](#wrap_enum_values) | opt-in | warning | yes | Enum `values` arrays wrap when compact JSON length reaches 64 |
+| [`wrap_index_entries`](#wrap_index_entries) | opt-in | warning | yes | Table `index` entries and their `field` arrays wrap at constant JSON width 64 |
 | [`wrap_piped_values`](#wrap_piped_values) | opt-in | warning | yes | Assignment filter pipelines wrap at pipe length 34 or 3+ filters; a grouped base stays inline |
 | [`wrap_tags_values`](#wrap_tags_values) | opt-in | warning | yes | Declaration `tags` arrays wrap when compact JSON length reaches 64 |
 | [`zero_object_literal_layout`](#zero_object_literal_layout) | opt-in | error | yes | `var` / `var.update` / `expect` `value` object that Xano will fence because a `0` is followed by another key |
@@ -64,9 +67,11 @@ Auto-fixable with `--fix`: spaces before the colon are inserted or removed until
 
 Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
 
-Xano collapses an assignment's object or array onto one line when that line — indent, the `name =` or `return` prefix, and the inline value — would be shorter than 64 UTF-8 bytes. A wrapped value that already fills 64 or more bytes stays wrapped. Long one-liners are left as-is, except string-only assignment arrays, which [`wrap_assignment_arrays`](#wrap_assignment_arrays) expands at compact JSON length 64.
+Xano collapses an assignment's object or array onto one line when the stored form is shorter than 64. For `input`, `value`, `data`, `response`, and `mock` objects (not `expect.*`), that measure is the PHP `json_encode` length of the stored value. Each object value is stored as its expression text, so a string literal is encoded twice, `/` becomes `\/`, and non-ASCII characters become `\uXXXX`. Indent is ignored. The rule collapses when an upper encoding of that JSON is below 64. Nested containers are less exact (nested keys quoted or not, nested scalars encoded once or twice); the rule acts only when that upper bound is under the cutoff, which leaves ambiguous nested objects alone.
 
-The threshold is the reconstructed line's UTF-8 byte length, not visible columns and not the number of entries. Multi-byte characters count as more than one: `{Authorization: "••••••••••••"}` is 31 characters and 55 bytes, while the reconstructed line — six spaces of indent plus `value = {Authorization: "••••••••••••"}` — is 45 characters and 69 bytes, so a wrapped form of that value stays wrapped. In the same pull Xano left a 69-byte sibling inline (`value = {"X-Signature": "••••••••••••"}`), so this rule only flags wrapped → inline; it does not expand long one-liners. Nested containers are left as-is: only the outermost `name = { ... }` / `name = [ ... ]` / `return { ... }` is checked. Enum `values` arrays are owned by [`wrap_enum_values`](#wrap_enum_values). Declaration `tags` arrays are owned by [`wrap_tags_values`](#wrap_tags_values). String-only assignment arrays such as `output` and `value` are expanded by [`wrap_assignment_arrays`](#wrap_assignment_arrays). A container followed by a filter pipe (`value = [...]|join:"/"`) is skipped, because Xano does not reformat those.
+Other assignments — `return`, `sort`, `db.query` `return`, arrays — still use the reconstructed line's UTF-8 byte length: indent, the `name =` or `return` prefix, and the inline value. A wrapped value that already fills 64 or more stays wrapped. Multi-byte characters count as more than one on that path: `{Authorization: "••••••••••••"}` is 31 characters and 55 bytes, while six spaces of indent plus `value = {Authorization: "••••••••••••"}` is 69 bytes, so a wrapped form of an out-of-scope owner stays wrapped.
+
+Long one-liners of in-scope objects are expanded by [`wrap_assignment_objects`](#wrap_assignment_objects). String-only assignment arrays are expanded by [`wrap_assignment_arrays`](#wrap_assignment_arrays). Nested containers inside a collapsed value stay inline. Enum `values` arrays are owned by [`wrap_enum_values`](#wrap_enum_values). Declaration `tags` arrays are owned by [`wrap_tags_values`](#wrap_tags_values). Table `index` entries are owned by [`wrap_index_entries`](#wrap_index_entries). A container followed by a filter pipe (`value = [...]|join:"/"`) is skipped, because Xano does not reformat those.
 
 ```xs
 input = {event_type: "manual", unit: "sets", delta: 3}
@@ -284,6 +289,30 @@ expect.to_throw {
 ```
 
 Comment lines, the bodies of `"""` strings and triple-backtick fences, and a non-empty `exception` (`"not_found"`, `$error`, an expression) are ignored. A block that has other properties but no `exception` is still flagged.
+
+## no_equal_true_condition
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
+
+Xano strips `$path == true` from `if (...)` and `elseif (...)` conditions on push, leaving the path alone. `== false` and `!= true` are kept.
+
+The comparison must be a plain `$` path, bounded by `(`, `&&`, `||`, or `)`. `===`, a `!` prefix, a filter on the path (`$row.flag|is_bool == true`), `where` / `value =` expressions, and bodies of `"""` strings or triple-backtick fences (JavaScript lambdas) are left alone.
+
+```xs
+if ($row.is_active == true) {
+  var $ok {
+    value = 1
+  }
+}
+
+if ($row.is_active) {
+  var $ok {
+    value = 1
+  }
+}
+```
+
+Auto-fixable with `--fix`: `== true` and the space before it are dropped, so `if ($row.is_active == true)` becomes `if ($row.is_active)`.
 
 ## no_expect_equal_null
 
@@ -843,6 +872,36 @@ wrap_assignment_arrays:
   wrap_at: 64
 ```
 
+## wrap_assignment_objects
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
+
+Xano wraps an `input`, `value`, `data`, `response`, or `mock` object when the PHP `json_encode` length of the stored value is 64 or more. Each value is stored as its expression text, so a string literal is encoded twice, `/` becomes `\/`, and non-ASCII characters become `\uXXXX`. Indent is ignored. The rule flags an inline object whose lower encoding bound is at least 64. Nested containers are less exact; when the lower bound is under the cutoff the object stays inline.
+
+`expect.*` objects, `sort`, `db.query` `return`, piped values, tabs, comments, fences, and `var` / `var.update` objects owned by [`zero_object_literal_layout`](#zero_object_literal_layout) (a `0` followed by another key) are skipped. Already-wrapped objects are left to [`collapse_assignment_values`](#collapse_assignment_values).
+
+```xs
+input = {k: "short"}
+
+input = {
+  user_id: $record.user_id
+  reason : "too_long_for_one_line"
+}
+
+mock = {ok: 1}
+```
+
+The wrapped form has no commas between entries. Auto-fix writes one entry per line at the opener's indent plus 2, aligns colons to the longest key, keeps nested values inline, and puts `}` at the opener's indent. When the next line is a sibling statement — not blank and not a closer (`}` or `} as $x`) — a whitespace-only separator is inserted after `}`, at the opener's indent minus 2, matching [`separator_indentation`](#separator_indentation).
+
+Keep `wrap_at` in sync with [`collapse_assignment_values`](#collapse_assignment_values). If this rule's cutoff is lower, that rule can fold the wrapped form back onto one line.
+
+Override the cutoff with `wrap_at` (a positive integer, default 64):
+
+```yaml
+wrap_assignment_objects:
+  wrap_at: 64
+```
+
 ## wrap_enum_values
 
 Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
@@ -881,6 +940,38 @@ Override the cutoff with `wrap_at` (a positive integer, default 64):
 
 ```yaml
 wrap_enum_values:
+  wrap_at: 64
+```
+
+## wrap_index_entries
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is warning.
+
+Xano wraps a table `index = [...]` entry when the constant JSON form of that entry is 64 characters or longer, and collapses it when the form is shorter. Strings are encoded once (`{"type":"btree","field":[{"name":"id","op":"asc"}]}`). The `field` array inside a wrapped entry uses the same cutoff. `{name, op}` objects inside `field` stay inline.
+
+```xs
+index = [
+  {type: "primary", field: [{name: "id"}]}
+  {
+    type : "btree|unique"
+    field: [{name: "account_code", op: "asc"}]
+  }
+  {
+    type : "btree"
+    field: [
+      {name: "created_at", op: "desc"}
+      {name: "region_code", op: "asc"}
+    ]
+  }
+]
+```
+
+The wrapped form has no commas between entries. Auto-fix rewrites the whole index item: `type` / `field` colons aligned to the longest key, and `field` items one per line when that array's JSON width is at least 64.
+
+Override the cutoff with `wrap_at` (a positive integer, default 64):
+
+```yaml
+wrap_index_entries:
   wrap_at: 64
 ```
 
@@ -966,7 +1057,7 @@ Xano evaluates a code-fenced object as expression text, not as a native object. 
 The rule flags a `value =` assignment inside `var`, `var.update`, or `expect.<matcher>` when:
 
 - the value is a triple-backtick fence whose body is an object (first non-blank character is `{`), whether or not it contains a `0`
-- or the value is a native object whose top-level fields include a `0` / `0.0` followed by another field, and the object is multiline or its one-line form is 64 bytes or longer (same measure as [`collapse_assignment_values`](#collapse_assignment_values): indent + `value =` + inline object)
+- or the value is a native object whose top-level fields include a `0` / `0.0` followed by another field, and the object is multiline or its stored form is 64 or longer. `var` / `var.update` use the same JSON width as [`collapse_assignment_values`](#collapse_assignment_values) (PHP `json_encode` of expression text). `expect.*` still uses reconstructed line length (indent + `value =` + inline object)
 
 Do not flag `mock =` or test `input =` (owned by [`fence_multiline_values`](#fence_multiline_values)), a fenced array or non-object expression, a native object whose only `0` is its last top-level field, a `0` inside a nested object, a one-line object under 64 bytes, or `data =` / `response =` / `settings =` / any other owner.
 
@@ -976,7 +1067,7 @@ var $result {
 }
 ```
 
-Auto-fixable with `--fix` on `var` and `var.update` only. When the whole object fits on one line under 64 bytes, it is inlined (the form that stays unfenced). Otherwise the value becomes a one-line seed of leading scalar / plain-variable fields that stays under 64 bytes, then a `|set:` chain for the rest in key order. List and object literals always go onto `|set:`. If a field that would move contains a filter, ternary, or operator, or its key contains a `.` (which `|set:` would treat as a nested path), the value is reported and left alone. A native object that contains comments is reported and left alone until the fixer can keep those comments. Already-quoted keys keep their original escapes. A fenced body that does not parse as an object is reported and left alone. The chain uses the layout [`wrap_piped_values`](#wrap_piped_values) produces, so a non-empty seed stays inline and an empty `{}` seed wraps when that rule would wrap. `expect.*` is reported only; an expect cannot take `|set:`.
+Auto-fixable with `--fix` on `var` and `var.update` only. When the whole object's JSON width is under 64, it is inlined (the form that stays unfenced). Otherwise the value becomes a one-line seed of leading scalar / plain-variable fields that stays under 64, then a `|set:` chain for the rest in key order. List and object literals always go onto `|set:`. If a field that would move contains a filter, ternary, or operator, or its key contains a `.` (which `|set:` would treat as a nested path), the value is reported and left alone. A native object that contains comments is reported and left alone until the fixer can keep those comments. Already-quoted keys keep their original escapes. A fenced body that does not parse as an object is reported and left alone. The chain uses the layout [`wrap_piped_values`](#wrap_piped_values) produces, so a non-empty seed stays inline and an empty `{}` seed wraps when that rule would wrap. `expect.*` is reported only; an expect cannot take `|set:`.
 
 ## Team-specific rules
 

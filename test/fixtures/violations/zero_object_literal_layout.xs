@@ -30,7 +30,7 @@ function "example" {
       }
     }
     var $oneline_64 {
-      value = {lead: 0, next: 30, tail: "xxxxxxxxxxxxxxxxxxxxx"}
+      value = {lead: 0, next: 30, tail: "xxxxxxxxxxxxxxxxxxxxxxxxxx"}
     }
     var $zero_dot {
       value = {
@@ -49,7 +49,7 @@ function "example" {
       value = {
         id   : $input.key
         used : 0
-        extra: "xxxxxxxxxxxxxx"
+        extra: "xxxxxxxxxxxxxxxxxxx"
       }
     }
     var $filter_field {

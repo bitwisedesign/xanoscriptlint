@@ -4,7 +4,7 @@ function "example" {
 
   stack {
     var $short_oneline {
-      value = {lead: 0, next: 30, tail: "xxxxxxxxxxxxxxxxxxxx"}
+      value = {lead: 0, next: 30, tail: "xxxxxxxxxxxxxxxxxxxxxxxxx"}
     }
     var $zero_last {
       value = {
