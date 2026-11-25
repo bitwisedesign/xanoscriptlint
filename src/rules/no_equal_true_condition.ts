@@ -1,7 +1,6 @@
 import { isSuppressed, parseSuppressions } from "../suppress.js";
 import { isCommentLine } from "../util.js";
 import { joinLineRecords, splitLineRecords } from "./line_records.js";
-import { literalLines } from "./numeric_declarations.js";
 import { skipQuoted } from "./pipe_chains.js";
 import type { Rule, RuleOptions, SourceFile, Violation } from "./types.js";
 
@@ -82,15 +81,68 @@ function findHits(line: string): Omit<EqualTrueHit, "line">[] {
   return hits;
 }
 
-function findLineHits(lines: string[]): EqualTrueHit[] {
-  const literals = literalLines(lines);
-  const hits: EqualTrueHit[] = [];
-  for (let line = 0; line < lines.length; line += 1) {
-    if (literals.has(line)) {
+function indexOutsideQuotes(line: string, token: string): number {
+  let col = 0;
+  while (col < line.length) {
+    const ch = line[col];
+    if (ch === "/" && line[col + 1] === "/") {
+      return -1;
+    }
+    if (line.startsWith(token, col)) {
+      return col;
+    }
+    if (ch === '"' || ch === "'") {
+      const end = skipQuoted(line, col, ch);
+      if (end === null) {
+        return -1;
+      }
+      col = end;
       continue;
     }
-    for (const hit of findHits(lines[line] ?? "")) {
-      hits.push({ line, ...hit });
+    col += 1;
+  }
+  return -1;
+}
+
+function lineOpensMultiline(line: string): "fence" | "triple" | null {
+  const fenceAt = indexOutsideQuotes(line, "```");
+  const tripleAt = indexOutsideQuotes(line, '"""');
+  if (fenceAt === -1 && tripleAt === -1) {
+    return null;
+  }
+  if (tripleAt !== -1 && (fenceAt === -1 || tripleAt < fenceAt)) {
+    return line.indexOf('"""', tripleAt + 3) === -1 ? "triple" : null;
+  }
+  return line.indexOf("```", fenceAt + 3) === -1 ? "fence" : null;
+}
+
+function findLineHits(lines: string[]): EqualTrueHit[] {
+  const hits: EqualTrueHit[] = [];
+  let mode: "code" | "fence" | "triple" = "code";
+  for (let line = 0; line < lines.length; line += 1) {
+    const text = lines[line] ?? "";
+    let scanStart = 0;
+    if (mode !== "code") {
+      const closer = mode === "fence" ? "```" : '"""';
+      const closeAt = text.indexOf(closer);
+      if (closeAt === -1) {
+        continue;
+      }
+      mode = "code";
+      scanStart = closeAt + closer.length;
+    }
+    const scan = text.slice(scanStart);
+    for (const hit of findHits(scan)) {
+      hits.push({
+        line,
+        column: hit.column + scanStart,
+        start: hit.start + scanStart,
+        end: hit.end + scanStart,
+      });
+    }
+    const opened = lineOpensMultiline(scan);
+    if (opened !== null) {
+      mode = opened;
     }
   }
   return hits;

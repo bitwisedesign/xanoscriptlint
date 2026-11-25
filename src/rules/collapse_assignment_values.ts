@@ -473,7 +473,7 @@ export function assignmentSiteEligible(site: AssignmentSite): boolean {
 export function usesExpressionJsonWidth(site: AssignmentSite, lines: string[]): boolean {
   return (
     site.node.kind === "object" &&
-    isExpressionObjectOwner(site.owner, enclosingStatement(lines, site.openLine))
+    isExpressionObjectOwner(site.owner, enclosingStatement(lines, site.openLine, site.openCol))
   );
 }
 

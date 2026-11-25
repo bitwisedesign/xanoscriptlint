@@ -30,7 +30,7 @@ function zeroOwned(site: AssignmentSite, lines: string[]): boolean {
   if (site.owner !== "value" || site.node.kind !== "object" || !hasZeroFollowedByKey(site.node)) {
     return false;
   }
-  const context = enclosingStatement(lines, site.openLine);
+  const context = enclosingStatement(lines, site.openLine, site.openCol);
   return context.startsWith("var ") || context.startsWith("var.update");
 }
 

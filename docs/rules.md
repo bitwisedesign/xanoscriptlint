@@ -1052,14 +1052,14 @@ wrap_tags_values:
 
 Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is error.
 
-Xano evaluates a code-fenced object as expression text, not as a native object. When a top-level field is a numeric `0` (or `0.0`, which Xano rewrites to `0`) followed by another field, the fenced value drops keys: `{lead: 0, next: 30, tail: "end"}` becomes `{lead: null, tail: "end"}`. Xano also *creates* that fence. A multiline `value = {…}` whose top-level fields include a `0` followed by another field is stored fenced on push. A one-line object of 64 UTF-8 bytes or longer is rewritten to a native multiline object on push writeback, then fenced on the next push. A one-line object under 64 bytes stays one line. `|set:` of a literal `0` writes the field correctly.
+Xano evaluates a code-fenced object as expression text, not as a native object. When a top-level field is a numeric `0` (or `0.0`, which Xano rewrites to `0`) followed by another field, the fenced value drops keys: `{lead: 0, next: 30, tail: "end"}` becomes `{lead: null, tail: "end"}`. Xano also *creates* that fence. A multiline `value = {…}` whose top-level fields include a `0` followed by another field is stored fenced on push. For `var` / `var.update`, a one-line object whose stored JSON width is 64 or more is rewritten to a native multiline object on push writeback, then fenced on the next push; under JSON width 64 it stays one line. Source line length is not that cutoff: a one-line object can be under 64 UTF-8 bytes and still wrap when JSON width is 64 or more. For `expect.*`, the wrap/fence threshold is reconstructed line length (indent + `value =` + inline object), not JSON width. `|set:` of a literal `0` writes the field correctly.
 
 The rule flags a `value =` assignment inside `var`, `var.update`, or `expect.<matcher>` when:
 
 - the value is a triple-backtick fence whose body is an object (first non-blank character is `{`), whether or not it contains a `0`
 - or the value is a native object whose top-level fields include a `0` / `0.0` followed by another field, and the object is multiline or its stored form is 64 or longer. `var` / `var.update` use the same JSON width as [`collapse_assignment_values`](#collapse_assignment_values) (PHP `json_encode` of expression text). `expect.*` still uses reconstructed line length (indent + `value =` + inline object)
 
-Do not flag `mock =` or test `input =` (owned by [`fence_multiline_values`](#fence_multiline_values)), a fenced array or non-object expression, a native object whose only `0` is its last top-level field, a `0` inside a nested object, a one-line object under 64 bytes, or `data =` / `response =` / `settings =` / any other owner.
+Do not flag `mock =` or test `input =` (owned by [`fence_multiline_values`](#fence_multiline_values)), a fenced array or non-object expression, a native object whose only `0` is its last top-level field, a `0` inside a nested object, a one-line `var` / `var.update` object under JSON width 64, a one-line `expect.*` object whose reconstructed line is under 64 UTF-8 bytes, or `data =` / `response =` / `settings =` / any other owner.
 
 ```xs
 var $result {

@@ -7607,6 +7607,10 @@ describe("wrap_assignment_objects", () => {
       value = {k: "${JSON_PAD_64}"}
     }
   }
+
+  test "keeps a same-line expect object inline" {
+    expect.to_equal ($response) { value = {k: "${JSON_PAD_64}"} }
+  }
 }`;
     assert.equal(wrapObjectHits(expectText).length, 0);
     assert.equal(wrapObjectHits(wrapAssign("sort", inlineAssignObj(JSON_PAD_64))).length, 0);
@@ -7805,6 +7809,10 @@ describe("no_equal_true_condition", () => {
           return 1
         }
         """
+    }
+    var $closer {
+      value = """
+        if ($row.flag == true) """
     }
   }
 

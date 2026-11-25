@@ -168,8 +168,13 @@ function leadingSpaces(line: string): number {
   return match?.[0].length ?? 0;
 }
 
-export function enclosingStatement(lines: string[], line: number): string {
-  const indent = leadingSpaces(lines[line] ?? "");
+export function enclosingStatement(lines: string[], line: number, column = 0): string {
+  const current = lines[line] ?? "";
+  const prefix = current.slice(0, column).trim();
+  if (prefix.includes("{") || (prefix.length > 0 && !/^[A-Za-z_][A-Za-z0-9_.]*\s*=/.test(prefix))) {
+    return prefix;
+  }
+  const indent = leadingSpaces(current);
   for (let i = line; i >= 0; i -= 1) {
     const text = lines[i] ?? "";
     if (isBlankLine(text) || isCommentLine(text)) {
@@ -179,7 +184,7 @@ export function enclosingStatement(lines: string[], line: number): string {
       return text.trim();
     }
   }
-  return (lines[line] ?? "").trim();
+  return current.trim();
 }
 
 export function isExpressionObjectOwner(owner: string, context: string): boolean {

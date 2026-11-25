@@ -3518,4 +3518,27 @@ ${inlineOutputLine(OUTPUT_V64)}
     );
     assert.equal(again.changed, false);
   });
+
+  it("does not strip == true on a multiline-string closer line", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+    var $js {
+      value = """
+        if ($row.flag == true) """
+    }
+  }
+
+  response = $js
+}`;
+    const result = fixFile(
+      { path: "eq-true-closer.xs", text },
+      config({ only_rules: ["no_equal_true_condition"] }),
+    );
+    assert.equal(result.changed, false);
+    assert.equal(result.text, text);
+    assert.match(result.text, /if \(\$row\.flag == true\) """/);
+  });
 });
