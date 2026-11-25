@@ -9,6 +9,7 @@
 | [`guid_placement`](#guid_placement) | opt-in | warning | yes | `guid` needs a blank line above it only when it follows a block closer |
 | [`indentation`](#indentation) | opt-in | warning | yes | Code uses two spaces per nesting level; a wrapped filter pipeline sits at its opener's indent plus two |
 | [`lock_placement`](#lock_placement) | opt-in | warning | yes | `lock` sits immediately after `field_value` in `db.get`, or first in `db.query` |
+| [`no_empty_expect_throw`](#no_empty_expect_throw) | opt-in | error | no | `expect.to_throw` with `exception = ""` or with no `exception` passes on any error |
 | [`no_expect_equal_null`](#no_expect_equal_null) | opt-in | error | no | `expect.to_equal` / `expect.to_not_equal` with `value = null` is verbose; use a dedicated assertion |
 | [`no_null_response`](#no_null_response) | opt-in | warning | yes | Do not assign `response = null` |
 | [`no_reserved_var`](#no_reserved_var) | on | error | no | Do not declare a reserved variable name |
@@ -252,6 +253,37 @@ Xano places `lock` in a canonical slot on push. In `db.get`, it sits immediately
 A `db.get` with no `field_value`, a multi-line `lock` value, or two `lock` members in the same statement is left alone.
 
 Auto-fixable with `--fix`: `lock` is moved to that slot. Comment lines attached directly above it (no blank line between) move with it, except region `disable` / `enable` and `disable:previous`, which stay so they still apply to the original span. Sibling members, including wrapped `where`, `output`, and `mock`, stay in place.
+
+## no_empty_expect_throw
+
+Off by default; enable with `opt_in_rules` or `--opt-in`. Default severity is error.
+
+`expect.to_throw` with `exception = ""`, or with no `exception` at all, passes on any error. Pin `exception` to the `name` of a named `throw`, or to the exact `error` string of a `precondition`.
+
+```xs
+expect.to_throw { exception = "" }
+expect.to_throw {}
+expect.to_throw
+
+expect.to_throw {
+  exception = "not_found"
+}
+```
+
+The multi-line form with `exception = ""`, or with no `exception` property, is also flagged.
+
+There is no auto-fix: the expected exception is the test's contract.
+
+A genuinely dynamic message can be allowed with a per-line suppress:
+
+```xs
+// xanoscriptlint:disable:next no_empty_expect_throw
+expect.to_throw {
+  exception = ""
+}
+```
+
+Comment lines, the bodies of `"""` strings and triple-backtick fences, and a non-empty `exception` (`"not_found"`, `$error`, an expression) are ignored. A block that has other properties but no `exception` is still flagged.
 
 ## no_expect_equal_null
 

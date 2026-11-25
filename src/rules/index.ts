@@ -5,6 +5,7 @@ import { fenceMultilineValues } from "./fence_multiline_values.js";
 import { guidPlacement } from "./guid_placement.js";
 import { indentation } from "./indentation.js";
 import { lockPlacement } from "./lock_placement.js";
+import { noEmptyExpectThrow } from "./no_empty_expect_throw.js";
 import { noExpectEqualNull } from "./no_expect_equal_null.js";
 import { noNullResponse } from "./no_null_response.js";
 import { noTrailingComments } from "./no_trailing_comments.js";
@@ -50,6 +51,7 @@ export const builtinRules: Rule[] = [
   noTrailingComments,
   noTrailingNewline,
   noReservedVar,
+  noEmptyExpectThrow,
   noExpectEqualNull,
   noNullResponse,
   noZeroNumericDefault,

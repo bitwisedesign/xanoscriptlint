@@ -167,4 +167,39 @@ custom_rules:
       [16],
     );
   });
+
+  it("disable:next suppresses no_empty_expect_throw", () => {
+    const text = `function "example" {
+  input {
+  }
+
+  stack {
+  }
+
+  response = $ok
+
+  test "rejects missing row" {
+    input = {id: 1}
+    // xanoscriptlint:disable:next no_empty_expect_throw
+    expect.to_throw {
+      exception = ""
+    }
+    expect.to_throw {
+      exception = ""
+    }
+  }
+}`;
+    const violations = lintFile(
+      { path: "a.xs", text },
+      resolveConfig(
+        { opt_in_rules: ["no_empty_expect_throw"], disabled_rules: ["no_trailing_newline"] },
+        "/tmp",
+        null,
+      ),
+    ).filter((v) => v.ruleId === "no_empty_expect_throw");
+    assert.deepEqual(
+      violations.map((v) => v.line),
+      [16],
+    );
+  });
 });

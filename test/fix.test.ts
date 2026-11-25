@@ -65,6 +65,7 @@ import {
   wrapAssign,
   wrapVarValue,
   EXPECT_EQUAL_NULL_XS,
+  EXPECT_THROW_EMPTY_XS,
   inlinePiped,
   wrappedPiped,
   inlineAssignObj,
@@ -227,6 +228,20 @@ describe("fixFile", () => {
     assert.equal(result.text, EXPECT_EQUAL_NULL_XS);
     assert.equal(
       result.corrections.filter((correction) => correction.ruleId === "no_expect_equal_null")
+        .length,
+      0,
+    );
+  });
+
+  it("does not rewrite no_empty_expect_throw when that rule is opted in", () => {
+    const result = fixFile(
+      { path: "expect-throw.xs", text: EXPECT_THROW_EMPTY_XS },
+      config({ opt_in_rules: ["no_empty_expect_throw"] }),
+    );
+    assert.equal(result.changed, false);
+    assert.equal(result.text, EXPECT_THROW_EMPTY_XS);
+    assert.equal(
+      result.corrections.filter((correction) => correction.ruleId === "no_empty_expect_throw")
         .length,
       0,
     );
